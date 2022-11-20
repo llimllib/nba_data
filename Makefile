@@ -1,6 +1,7 @@
 .PHONY: update
 update:
-	pipenv install && \
+	python -m pip install --upgrade pipenv wheel && \
+		pipenv install && \
 		pipenv run python dl.py && \
 		git add data && \
 		git commit -m "Latest data: $(date -u)" || exit 0 && \
