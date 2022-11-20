@@ -1,5 +1,6 @@
 name: Deploy data to gh-pages
 on:
+  workflow_dispatch:
   push:
     branches: ["main"]
 permissions:
