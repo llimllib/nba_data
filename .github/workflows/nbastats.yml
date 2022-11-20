@@ -12,20 +12,21 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
+
       - uses: actions/setup-python@v1
         with:
           python-version: "3.10"
+
       - name: Install pipenv
         run: python -m pip install --upgrade pipenv wheel
 
-      # cache thingy taken from
-      # https://gist.github.com/alukach/6f3a371e9af600e417aca1b36806ad72
-      # no idea if it actually works or what, but let's try
+      #  https://github.com/actions/cache/blob/5c79b3fd6c0e87c9444fe7b18edafe7d9ba61531/examples.md#python---pipenv
       - id: cache-pipenv
-        uses: actions/cache@v1
+        uses: actions/cache@v3
         with:
           path: ~/.local/share/virtualenvs
-          key: ${{ runner.os }}-pipenv-${{ hashFiles('**/Pipfile.lock') }}
+          key: ${{ runner.os }}-python-${{ steps.setup-python.outputs.python-version }}-pipenv-${{ hashFiles('Pipfile.lock') }}
+
       - name: Install dependencies
         if: steps.cache-pipenv.outputs.cache-hit != 'true'
         run: |
@@ -33,6 +34,7 @@ jobs:
 
       - name: Download NBA data
         run: pipenv run python dl.py
+
       - name: Commit and push if it changed
         run: |-
           git config user.name "Automated"
