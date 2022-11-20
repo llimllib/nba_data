@@ -18,6 +18,7 @@ import pandas as pd
 FIRST_SEASON = 2010
 CURRENT_SEASON = 2023
 DIR = Path("data")
+TIMEOUT = 60
 
 # TODO: refactor this to create a duckdb database; Here is a javascript code
 # example of how to connect to a database file stored at a URL:
@@ -137,6 +138,7 @@ def download_gamelogs():
                     date_from_nullable=most_recent,
                     season_nullable=season,
                     measure_type_player_game_logs_nullable=measure,
+                    timeout=TIMEOUT,
                 ).get_data_frames()[0]
             )
 
@@ -233,6 +235,7 @@ def download_player_stats():
                     season=season,
                     measure_type_detailed_defense=measure,
                     per_mode_detailed=per,
+                    timeout=TIMEOUT,
                 ).get_data_frames()[0]
                 df["year"] = year
 
@@ -254,6 +257,7 @@ def download_player_stats():
                 season=season,
                 measure_type_detailed_defense="Advanced",
                 per_mode_detailed="Totals",
+                timeout=TIMEOUT,
             ).get_data_frames()[0]
         )
 
