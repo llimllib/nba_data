@@ -264,6 +264,7 @@ def download_player_stats():
 
         # https://www.nba.com/stats/players/shots-general
         # this gets us 2-point shots broken out from other field goals
+        # also: this defaults to totals, if I want per game I'll need to add it
         stats.append(
             LeagueDashPlayerPtShot(
                 season=season,
