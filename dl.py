@@ -10,6 +10,7 @@ from typing import List
 
 from nba_api.stats.endpoints import (
     LeagueDashPlayerStats,
+    LeagueDashPlayerPtShot,
     LeagueDashPlayerBioStats,
     TeamGameLogs,
 )
@@ -257,6 +258,15 @@ def download_player_stats():
                 season=season,
                 measure_type_detailed_defense="Advanced",
                 per_mode_detailed="Totals",
+                timeout=TIMEOUT,
+            ).get_data_frames()[0]
+        )
+
+        # https://www.nba.com/stats/players/shots-general
+        # this gets us 2-point shots broken out from other field goals
+        stats.append(
+            LeagueDashPlayerPtShot(
+                season=season,
                 timeout=TIMEOUT,
             ).get_data_frames()[0]
         )
