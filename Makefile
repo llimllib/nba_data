@@ -5,7 +5,8 @@ update:
 	# best way to get it by default for both local and automated processes is.
 	#
 	# Here I'm just going to assume it exists
-	pipenv install && \
+	git pull && \
+		pipenv install && \
 		pipenv run python dl.py && \
 		git add data && \
 		git commit -m "Latest data: $$(date -u)" || exit 0 && \
