@@ -17,7 +17,7 @@ from nba_api.stats.endpoints import (
 import pandas as pd
 
 FIRST_SEASON = 2010
-CURRENT_SEASON = 2023
+CURRENT_SEASON = 2024
 DIR = Path("data")
 TIMEOUT = 60
 
