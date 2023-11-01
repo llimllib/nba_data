@@ -12,14 +12,17 @@ from nba_api.stats.endpoints import (
     LeagueDashPlayerStats,
     LeagueDashPlayerPtShot,
     LeagueDashPlayerBioStats,
+    LeagueDashTeamStats,
     TeamGameLogs,
 )
+from nba_api.stats.library.data import teams
 import pandas as pd
 
 FIRST_SEASON = 2010
 CURRENT_SEASON = 2024
 DIR = Path("data")
 TIMEOUT = 60
+TEAMS_BY_ID = {t[0]: t for t in teams}
 
 # TODO: refactor this to create a duckdb database; Here is a javascript code
 # example of how to connect to a database file stored at a URL:
@@ -27,6 +30,15 @@ TIMEOUT = 60
 #
 # (or just load a few parquet files? who knows. Their docs are
 # incomprehensible)
+
+
+def team_id_to_abbrev(id: int) -> str:
+    """
+    Return a team's abbreviation from their full name
+
+    ex: team_fullname_to_abbrev("Charlotte Hornets") -> "CHA"
+    """
+    return TEAMS_BY_ID[id][1]
 
 
 def fresh(fname: Path) -> bool:
@@ -71,6 +83,61 @@ def tryrm(path: str | Path):
         pass
 
 
+def dump_team_summaries(season: str, year: int) -> None:
+    """
+    Dump team summary stats for a season to team_summary_{year}.json
+
+    Currently only used for the team diamond, but I should make it possible to
+    graph team stats as well
+    """
+    # I wish I understood what the estimated stats were, but let's just not
+    # include them bc I don't understand them. A warning pops up when you go to
+    # https://www.nba.com/stats/teams/estimated-advanced that says "The
+    # advanced stats on this page are derived from estimated possessions.", but
+    # what are the other stats derived from? exact posssessions? Why would I
+    # want estimated instead of exact? They give reasonably different answers
+    # too. Strange
+    #
+    # there are more stats available if you leave off "Advanced", but I don't
+    # currently have a need for them. add as necessary. (dump this to parquet?)
+    df = LeagueDashTeamStats(
+        season=season, measure_type_detailed_defense="Advanced"
+    ).get_data_frames()[0][
+        [
+            "TEAM_ID",
+            "TEAM_NAME",
+            "GP",
+            "W",
+            "L",
+            "MIN",
+            "OFF_RATING",
+            "DEF_RATING",
+            "NET_RATING",
+            "AST_PCT",
+            "AST_TO",
+            "AST_RATIO",
+            "OREB_PCT",
+            "DREB_PCT",
+            "REB_PCT",
+            "TM_TOV_PCT",
+            "EFG_PCT",
+            "TS_PCT",
+            "PACE",
+            "PACE_PER40",
+            "POSS",
+        ]
+    ]
+    json.dump(
+        {
+            "updated": datetime.now(timezone.utc).isoformat(),
+            "teams": {
+                team_id_to_abbrev(t["TEAM_ID"]): t for t in df.to_dict(orient="records")
+            },
+        },
+        open(DIR / f"team_summary_{year}.json", "w"),
+    )
+
+
 def dump_team_eff_json(df: pd.DataFrame, year: int) -> None:
     """
     write out efficiency stats to a json file for consumption by the team graph
@@ -113,6 +180,7 @@ def download_gamelogs():
         elif year == CURRENT_SEASON and fresh(file):
             seasons.append(pd.read_parquet(file))
             continue
+
         # If the current year's file isn't fresh, load it so we can download
         # only the more recent games
         elif file.is_file():
@@ -167,6 +235,7 @@ def download_gamelogs():
         convert_i64_to_i32(games)
 
         dump_team_eff_json(games, year)
+        dump_team_summaries(season, year)
 
         seasons.append(games)
         games.to_parquet(file)
