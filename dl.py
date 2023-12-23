@@ -360,6 +360,18 @@ def download_player_stats():
     tryrm(DIR / "playerstats.parquet")
     allstats.to_parquet(DIR / "playerstats.parquet")
 
+    # XXX: Until duckdb supports reading metadata out of parquet files, we will
+    #      generate a metadata file
+    # - https://github.com/duckdb/duckdb/issues/2534
+    # update: duckdb now supports it, but the version containing support has
+    #         not yet been released. see
+    #         https://duckdb.org/docs/data/parquet/metadata.html#parquet-key-value-metadata
+    #         for the docs; once something > 0.9.2 gets relased, we can use it
+    json.dump(
+        {"updated": datetime.utcnow().isoformat() + "Z"},
+        open(DIR / "metadata.json", "w"),
+    )
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="download stats from stats.nba.com")
