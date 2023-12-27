@@ -226,7 +226,12 @@ def download_gamelogs():
                 columns=["game_n"],
                 inplace=True,
             )
-            games = pd.concat([old_games, games]).drop_duplicates()
+            # using game_id and team_id as keys, drop any duplicate rows. Favor
+            # newer rows.
+            games = pd.concat([old_games, games]).drop_duplicates(
+                subset=["game_id", "team_id"],
+                keep="last",
+            )
 
         assert isinstance(games, pd.DataFrame)
 
