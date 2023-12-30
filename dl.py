@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import argparse
+from collections import defaultdict
 from datetime import datetime, timezone
 from functools import reduce
 import json
@@ -145,6 +146,8 @@ def dump_team_eff_json(df: pd.DataFrame, year: int) -> None:
     """
     eff = df[
         [
+            "game_id",
+            "team_id",
             "team_abbreviation",
             "game_date",
             "matchup",
@@ -160,6 +163,20 @@ def dump_team_eff_json(df: pd.DataFrame, year: int) -> None:
         "updated": datetime.now(timezone.utc).isoformat(),
         "games": eff.to_dict(orient="records"),
     }
+
+    # attach the opponents' points and possessions here, but doing a self-join
+    # in pandas seems to be beyond my reach. Instead I'll do some chugging with
+    # loops
+    game_id_index = defaultdict(list)
+    for g1 in data["games"]:
+        game_id_index[g1["game_id"]].append(g1)
+
+    for g1 in data["games"]:
+        a, b = game_id_index[g1["game_id"]]
+        g2 = a if a["team_id"] != g1["team_id"] else b
+        g1["opp_pts"] = g2["pts"]
+        g1["opp_poss"] = g2["poss"]
+
     json.dump(data, open(DIR / f"team_efficiency_{year}.json", "w"))
 
 
