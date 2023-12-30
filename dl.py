@@ -7,6 +7,7 @@ import json
 from time import time
 import os
 from pathlib import Path
+import sys
 from typing import List
 
 from nba_api.stats.endpoints import (
@@ -172,7 +173,13 @@ def dump_team_eff_json(df: pd.DataFrame, year: int) -> None:
         game_id_index[g1["game_id"]].append(g1)
 
     for g1 in data["games"]:
-        a, b = game_id_index[g1["game_id"]]
+        try:
+            a, b = game_id_index[g1["game_id"]]
+        except ValueError:
+            print(
+                f"unable to find {g1['game_id']} in index, skipping. No idea why this is happening. {year}"
+            )
+            continue
         g2 = a if a["team_id"] != g1["team_id"] else b
         g1["opp_pts"] = g2["pts"]
         g1["opp_poss"] = g2["poss"]
@@ -395,18 +402,30 @@ def download_player_stats():
     )
 
 
+def update_json():
+    for year in range(FIRST_SEASON, CURRENT_SEASON + 1):
+        season = f"{year-1}-{str(year)[2:]}"
+        df = pd.read_parquet(DIR / f"gamelog_{year}.parquet")
+        dump_team_eff_json(df, year)
+        dump_team_summaries(season, year)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="download stats from stats.nba.com")
     parser.add_argument("-g", "--gamelogs", const=True, action="store_const")
     parser.add_argument("-s", "--player-stats", const=True, action="store_const")
+    parser.add_argument("--update-json-only", const=True, action="store_const")
     args = parser.parse_args()
 
     # if no arguments passed, download both
-    runall = not args.gamelogs and not args.player_stats
+    runall = not any([args.gamelogs, args.player_stats, args.update_json_only])
 
     if not DIR.is_dir():
         DIR.mkdir()
 
+    if args.update_json_only:
+        update_json()
+        sys.exit(0)
     if args.gamelogs or runall:
         download_gamelogs()
     if args.player_stats or runall:
