@@ -21,7 +21,7 @@ from nba_api.stats.library.data import teams
 import pandas as pd
 
 FIRST_SEASON = 2010
-CURRENT_SEASON = 2024
+CURRENT_SEASON = 2025
 DIR = Path("data")
 TIMEOUT = 60
 TEAMS_BY_ID = {t[0]: t for t in teams}
