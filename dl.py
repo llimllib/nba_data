@@ -98,7 +98,9 @@ def retry(f: Callable[..., G], **kwargs) -> G:
         try:
             return f(**kwargs)
         except Exception as exc:
-            timeout = [1, 2, 5, 10, 15, 20, 25, 25, 25, 50, 50, 100][min(i, 11)]
+            if i > 11:
+                raise Exception("retry limit exceeded")
+            timeout = [1, 2, 5, 10, 15, 20, 25, 25, 25, 50, 50, 100][i]
             i += 1
             print(f"failed {f.__name__}({kwargs}), sleeping {timeout}:\n{exc}")
             sleep(timeout)
