@@ -1,16 +1,18 @@
 #!/usr/bin/env python
 import argparse
 from collections import defaultdict
-from datetime import datetime, timezone
+import datetime
 from functools import reduce
 import json
-from time import time
+from time import sleep, time
 import os
 from pathlib import Path
 import sys
-from typing import List
+from typing import Callable, TypeVar
 
 from nba_api.stats.endpoints import (
+    BoxScoreTraditionalV3,
+    BoxScoreAdvancedV3,
     LeagueDashPlayerStats,
     LeagueDashPlayerPtShot,
     LeagueDashPlayerBioStats,
@@ -68,7 +70,7 @@ def convert_i64_to_i32(df: pd.DataFrame) -> None:
             df[col] = column.astype("int32")
 
 
-def join(frames: List[pd.DataFrame], on: List[str]) -> pd.DataFrame:
+def join(frames: list[pd.DataFrame], on: list[str]) -> pd.DataFrame:
     """
     join a list of dataframes, adding a _DROP suffix for repeated
     columns, which we can then filter out
@@ -83,6 +85,48 @@ def tryrm(path: str | Path):
         os.unlink(path)
     except FileNotFoundError:
         pass
+
+
+G = TypeVar("G")
+
+
+# retry takes a function and its args, and if it times out, sleeps 60 seconds
+# then retries until it succeeds
+def retry(f: Callable[..., G], **kwargs) -> G:
+    i = 0
+    while 1:
+        try:
+            return f(**kwargs)
+        except Exception as exc:
+            if i > 11:
+                raise Exception("retry limit exceeded")
+            timeout = [1, 2, 5, 10, 15, 20, 25, 25, 25, 50, 50, 100][i]
+            i += 1
+            print(f"failed {f.__name__}({kwargs}), sleeping {timeout}:\n{exc}")
+            sleep(timeout)
+    raise Exception("this should never happen")
+
+
+# get_box_score will return a combined traditional + advanced box score for a
+# given game
+def get_box_score(game_id: str) -> pd.DataFrame:
+    bs = retry(
+        BoxScoreTraditionalV3, game_id=game_id, timeout=TIMEOUT
+    ).get_data_frames()[0]
+    bsa = retry(BoxScoreAdvancedV3, game_id=game_id, timeout=TIMEOUT).get_data_frames()[
+        0
+    ]
+    return join([bs, bsa], on=["gameId", "personId"])
+
+
+def get_team_game_logs(season: str, dt: str, measure: None | str) -> pd.DataFrame:
+    return retry(
+        TeamGameLogs,
+        season_nullable=season,
+        date_from_nullable=dt,
+        measure_type_player_game_logs_nullable=measure,
+        timeout=TIMEOUT,
+    ).get_data_frames()[0]
 
 
 def dump_team_summaries(season: str, year: int) -> None:
@@ -131,7 +175,7 @@ def dump_team_summaries(season: str, year: int) -> None:
     ]
     json.dump(
         {
-            "updated": datetime.now(timezone.utc).isoformat(),
+            "updated": datetime.datetime.now(datetime.UTC).isoformat(),
             "teams": {
                 team_id_to_abbrev(t["TEAM_ID"]): t for t in df.to_dict(orient="records")
             },
@@ -161,7 +205,7 @@ def dump_team_eff_json(df: pd.DataFrame, year: int) -> None:
     assert isinstance(eff, pd.DataFrame)
 
     data = {
-        "updated": datetime.now(timezone.utc).isoformat(),
+        "updated": datetime.datetime.now(datetime.UTC).isoformat(),
         "games": eff.to_dict(orient="records"),
     }
 
@@ -190,25 +234,27 @@ def dump_team_eff_json(df: pd.DataFrame, year: int) -> None:
 def download_gamelogs():
     seasons = []
     for year in range(FIRST_SEASON, CURRENT_SEASON + 1):
-        file = DIR / f"gamelog_{year}.parquet"
+        gamelog_file = DIR / f"gamelog_{year}.parquet"
+        playerlog_file = DIR / f"playerlog_{year}.parquet"
         season = f"{year-1}-{str(year)[2:]}"
         most_recent = ""
         old_games = None
+        old_playerlogs = None
 
         # we don't need to redownload old years, (presumably?) nothing has changed
-        if year != CURRENT_SEASON and file.is_file():
-            seasons.append(pd.read_parquet(file))
+        if year != CURRENT_SEASON and gamelog_file.is_file():
+            seasons.append(pd.read_parquet(gamelog_file))
             continue
 
         # If the current year's file is less than an hour old, don't re-download
-        elif year == CURRENT_SEASON and fresh(file):
-            seasons.append(pd.read_parquet(file))
+        elif year == CURRENT_SEASON and fresh(gamelog_file):
+            seasons.append(pd.read_parquet(gamelog_file))
             continue
 
         # If the current year's file isn't fresh, load it so we can download
         # only the more recent games
-        elif file.is_file():
-            old_games = pd.read_parquet(file)
+        if gamelog_file.is_file():
+            old_games = pd.read_parquet(gamelog_file)
             # the date format for LeagueGameLog appears to be YYYY-MM-DD while
             # the date formate for TeamGameLogs appears to be MM/DD/YYYY. I
             # can't find any documentation for this, I did curl requests until
@@ -220,20 +266,21 @@ def download_gamelogs():
                 .strftime("%m/%d/%Y")
             )
 
+        if playerlog_file.is_file():
+            old_playerlogs = pd.read_parquet(playerlog_file)
+
         print(f"Downloading {season} game logs from {most_recent}")
 
         # you can get the game logs with ortg and drtg as "advanced"
         # MeasureType at https://www.nba.com/stats/teams/boxscores-advanced
         logs = []
+        playerlogs = pd.DataFrame()
         for measure in [None, "Advanced"]:
-            logs.append(
-                TeamGameLogs(
-                    date_from_nullable=most_recent,
-                    season_nullable=season,
-                    measure_type_player_game_logs_nullable=measure,
-                    timeout=TIMEOUT,
-                ).get_data_frames()[0]
-            )
+            gamelogs = get_team_game_logs(season, most_recent, measure)
+            logs.append(gamelogs)
+            for _, game_id in gamelogs["GAME_ID"].items():
+                assert isinstance(game_id, str), game_id
+                playerlogs = pd.concat([playerlogs, get_box_score(game_id)])
 
         # join games by game_id and team_id, which should serve as unique keys
         games = join(logs, on=["GAME_ID", "TEAM_ID"])
@@ -245,11 +292,6 @@ def download_gamelogs():
         # downloaded ones. Otherwise, we should have all the games for this
         # season in the games dataframe
         if old_games is not None:
-            # drop all our created columns; we'll recreate them in a second.
-            old_games.drop(
-                columns=["game_n"],
-                inplace=True,
-            )
             # using game_id and team_id as keys, drop any duplicate rows. Favor
             # newer rows.
             games = pd.concat([old_games, games]).drop_duplicates(
@@ -257,17 +299,27 @@ def download_gamelogs():
                 keep="last",
             )
 
-        assert isinstance(games, pd.DataFrame)
+        if old_playerlogs is not None:
+            playerlogs = pd.concat([old_playerlogs, playerlogs]).drop_duplicates(
+                subset=["gameId", "personId"],
+                keep="last",
+            )
 
-        games.reset_index(inplace=True)
-        games.rename(columns={"index": "game_n"}, inplace=True)
+        assert isinstance(games, pd.DataFrame)
+        assert isinstance(playerlogs, pd.DataFrame)
+
+        games.reset_index(inplace=True, drop=True)
         convert_i64_to_i32(games)
+
+        playerlogs.reset_index(inplace=True, drop=True)
+        convert_i64_to_i32(playerlogs)
 
         dump_team_eff_json(games, year)
         dump_team_summaries(season, year)
 
         seasons.append(games)
-        games.to_parquet(file)
+        games.to_parquet(gamelog_file)
+        playerlogs.to_parquet(playerlog_file)
 
     allseasons = pd.concat(seasons)
     allseasons.reset_index(drop=True, inplace=True)
@@ -397,7 +449,7 @@ def download_player_stats():
     #         https://duckdb.org/docs/data/parquet/metadata.html#parquet-key-value-metadata
     #         for the docs; once something > 0.9.2 gets relased, we can use it
     json.dump(
-        {"updated": datetime.utcnow().isoformat() + "Z"},
+        {"updated": datetime.datetime.now(datetime.UTC).isoformat() + "Z"},
         open(DIR / "metadata.json", "w"),
     )
 
