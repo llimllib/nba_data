@@ -21,6 +21,8 @@ from nba_api.stats.endpoints import (
 )
 from nba_api.stats.library.data import teams
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 FIRST_SEASON = 2010
 CURRENT_SEASON = 2025
@@ -105,6 +107,14 @@ def retry(f: Callable[..., G], **kwargs) -> G:
             print(f"failed {f.__name__}({kwargs}), sleeping {timeout}:\n{exc}")
             sleep(timeout)
     raise Exception("this should never happen")
+
+
+def write_parquet(df: pd.DataFrame, filename: str | Path):
+    schema = pa.Schema.from_pandas(df).with_metadata(
+        {"updated": datetime.datetime.now(datetime.UTC).isoformat()},
+    )
+    table = pa.Table.from_pandas(df, schema=schema)
+    pq.write_table(table, filename)
 
 
 # get_box_score will return a combined traditional + advanced box score for a
@@ -318,8 +328,8 @@ def download_gamelogs():
         dump_team_summaries(season, year)
 
         seasons.append(games)
-        games.to_parquet(gamelog_file)
-        playerlogs.to_parquet(playerlog_file)
+        write_parquet(games, gamelog_file)
+        write_parquet(playerlogs, playerlog_file)
 
     allseasons = pd.concat(seasons)
     allseasons.reset_index(drop=True, inplace=True)
@@ -327,7 +337,7 @@ def download_gamelogs():
     # delete the old file and overwrite with the new. pandas parquet writing
     # does not have any option to overwrite.
     tryrm(DIR / "gamelogs.parquet")
-    allseasons.to_parquet(DIR / "gamelogs.parquet")
+    write_parquet(allseasons, DIR / "gamelogs.parquet")
 
 
 columns_to_suffix = [
@@ -432,14 +442,14 @@ def download_player_stats():
         allstats.columns = allstats.columns.str.lower()
 
         playerstats.append(allstats)
-        allstats.to_parquet(file)
+        write_parquet(allstats, file)
 
     allstats = pd.concat(playerstats)
     allstats.reset_index(drop=True, inplace=True)
 
     # delete the old playerstats.parquet and overwrite the new.
     tryrm(DIR / "playerstats.parquet")
-    allstats.to_parquet(DIR / "playerstats.parquet")
+    write_parquet(allstats, DIR / "playerstats.parquet")
 
     # XXX: Until duckdb supports reading metadata out of parquet files, we will
     #      generate a metadata file
