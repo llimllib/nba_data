@@ -27,7 +27,11 @@ import pyarrow.parquet as pq
 FIRST_SEASON = 2010
 CURRENT_SEASON = 2025
 DIR = Path("data")
-TIMEOUT = 60
+# this is the timeout used for reading data from stats.nba.com. In my
+# experience, delays usually indicate that you're rate-limited, not that it is
+# taking a long time to fetch the data, so having a longer timeout doesn't make
+# sense to me
+TIMEOUT = 30
 TEAMS_BY_ID = {t[0]: t for t in teams}
 
 # TODO: refactor this to create a duckdb database; Here is a javascript code
@@ -129,7 +133,7 @@ def get_box_score(game_id: str) -> pd.DataFrame:
     return join([bs, bsa], on=["gameId", "personId"])
 
 
-def get_team_game_logs(season: str, dt: str, measure: None | str) -> pd.DataFrame:
+def get_team_gamelogs(season: str, dt: str, measure: None | str) -> pd.DataFrame:
     return retry(
         TeamGameLogs,
         season_nullable=season,
@@ -242,7 +246,8 @@ def dump_team_eff_json(df: pd.DataFrame, year: int) -> None:
 
 
 def download_gamelogs():
-    seasons = []
+    game_seasons = []
+    player_seasons = []
     for year in range(FIRST_SEASON, CURRENT_SEASON + 1):
         gamelog_file = DIR / f"gamelog_{year}.parquet"
         playerlog_file = DIR / f"playerlog_{year}.parquet"
@@ -253,13 +258,15 @@ def download_gamelogs():
 
         # we don't need to redownload old years, (presumably?) nothing has changed
         if year != CURRENT_SEASON and gamelog_file.is_file():
-            seasons.append(pd.read_parquet(gamelog_file))
+            game_seasons.append(pd.read_parquet(gamelog_file))
             continue
 
         # If the current year's file is less than an hour old, don't re-download
         elif year == CURRENT_SEASON and fresh(gamelog_file):
-            seasons.append(pd.read_parquet(gamelog_file))
+            game_seasons.append(pd.read_parquet(gamelog_file))
             continue
+
+        # TODO: download past year's game logs... will take a long time
 
         # If the current year's file isn't fresh, load it so we can download
         # only the more recent games
@@ -286,7 +293,7 @@ def download_gamelogs():
         logs = []
         playerlogs = pd.DataFrame()
         for measure in [None, "Advanced"]:
-            gamelogs = get_team_game_logs(season, most_recent, measure)
+            gamelogs = get_team_gamelogs(season, most_recent, measure)
             logs.append(gamelogs)
             for _, game_id in gamelogs["GAME_ID"].items():
                 assert isinstance(game_id, str), game_id
@@ -327,17 +334,22 @@ def download_gamelogs():
         dump_team_eff_json(games, year)
         dump_team_summaries(season, year)
 
-        seasons.append(games)
+        game_seasons.append(games)
         write_parquet(games, gamelog_file)
+        player_seasons.append(playerlogs)
         write_parquet(playerlogs, playerlog_file)
 
-    allseasons = pd.concat(seasons)
-    allseasons.reset_index(drop=True, inplace=True)
+    all_game_seasons = pd.concat(game_seasons)
+    all_game_seasons.reset_index(drop=True, inplace=True)
+    all_player_seasons = pd.concat(player_seasons)
+    all_player_seasons.reset_index(drop=True, inplace=True)
 
     # delete the old file and overwrite with the new. pandas parquet writing
     # does not have any option to overwrite.
     tryrm(DIR / "gamelogs.parquet")
-    write_parquet(allseasons, DIR / "gamelogs.parquet")
+    write_parquet(all_game_seasons, DIR / "gamelogs.parquet")
+    tryrm(DIR / "player_game_logs.parquet")
+    write_parquet(all_game_seasons, DIR / "player_game_logs.parquet")
 
 
 columns_to_suffix = [
