@@ -3,10 +3,12 @@ import argparse
 from collections import defaultdict
 import datetime
 from functools import reduce
+from glob import glob
 import json
 from time import sleep, time
 import os
 from pathlib import Path
+import re
 import sys
 from typing import Callable, TypeVar
 
@@ -198,6 +200,22 @@ def dump_team_summaries(season: str, year: int) -> None:
     )
 
 
+def write_all_team_summaries() -> None:
+    """
+    gather all the team summary json files into a single team summary json for
+    all covered years
+    """
+    all_summaries = {
+        "updated": datetime.datetime.now(datetime.UTC).isoformat(),
+        "data": {},
+    }
+    for f in glob(str(DIR / "team_summary_*.json")):
+        data = json.load(open(f))
+        year = re.findall(r"\d{4}", f)[0]
+        all_summaries["data"][year] = data["teams"]
+    json.dump(all_summaries, open(DIR / f"team_summary.json", "w"))
+
+
 def dump_team_eff_json(df: pd.DataFrame, year: int) -> None:
     """
     write out efficiency stats to a json file for consumption by the team graph
@@ -343,6 +361,8 @@ def download_gamelogs():
     all_game_seasons.reset_index(drop=True, inplace=True)
     all_player_seasons = pd.concat(player_seasons)
     all_player_seasons.reset_index(drop=True, inplace=True)
+
+    write_all_team_summaries()
 
     # delete the old file and overwrite with the new. pandas parquet writing
     # does not have any option to overwrite.
