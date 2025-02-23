@@ -32,14 +32,6 @@ jobs:
         run: |
           timeout 5m sudo -E tailscale set --exit-node=apple-tv --exit-node-allow-lan-access=true
 
-      - name: Verify HTTP traffic is routed through exit node
-        run: |
-          echo "Available exit nodes:"
-          tailscale status | grep 'exit node'
-
-          echo "IP from ifconfig.me:"
-          curl -s https://ifconfig.me
-
       - name: Install uv
         uses: astral-sh/setup-uv@v5
 
