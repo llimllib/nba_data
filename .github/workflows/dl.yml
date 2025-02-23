@@ -21,8 +21,16 @@ jobs:
         with:
           oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
-          args: "--exit-node=apple-tv --exit-node-allow-lan-access=true"
           tags: tag:github-actions
+          args: "--exit-node-allow-lan-access=true"
+
+      # you can't set the exit-node name at 'up' time; so instead set it after
+      # we've gotten up and running
+      # https://github.com/tailscale/github-action/issues/123
+      # https://github.com/tailscale/tailscale/issues/4152#issuecomment-1066126643
+      - name: use named exit node in tailscale
+        run: |
+          timeout 5m sudo -E tailscale set --exit-node=apple-tv
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
