@@ -11,6 +11,7 @@ jobs:
     timeout-minutes: 30 # Prevent hanging jobs
     permissions:
       contents: write
+      issues: write
 
     steps:
       - uses: actions/checkout@v4
@@ -44,14 +45,46 @@ jobs:
         run: make update
         continue-on-error: false
 
+      # if there's a failure:
+      # - check for an existing ticket
+      # - make one if not found
+      # - otherwise add the failure to the ticket
+      #
+      # the idea here is to avoid getting an avalanche of tickets when something breaks
       - name: Notify on failure
         if: failure()
         uses: actions/github-script@v7
         with:
           script: |
-            github.rest.issues.create({
+            const issueTitle = 'Data update workflow failed';
+
+            // Search for an open issue with our title
+            const issues = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: 'Data update workflow failed',
-              body: `Workflow run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
-            })
+              state: 'open',
+              creator: 'github-actions[bot]'
+            });
+
+            const existingIssue = issues.data.find(issue => issue.title === issueTitle);
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            if (existingIssue) {
+              // Add a comment to the existing issue
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existingIssue.number,
+                body: `Another failure detected in workflow run: ${runUrl}`
+              });
+              console.log(`Added comment to existing issue #${existingIssue.number}`);
+            } else {
+              // Create a new issue
+              const newIssue = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: issueTitle,
+                body: `Workflow run failed: ${runUrl}\n\nPlease check the workflow logs for details.`
+              });
+              console.log(`Created new issue #${newIssue.data.number}`);
+            }
