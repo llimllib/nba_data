@@ -4,11 +4,7 @@ Run this manually when you need to update the test fixtures.
 """
 
 from pathlib import Path
-import sys
-import os
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from stats import get_dash_player_stats, get_2pt_shots, get_bio_stats
+from src.stats import get_dash_player_stats, get_2pt_shots, get_bio_stats
 
 
 def capture_responses():
