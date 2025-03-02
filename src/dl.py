@@ -203,10 +203,12 @@ def dump_team_eff_json(df: pd.DataFrame, year: int) -> None:
     json.dump(data, open(DIR / f"team_efficiency_{year}.json", "w"))
 
 
-def download_gamelogs(outdir: Path):
+def download_gamelogs(
+    outdir: Path, first_season=FIRST_SEASON, current_season=CURRENT_SEASON
+):
     game_seasons = []
     player_seasons = []
-    for year in range(FIRST_SEASON, CURRENT_SEASON + 1):
+    for year in range(first_season, current_season + 1):
         gamelog_file = outdir / f"gamelog_{year}.parquet"
         playerlog_file = outdir / f"playerlog_{year}.parquet"
         season = f"{year-1}-{str(year)[2:]}"
@@ -215,12 +217,12 @@ def download_gamelogs(outdir: Path):
         old_playerlogs = None
 
         # we don't need to redownload old years, (presumably?) nothing has changed
-        if year != CURRENT_SEASON and gamelog_file.is_file():
+        if year != current_season and gamelog_file.is_file():
             game_seasons.append(pd.read_parquet(gamelog_file))
             continue
 
         # If the current year's file is less than an hour old, don't re-download
-        elif year == CURRENT_SEASON and fresh(gamelog_file):
+        elif year == current_season and fresh(gamelog_file):
             game_seasons.append(pd.read_parquet(gamelog_file))
             continue
 
@@ -342,19 +344,21 @@ columns_to_suffix = [
 ]
 
 
-def download_player_stats(outdir: Path):
+def download_player_stats(
+    outdir: Path, first_season=FIRST_SEASON, current_season=CURRENT_SEASON
+):
     playerstats = []
-    for year in range(FIRST_SEASON, CURRENT_SEASON + 1):
+    for year in range(first_season, current_season + 1):
         file = outdir / f"players_{year}.parquet"
         season = f"{year-1}-{str(year)[2:]}"
 
         # we don't need to redownload old years, (presumably?) nothing has changed
-        if year != CURRENT_SEASON and Path(file).is_file():
+        if year != current_season and Path(file).is_file():
             playerstats.append(pd.read_parquet(file))
             continue
 
         # If the current year's file is less than an hour old, don't re-download
-        elif year == CURRENT_SEASON and fresh(Path(file)):
+        elif year == current_season and fresh(Path(file)):
             playerstats.append(pd.read_parquet(file))
             continue
 
@@ -419,8 +423,8 @@ def download_player_stats(outdir: Path):
     )
 
 
-def update_json(outdir: Path):
-    for year in range(FIRST_SEASON, CURRENT_SEASON + 1):
+def update_json(outdir: Path, first_season=FIRST_SEASON, current_season=CURRENT_SEASON):
+    for year in range(first_season, current_season + 1):
         season = f"{year-1}-{str(year)[2:]}"
         df = pd.read_parquet(outdir / f"gamelog_{year}.parquet")
         dump_team_eff_json(df, year)
