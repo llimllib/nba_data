@@ -2,38 +2,32 @@
 import argparse
 from collections import defaultdict
 import datetime
-from functools import reduce
 from glob import glob
 import json
-from time import sleep, time
+from time import time
 import os
 from pathlib import Path
 import re
 import sys
-from typing import Callable, TypeVar
 
-from nba_api.stats.endpoints import (
-    BoxScoreTraditionalV3,
-    BoxScoreAdvancedV3,
-    LeagueDashPlayerStats,
-    LeagueDashPlayerPtShot,
-    LeagueDashPlayerBioStats,
-    LeagueDashTeamStats,
-    TeamGameLogs,
-)
 from nba_api.stats.library.data import teams
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from .stats import (
+    get_box_score,
+    get_team_gamelogs,
+    get_team_stats,
+    get_dash_player_stats,
+    get_2pt_shots,
+    get_bio_stats,
+    join,
+)
+
 FIRST_SEASON = 2010
 CURRENT_SEASON = 2025
 DIR = Path("data")
-# this is the timeout used for reading data from stats.nba.com. In my
-# experience, delays usually indicate that you're rate-limited, not that it is
-# taking a long time to fetch the data, so having a longer timeout doesn't make
-# sense to me
-TIMEOUT = 30
 TEAMS_BY_ID = {t[0]: t for t in teams}
 
 # TODO: refactor this to create a duckdb database; Here is a javascript code
@@ -78,41 +72,11 @@ def convert_i64_to_i32(df: pd.DataFrame) -> None:
             df[col] = column.astype("int32")
 
 
-def join(frames: list[pd.DataFrame], on: list[str]) -> pd.DataFrame:
-    """
-    join a list of dataframes, adding a _DROP suffix for repeated
-    columns, which we can then filter out
-    """
-    return reduce(
-        lambda x, y: x.merge(y, on=on, suffixes=("", "_DROP")), frames
-    ).filter(regex="^(?!.*_DROP$)")
-
-
 def tryrm(path: str | Path):
     try:
         os.unlink(path)
     except FileNotFoundError:
         pass
-
-
-G = TypeVar("G")
-
-
-# retry takes a function and its args, and if it times out, sleeps 60 seconds
-# then retries until it succeeds
-def retry(f: Callable[..., G], **kwargs) -> G:
-    i = 0
-    while 1:
-        try:
-            return f(**kwargs)
-        except Exception as exc:
-            if i > 11:
-                raise Exception("retry limit exceeded")
-            timeout = [1, 2, 5, 10, 15, 20, 25, 25, 25, 50, 50, 100][i]
-            i += 1
-            print(f"failed {f.__name__}({kwargs}), sleeping {timeout}:\n{exc}")
-            sleep(timeout)
-    raise Exception("this should never happen")
 
 
 def write_parquet(df: pd.DataFrame, filename: str | Path):
@@ -121,28 +85,6 @@ def write_parquet(df: pd.DataFrame, filename: str | Path):
     )
     table = pa.Table.from_pandas(df, schema=schema)
     pq.write_table(table, filename)
-
-
-# get_box_score will return a combined traditional + advanced box score for a
-# given game
-def get_box_score(game_id: str) -> pd.DataFrame:
-    bs = retry(
-        BoxScoreTraditionalV3, game_id=game_id, timeout=TIMEOUT
-    ).get_data_frames()[0]
-    bsa = retry(BoxScoreAdvancedV3, game_id=game_id, timeout=TIMEOUT).get_data_frames()[
-        0
-    ]
-    return join([bs, bsa], on=["gameId", "personId"])
-
-
-def get_team_gamelogs(season: str, dt: str, measure: None | str) -> pd.DataFrame:
-    return retry(
-        TeamGameLogs,
-        season_nullable=season,
-        date_from_nullable=dt,
-        measure_type_player_game_logs_nullable=measure,
-        timeout=TIMEOUT,
-    ).get_data_frames()[0]
 
 
 def dump_team_summaries(season: str, year: int) -> None:
@@ -162,9 +104,7 @@ def dump_team_summaries(season: str, year: int) -> None:
     #
     # there are more stats available if you leave off "Advanced", but I don't
     # currently have a need for them. add as necessary. (dump this to parquet?)
-    df = LeagueDashTeamStats(
-        season=season, measure_type_detailed_defense="Advanced"
-    ).get_data_frames()[0][
+    df = get_team_stats(season, "Advanced")[
         [
             "TEAM_ID",
             "TEAM_NAME",
@@ -193,7 +133,8 @@ def dump_team_summaries(season: str, year: int) -> None:
         {
             "updated": datetime.datetime.now(datetime.UTC).isoformat(),
             "teams": {
-                team_id_to_abbrev(t["TEAM_ID"]): t for t in df.to_dict(orient="records")
+                team_id_to_abbrev(t["TEAM_ID"]): t
+                for t in df.to_dict(orient="records")  # type: ignore
             },
         },
         open(DIR / f"team_summary_{year}.json", "w"),
@@ -424,12 +365,7 @@ def download_player_stats():
         stats = []
         for per in ["Totals", "PerGame", "Per36", "Per100Possessions"]:
             for measure in ["Base", "Defense"]:
-                df = LeagueDashPlayerStats(
-                    season=season,
-                    measure_type_detailed_defense=measure,
-                    per_mode_detailed=per,
-                    timeout=TIMEOUT,
-                ).get_data_frames()[0]
+                df = get_dash_player_stats(season, measure, per)
                 df["year"] = year
 
                 # we want the PTS column (for exmample) to contain the total # of
@@ -445,27 +381,15 @@ def download_player_stats():
 
         # the advanced stats don't have any differences between totals,
         # pergame, &c, so only download them once
-        stats.append(
-            LeagueDashPlayerStats(
-                season=season,
-                measure_type_detailed_defense="Advanced",
-                per_mode_detailed="Totals",
-                timeout=TIMEOUT,
-            ).get_data_frames()[0]
-        )
+        stats.append(get_dash_player_stats(season, "Advanced", "Totals"))
 
         # https://www.nba.com/stats/players/shots-general
         # this gets us 2-point shots broken out from other field goals
         # also: this defaults to totals, if I want per game I'll need to add it
-        stats.append(
-            LeagueDashPlayerPtShot(
-                season=season,
-                timeout=TIMEOUT,
-            ).get_data_frames()[0]
-        )
+        stats.append(get_2pt_shots(season))
 
         # get bio stats: height, place of origin, etc
-        stats.append(LeagueDashPlayerBioStats(season=season).get_data_frames()[0])
+        stats.append(get_bio_stats(season))
 
         allstats = join(stats, on=["PLAYER_ID"])
         convert_i64_to_i32(allstats)
