@@ -217,13 +217,19 @@ def download_gamelogs(
         old_playerlogs = None
 
         # we don't need to redownload old years, (presumably?) nothing has changed
-        if year != current_season and gamelog_file.is_file():
+        if (
+            year != current_season
+            and gamelog_file.is_file()
+            and playerlog_file.is_file()
+        ):
             game_seasons.append(pd.read_parquet(gamelog_file))
+            player_seasons.append(pd.read_parquet(playerlog_file))
             continue
 
         # If the current year's file is less than an hour old, don't re-download
-        elif year == current_season and fresh(gamelog_file):
+        elif year == current_season and fresh(gamelog_file) and fresh(playerlog_file):
             game_seasons.append(pd.read_parquet(gamelog_file))
+            player_seasons.append(pd.read_parquet(playerlog_file))
             continue
 
         # TODO: download past year's game logs... will take a long time
