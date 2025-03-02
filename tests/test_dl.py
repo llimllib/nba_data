@@ -1,23 +1,10 @@
-import pytest
-import pandas as pd
 from pathlib import Path
-import datetime
-import json
-from unittest.mock import patch, MagicMock
-
-# Import the module under test
-import sys
-import os
+import tempfile
+from unittest.mock import patch
 
 from src.dl import (
     download_player_stats,
-    DIR,
-    FIRST_SEASON,
-    CURRENT_SEASON,
-    fresh,
-    columns_to_suffix,
 )
-from src.stats import get_dash_player_stats, get_2pt_shots, get_bio_stats
 
 
 class TestDownloadPlayerStats:
@@ -41,18 +28,16 @@ class TestDownloadPlayerStats:
         mock_2pt_shots,
         mock_dash_stats,
         sample_player_stats_df,
-        mock_dir,
     ):
         """Test that we don't redownload data for previous seasons if files exist"""
         # Setup
         mock_is_file.return_value = True
         mock_read_parquet.return_value = sample_player_stats_df
 
-        with patch("src.dl.DIR", mock_dir):
+        with tempfile.TemporaryDirectory() as tempdir:
             with patch("src.dl.CURRENT_SEASON", 2023):
                 with patch("src.dl.FIRST_SEASON", 2022):
-                    # Execute
-                    download_player_stats()
+                    download_player_stats(Path(tempdir))
 
                     # Verify
                     # Should have read the parquet file for previous seasons
@@ -102,11 +87,10 @@ class TestDownloadPlayerStats:
         mock_bio_stats.return_value = sample_bio_stats_df
         mock_join.return_value = sample_player_stats_df
 
-        with patch("src.dl.DIR", mock_dir):
+        with tempfile.TemporaryDirectory() as tempdir:
             with patch("src.dl.CURRENT_SEASON", 2023):
                 with patch("src.dl.FIRST_SEASON", 2023):
-                    # Execute
-                    download_player_stats()
+                    download_player_stats(Path(tempdir))
 
                     # Verify
                     # Should call the API for the current season
@@ -152,11 +136,11 @@ class TestDownloadPlayerStats:
         mock_is_file.return_value = True
         mock_read_parquet.return_value = sample_player_stats_df
 
-        with patch("src.dl.DIR", mock_dir):
+        with tempfile.TemporaryDirectory() as tempdir:
             with patch("src.dl.CURRENT_SEASON", 2023):
                 with patch("src.dl.FIRST_SEASON", 2022):
                     # Execute
-                    download_player_stats()
+                    download_player_stats(Path(tempdir))
 
                     # Verify
                     # Should have created the metadata.json file
