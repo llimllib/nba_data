@@ -27,7 +27,6 @@ from .stats import (
 
 FIRST_SEASON = 2010
 CURRENT_SEASON = 2025
-DIR = Path("data")
 TEAMS_BY_ID = {t[0]: t for t in teams}
 
 # TODO: refactor this to create a duckdb database; Here is a javascript code
@@ -87,7 +86,7 @@ def write_parquet(df: pd.DataFrame, filename: str | Path):
     pq.write_table(table, filename)
 
 
-def dump_team_summaries(season: str, year: int) -> None:
+def dump_team_summaries(season: str, year: int, outdir: Path) -> None:
     """
     Dump team summary stats for a season to team_summary_{year}.json
 
@@ -137,11 +136,11 @@ def dump_team_summaries(season: str, year: int) -> None:
                 for t in df.to_dict(orient="records")  # type: ignore
             },
         },
-        open(DIR / f"team_summary_{year}.json", "w"),
+        open(outdir / f"team_summary_{year}.json", "w"),
     )
 
 
-def write_all_team_summaries() -> None:
+def write_all_team_summaries(outdir: Path) -> None:
     """
     gather all the team summary json files into a single team summary json for
     all covered years
@@ -154,7 +153,7 @@ def write_all_team_summaries() -> None:
         data = json.load(open(f))
         year = re.findall(r"\d{4}", f)[0]
         all_summaries["data"][year] = data["teams"]
-    json.dump(all_summaries, open(DIR / f"team_summary.json", "w"))
+    json.dump(all_summaries, open(outdir / f"team_summary.json", "w"))
 
 
 def dump_team_eff_json(df: pd.DataFrame, year: int) -> None:
@@ -204,12 +203,12 @@ def dump_team_eff_json(df: pd.DataFrame, year: int) -> None:
     json.dump(data, open(DIR / f"team_efficiency_{year}.json", "w"))
 
 
-def download_gamelogs():
+def download_gamelogs(outdir: Path):
     game_seasons = []
     player_seasons = []
     for year in range(FIRST_SEASON, CURRENT_SEASON + 1):
-        gamelog_file = DIR / f"gamelog_{year}.parquet"
-        playerlog_file = DIR / f"playerlog_{year}.parquet"
+        gamelog_file = outdir / f"gamelog_{year}.parquet"
+        playerlog_file = outdir / f"playerlog_{year}.parquet"
         season = f"{year-1}-{str(year)[2:]}"
         most_recent = ""
         old_games = None
@@ -291,7 +290,7 @@ def download_gamelogs():
         convert_i64_to_i32(playerlogs)
 
         dump_team_eff_json(games, year)
-        dump_team_summaries(season, year)
+        dump_team_summaries(season, year, outdir)
 
         game_seasons.append(games)
         write_parquet(games, gamelog_file)
@@ -303,14 +302,14 @@ def download_gamelogs():
     all_player_seasons = pd.concat(player_seasons)
     all_player_seasons.reset_index(drop=True, inplace=True)
 
-    write_all_team_summaries()
+    write_all_team_summaries(outdir)
 
     # delete the old file and overwrite with the new. pandas parquet writing
     # does not have any option to overwrite.
-    tryrm(DIR / "gamelogs.parquet")
-    write_parquet(all_game_seasons, DIR / "gamelogs.parquet")
-    tryrm(DIR / "player_game_logs.parquet")
-    write_parquet(all_game_seasons, DIR / "player_game_logs.parquet")
+    tryrm(outdir / "gamelogs.parquet")
+    write_parquet(all_game_seasons, outdir / "gamelogs.parquet")
+    tryrm(outdir / "player_game_logs.parquet")
+    write_parquet(all_game_seasons, outdir / "player_game_logs.parquet")
 
 
 columns_to_suffix = [
@@ -343,10 +342,10 @@ columns_to_suffix = [
 ]
 
 
-def download_player_stats():
+def download_player_stats(outdir: Path):
     playerstats = []
     for year in range(FIRST_SEASON, CURRENT_SEASON + 1):
-        file = DIR / f"players_{year}.parquet"
+        file = outdir / f"players_{year}.parquet"
         season = f"{year-1}-{str(year)[2:]}"
 
         # we don't need to redownload old years, (presumably?) nothing has changed
@@ -404,8 +403,8 @@ def download_player_stats():
     allstats.reset_index(drop=True, inplace=True)
 
     # delete the old playerstats.parquet and overwrite the new.
-    tryrm(DIR / "playerstats.parquet")
-    write_parquet(allstats, DIR / "playerstats.parquet")
+    tryrm(outdir / "playerstats.parquet")
+    write_parquet(allstats, outdir / "playerstats.parquet")
 
     # XXX: Until duckdb supports reading metadata out of parquet files, we will
     #      generate a metadata file
@@ -416,23 +415,32 @@ def download_player_stats():
     #         for the docs; once something > 0.9.2 gets relased, we can use it
     json.dump(
         {"updated": datetime.datetime.now(datetime.UTC).isoformat() + "Z"},
-        open(DIR / "metadata.json", "w"),
+        open(outdir / "metadata.json", "w"),
     )
 
 
-def update_json():
+def update_json(outdir: Path):
     for year in range(FIRST_SEASON, CURRENT_SEASON + 1):
         season = f"{year-1}-{str(year)[2:]}"
-        df = pd.read_parquet(DIR / f"gamelog_{year}.parquet")
+        df = pd.read_parquet(outdir / f"gamelog_{year}.parquet")
         dump_team_eff_json(df, year)
-        dump_team_summaries(season, year)
+        dump_team_summaries(season, year, outdir)
 
 
 if __name__ == "__main__":
+    DIR = Path("__file__").parent / "data"
+
     parser = argparse.ArgumentParser(description="download stats from stats.nba.com")
     parser.add_argument("-g", "--gamelogs", const=True, action="store_const")
     parser.add_argument("-s", "--player-stats", const=True, action="store_const")
     parser.add_argument("--update-json-only", const=True, action="store_const")
+    parser.add_argument(
+        "-d",
+        "--data-dir",
+        type=Path,
+        default=DIR,
+        help="Path to data directory (default: ./data)",
+    )
     args = parser.parse_args()
 
     # if no arguments passed, download both
@@ -442,9 +450,9 @@ if __name__ == "__main__":
         DIR.mkdir()
 
     if args.update_json_only:
-        update_json()
+        update_json(args.data_dir)
         sys.exit(0)
     if args.gamelogs or runall:
-        download_gamelogs()
+        download_gamelogs(args.data_dir)
     if args.player_stats or runall:
-        download_player_stats()
+        download_player_stats(args.data_dir)
