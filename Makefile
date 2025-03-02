@@ -1,7 +1,7 @@
 .PHONY: update
 update:
 	git pull && \
-		uv run python dl.py && \
+		uv run python src/dl.py && \
 		git add data && \
 		git commit -m "Latest data: $$(date -u)" && \
 		git push
