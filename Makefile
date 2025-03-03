@@ -2,8 +2,9 @@
 update:
 	# have been getting errors like:
 	# error: RPC failed; curl 92 HTTP/2 stream 7 was not closed cleanly: CANCEL (err 8)
-	# and this seems to be the recommended solution
-	git config --global http.postBuffer 157286400 && \
+	#
+	# increasing the postBuffer didn't help, maybe this will?
+	git config --global http.version HTTP/1.1 && \
 		git pull && \
 		uv run python -m src.dl && \
 		git add data && \
