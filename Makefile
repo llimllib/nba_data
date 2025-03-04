@@ -8,7 +8,7 @@ update:
 
 # CI already has a checkout, so we shouldn't need to do a `git pull`
 .PHONY: update-ci
-update:
+update-ci:
 	uv run python -m src.dl && \
 		git add data && \
 		git commit -m "Latest data: $$(date -u)" && \
