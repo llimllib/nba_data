@@ -1,6 +1,8 @@
 from functools import reduce
 from time import sleep
+import traceback
 from typing import Callable, TypeVar
+from urllib3.exceptions import ReadTimeoutError
 
 import pandas as pd
 from nba_api.stats.endpoints import (
@@ -46,6 +48,9 @@ def retry(f: Callable[..., G], **kwargs) -> G:
             timeout = [1, 2, 5, 10, 15, 20, 25, 25, 25, 50, 50, 100][i]
             i += 1
             print(f"failed {f.__name__}({kwargs}), sleeping {timeout}:\n{exc}")
+            # print the traceback unless it's a read timeout
+            if not isinstance(exc, (ReadTimeoutError)):
+                print(traceback.format_exc())
             sleep(timeout)
     raise Exception("this should never happen")
 
