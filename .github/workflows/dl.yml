@@ -43,6 +43,12 @@ jobs:
 
       - name: Run update
         run: make update
+        env:
+          # I've been getting errors just trying to pull the
+          # repo even though it's already cloned here
+          GIT_HTTP_LOW_SPEED_LIMIT: 0
+          GIT_HTTP_LOW_SPEED_TIME: 600
+          GIT_CURL_VERBOSE: 1
         continue-on-error: false
 
       # if there's a failure:
