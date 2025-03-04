@@ -40,6 +40,9 @@ jobs:
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          # git pulls are failing, this seems to help a tiny bit?
+          git config --global http.version HTTP/1.1
+          git config --global http.postBuffer 524288000
 
       - name: Run update
         run: make update
@@ -49,6 +52,7 @@ jobs:
           GIT_HTTP_LOW_SPEED_LIMIT: 0
           GIT_HTTP_LOW_SPEED_TIME: 600
           GIT_CURL_VERBOSE: 1
+          GIT_TIMEOUT: 300
         continue-on-error: false
 
       # if there's a failure:
