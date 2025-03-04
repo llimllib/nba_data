@@ -45,7 +45,7 @@ jobs:
           git config --global http.postBuffer 524288000
 
       - name: Run update
-        run: make update
+        run: make update-ci
         env:
           # I've been getting errors just trying to pull the
           # repo even though it's already cloned here
