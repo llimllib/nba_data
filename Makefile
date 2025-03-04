@@ -5,6 +5,8 @@ update:
 	#
 	# increasing the postBuffer didn't help, maybe this will?
 	git config --global http.version HTTP/1.1 && \
+		git config --global http.lowSpeedLimit 1000 && \
+		git config --global http.lowSpeedTime 300 && \
 		git pull && \
 		uv run python -m src.dl && \
 		git add data && \
