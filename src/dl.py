@@ -498,9 +498,9 @@ def download_player_playoff_stats(
     allstats = pd.concat(playerstats)
     allstats.reset_index(drop=True, inplace=True)
 
-    # delete the old playerstats.parquet and overwrite the new.
-    tryrm(outdir / "playerstats.parquet")
-    write_parquet(allstats, outdir / "playerstats.parquet")
+    # delete the old playerstats_playoffs.parquet and overwrite the new.
+    tryrm(outdir / "playerstats_playoffs.parquet")
+    write_parquet(allstats, outdir / "playerstats_playoffs.parquet")
 
     # XXX: Until duckdb supports reading metadata out of parquet files, we will
     #      generate a metadata file
