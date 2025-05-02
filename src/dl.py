@@ -11,6 +11,7 @@ import re
 import sys
 
 from nba_api.stats.library.data import teams
+from nba_api.stats.library.parameters import SeasonTypeAllStar
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -429,6 +430,91 @@ def download_player_stats(
     )
 
 
+def download_player_playoff_stats(
+    outdir: Path, first_season=FIRST_SEASON, current_season=CURRENT_SEASON
+):
+    playerstats = []
+    for year in range(first_season, current_season + 1):
+        file = outdir / f"players_{year}_playoffs.parquet"
+        season = f"{year-1}-{str(year)[2:]}"
+
+        # we don't need to redownload old years, (presumably?) nothing has changed
+        if year != current_season and Path(file).is_file():
+            playerstats.append(pd.read_parquet(file))
+            continue
+
+        # If the current year's file is less than an hour old, don't re-download
+        elif year == current_season and fresh(Path(file)):
+            playerstats.append(pd.read_parquet(file))
+            continue
+
+        print(f"Downloading {season} player postseason stats")
+
+        # https://www.nba.com/stats/players/traditional and inspect to see the options
+        stats = []
+        for per in ["Totals", "PerGame", "Per36", "Per100Possessions"]:
+            for measure in ["Base", "Defense"]:
+                df = get_dash_player_stats(
+                    season, measure, per, SeasonTypeAllStar.playoffs
+                )
+                df["year"] = year
+
+                # we want the PTS column (for exmample) to contain the total # of
+                # points, not PTS_Totals, so only suffix the columns of the other
+                # `per` values
+                if per != "Totals":
+                    df.rename(
+                        columns={col: f"{col}_{per}" for col in columns_to_suffix},
+                        inplace=True,
+                    )
+
+                stats.append(df)
+
+        # the advanced stats don't have any differences between totals,
+        # pergame, &c, so only download them once
+        stats.append(
+            get_dash_player_stats(
+                season, "Advanced", "Totals", SeasonTypeAllStar.playoffs
+            )
+        )
+
+        # https://www.nba.com/stats/players/shots-general
+        # this gets us 2-point shots broken out from other field goals
+        # also: this defaults to totals, if I want per game I'll need to add it
+        stats.append(get_2pt_shots(season, SeasonTypeAllStar.playoffs))
+
+        # get bio stats: height, place of origin, etc
+        stats.append(get_bio_stats(season, SeasonTypeAllStar.playoffs))
+
+        allstats = join(stats, on=["PLAYER_ID"])
+        convert_i64_to_i32(allstats)
+
+        # lower case all the columns
+        allstats.columns = allstats.columns.str.lower()
+
+        playerstats.append(allstats)
+        write_parquet(allstats, file)
+
+    allstats = pd.concat(playerstats)
+    allstats.reset_index(drop=True, inplace=True)
+
+    # delete the old playerstats.parquet and overwrite the new.
+    tryrm(outdir / "playerstats.parquet")
+    write_parquet(allstats, outdir / "playerstats.parquet")
+
+    # XXX: Until duckdb supports reading metadata out of parquet files, we will
+    #      generate a metadata file
+    # - https://github.com/duckdb/duckdb/issues/2534
+    # update: duckdb now supports it, but the version containing support has
+    #         not yet been released. see
+    #         https://duckdb.org/docs/data/parquet/metadata.html#parquet-key-value-metadata
+    #         for the docs; once something > 0.9.2 gets relased, we can use it
+    json.dump(
+        {"updated": datetime.datetime.now(datetime.UTC).isoformat() + "Z"},
+        open(outdir / "metadata.json", "w"),
+    )
+
+
 def update_json(outdir: Path, first_season=FIRST_SEASON, current_season=CURRENT_SEASON):
     for year in range(first_season, current_season + 1):
         season = f"{year-1}-{str(year)[2:]}"
@@ -443,6 +529,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="download stats from stats.nba.com")
     parser.add_argument("-g", "--gamelogs", const=True, action="store_const")
     parser.add_argument("-s", "--player-stats", const=True, action="store_const")
+    parser.add_argument("-p", "--playoff-stats", const=True, action="store_const")
     parser.add_argument("--update-json-only", const=True, action="store_const")
     parser.add_argument(
         "-d",
@@ -454,7 +541,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # if no arguments passed, download both
-    runall = not any([args.gamelogs, args.player_stats, args.update_json_only])
+    runall = not any(
+        [args.gamelogs, args.player_stats, args.update_json_only, args.playoff_stats]
+    )
 
     if not DIR.is_dir():
         DIR.mkdir()
@@ -466,3 +555,5 @@ if __name__ == "__main__":
         download_gamelogs(args.data_dir)
     if args.player_stats or runall:
         download_player_stats(args.data_dir)
+    if args.playoff_stats or runall:
+        download_player_playoff_stats(args.data_dir)
