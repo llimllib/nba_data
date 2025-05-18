@@ -125,6 +125,7 @@ def dump_to_parquet(base_dir: Path, output_dir: Path):
                 player_boxes[(pb["gmId"], pb["plyrID"])] = {
                     "season": season,
                     "game_id": pb["gmId"],
+                    "player_id": pb["plyrID"],
                     "home": pb["hmTm"],
                     "starter": pb["starter"],
                     "dAvgPos": pb["dAvgPos"],
@@ -166,8 +167,8 @@ def dump_to_parquet(base_dir: Path, output_dir: Path):
             for tb in data["team_box"]:
                 team_boxes[(tb["gameId"], tb["tmID"])] = {
                     "season": season,
-                    "gameId": tb["gameId"],
-                    "tmID": tb["tmID"],
+                    "game_id": tb["gameId"],
+                    "team_id": tb["tmID"],
                     "homeTm": tb["homeTm"],
                     "tmName": tb["tmName"],
                     "assisted3ptShooter": tb["assisted3ptShooter"],
