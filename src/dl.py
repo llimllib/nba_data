@@ -318,7 +318,7 @@ def download_gamelogs(
     tryrm(outdir / "gamelogs.parquet")
     write_parquet(all_game_seasons, outdir / "gamelogs.parquet")
     tryrm(outdir / "player_game_logs.parquet")
-    write_parquet(all_game_seasons, outdir / "player_game_logs.parquet")
+    write_parquet(all_player_seasons, outdir / "player_game_logs.parquet")
 
 
 columns_to_suffix = [
