@@ -1,6 +1,5 @@
 import argparse
 from datetime import datetime, timedelta
-import glob
 import json
 import os
 from pathlib import Path
@@ -254,9 +253,13 @@ def main(opts: Options):
 
         print(f"Downloading data for {len(dates)} days...")
 
+        today = datetime.now().strftime("%Y-%m-%d")
+        yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+
         for date in dates:
-            outfile = os.path.join(output_dir, f"{date}.json")
-            if os.path.isfile(outfile):
+            # don't re-download data unless it's todays or yesterday's
+            outfile = output_dir / f"{date}.json"
+            if outfile.is_file() and date not in [today, yesterday]:
                 continue
 
             print(f"Fetching data for {season} {date}...")
