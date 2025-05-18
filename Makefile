@@ -2,6 +2,7 @@
 update:
 	git pull && \
 		uv run python -m src.dl && \
+		uv run python -m src.espn && \
 		git add data && \
 		git commit -m "Latest data: $$(date -u)" && \
 		git push
@@ -10,6 +11,7 @@ update:
 .PHONY: update-ci
 update-ci:
 	uv run python -m src.dl && \
+		uv run python -m src.espn && \
 		git add data && \
 		git commit -m "Latest data: $$(date -u)" && \
 		git push
