@@ -14,7 +14,7 @@ from nba_api.stats.endpoints import (
     LeagueDashTeamStats,
     TeamGameLogs,
 )
-from nba_api.stats.library.parameters import SeasonTypeAllStar
+from nba_api.stats.library.parameters import LeagueIDNullable, SeasonTypeAllStar
 
 
 def join(frames: list[pd.DataFrame], on: list[str]) -> pd.DataFrame:
@@ -71,6 +71,7 @@ def get_box_score(game_id: str) -> pd.DataFrame:
 def get_team_gamelogs(season: str, dt: str, measure: None | str) -> pd.DataFrame:
     return retry(
         TeamGameLogs,
+        league_id_nullable=LeagueIDNullable.nba,
         season_nullable=season,
         date_from_nullable=dt,
         measure_type_player_game_logs_nullable=measure,
@@ -83,6 +84,7 @@ def get_dash_player_stats(
 ) -> pd.DataFrame:
     return retry(
         LeagueDashPlayerStats,
+        league_id_nullable=LeagueIDNullable.nba,
         measure_type_detailed_defense=measure,
         per_mode_detailed=per,
         season=season,
@@ -96,6 +98,7 @@ def get_2pt_shots(
 ) -> pd.DataFrame:
     return retry(
         LeagueDashPlayerPtShot,
+        league_id=LeagueIDNullable.nba,
         season=season,
         season_type_all_star=season_type,
         timeout=TIMEOUT,
@@ -106,13 +109,17 @@ def get_bio_stats(
     season: str, season_type: str = SeasonTypeAllStar.regular
 ) -> pd.DataFrame:
     return retry(
-        LeagueDashPlayerBioStats, season=season, season_type_all_star=season_type
+        LeagueDashPlayerBioStats,
+        league_id=LeagueIDNullable.nba,
+        season=season,
+        season_type_all_star=season_type,
     ).get_data_frames()[0]
 
 
 def get_team_stats(season: str, measure_defense: str) -> pd.DataFrame:
     return retry(
         LeagueDashTeamStats,
+        league_id_nullable=LeagueIDNullable.nba,
         season=season,
         measure_type_detailed_defense=measure_defense,
     ).get_data_frames()[0]
