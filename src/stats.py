@@ -15,6 +15,7 @@ from nba_api.stats.endpoints import (
     TeamGameLogs,
 )
 from nba_api.stats.library.parameters import LeagueIDNullable, SeasonTypeAllStar
+from requests.exceptions import ReadTimeout
 
 
 def join(frames: list[pd.DataFrame], on: list[str]) -> pd.DataFrame:
@@ -36,21 +37,36 @@ TIMEOUT = 30
 G = TypeVar("G")
 
 
-# retry takes a function and its args, and if it times out, sleeps 60 seconds
-# then retries until it succeeds
+class RetryLimitExceeded(Exception):
+    """Exception raised when a function retry limit is exceeded."""
+
+    def __init__(self, func_name, attempts, kwargs, exception=None):
+        self.func_name = func_name
+        self.attempts = attempts
+        self.kwargs = kwargs
+        self.last_exception = exception
+        super().__init__(
+            f"Retry limit exceeded after {attempts} attempts for function {func_name} with {exception.__class__.__name__}"
+        )
+
+
 def retry(f: Callable[..., G], **kwargs) -> G:
+    """
+    Retry a function call with backoff and prints out the exceptions raised
+    unless they are a timeout.
+    """
     i = 0
     while 1:
         try:
             return f(**kwargs)
         except Exception as exc:
             if i > 11:
-                raise Exception("retry limit exceeded")
+                raise RetryLimitExceeded(f.__name__, i, kwargs, exc)
             timeout = [1, 2, 5, 10, 15, 20, 25, 25, 25, 50, 50, 100][i]
             i += 1
             print(f"failed {f.__name__}({kwargs}), sleeping {timeout}:\n{exc}")
             # print the traceback unless it's a read timeout
-            if not isinstance(exc, (ReadTimeoutError)):
+            if not isinstance(exc, (ReadTimeout, ReadTimeoutError, TimeoutError)):
                 print(traceback.format_exc())
             sleep(timeout)
     raise Exception("this should never happen")
