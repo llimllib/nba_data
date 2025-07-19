@@ -26,9 +26,11 @@ class TestStatsAPI:
 
         # Verify
         mock_league_dash.assert_called_once_with(
-            season="2022-23",
+            league_id_nullable="00",
             measure_type_detailed_defense="Base",
             per_mode_detailed="Totals",
+            season="2022-23",
+            season_type_all_star="Regular Season",
             timeout=30,
         )
         assert isinstance(result, pd.DataFrame)
@@ -46,7 +48,12 @@ class TestStatsAPI:
         result = get_2pt_shots("2022-23")
 
         # Verify
-        mock_pt_shot.assert_called_once_with(season="2022-23", timeout=30)
+        mock_pt_shot.assert_called_once_with(
+            league_id="00",
+            season="2022-23",
+            season_type_all_star="Regular Season",
+            timeout=30,
+        )
         assert isinstance(result, pd.DataFrame)
         assert list(result["test"]) == [1, 2, 3]
 
@@ -62,7 +69,9 @@ class TestStatsAPI:
         result = get_bio_stats("2022-23")
 
         # Verify
-        mock_bio_stats.assert_called_once_with(season="2022-23")
+        mock_bio_stats.assert_called_once_with(
+            league_id="00", season="2022-23", season_type_all_star="Regular Season"
+        )
         assert isinstance(result, pd.DataFrame)
         assert list(result["test"]) == [1, 2, 3]
 
