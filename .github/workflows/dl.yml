@@ -14,7 +14,7 @@ jobs:
       issues: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # nba.com doesn't let me use a github actions IP, so route through tailscale
       # https://til.simonwillison.net/tailscale/tailscale-github-actions
@@ -34,7 +34,7 @@ jobs:
           timeout 5m sudo -E tailscale set --exit-node=apple-tv --exit-node-allow-lan-access=true
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v6
 
       - name: Configure Git
         run: |
@@ -65,7 +65,7 @@ jobs:
       # the idea here is to avoid getting an avalanche of tickets when something breaks
       - name: Notify on failure
         if: failure()
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const issueTitle = 'Data update workflow failed';
