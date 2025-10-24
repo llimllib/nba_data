@@ -16,7 +16,7 @@ from nba_api.stats.endpoints import (
     TeamGameLogs,
 )
 from nba_api.stats.library.parameters import LeagueIDNullable, SeasonTypeAllStar
-from requests.exceptions import ReadTimeout
+from requests.exceptions import ReadTimeout, ConnectionError
 
 
 def join(frames: list[pd.DataFrame], on: list[str]) -> pd.DataFrame:
@@ -69,7 +69,14 @@ def retry(f: Callable[..., G], **kwargs) -> G:
             print(f"failed {f.__name__}({args_str}), sleeping {timeout}:\n{exc}")
             # print the traceback unless it's a read timeout
             if not isinstance(
-                exc, (ReadTimeout, ReadTimeoutError, TimeoutError, RemoteDisconnected)
+                exc,
+                (
+                    ReadTimeout,
+                    ReadTimeoutError,
+                    TimeoutError,
+                    RemoteDisconnected,
+                    ConnectionError,
+                ),
             ):
                 print(traceback.format_exc())
             sleep(timeout)
@@ -79,11 +86,11 @@ def retry(f: Callable[..., G], **kwargs) -> G:
 # get_box_score will return a combined traditional + advanced box score for a
 # given game
 def get_box_score(game_id: str) -> pd.DataFrame:
-    print(f"BoxScoreTraditionalV3(game_id={game_id}, timeout={TIMEOUT}")
+    print(f"BoxScoreTraditionalV3(game_id={game_id}, timeout={TIMEOUT})")
     bs = retry(
         BoxScoreTraditionalV3, game_id=game_id, timeout=TIMEOUT
     ).get_data_frames()[0]
-    print(f"BoxScoreAdvancedV3(game_id={game_id}, timeout={TIMEOUT}")
+    print(f"BoxScoreAdvancedV3(game_id={game_id}, timeout={TIMEOUT})")
     bsa = retry(BoxScoreAdvancedV3, game_id=game_id, timeout=TIMEOUT).get_data_frames()[
         0
     ]
