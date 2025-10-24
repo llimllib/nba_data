@@ -411,7 +411,7 @@ def download_player_stats(
         playerstats.append(allstats)
         write_parquet(allstats, file)
 
-    allstats = pd.concat(playerstats)
+    allstats = pd.concat([df for df in playerstats if not df.empty])
     allstats.reset_index(drop=True, inplace=True)
 
     # delete the old playerstats.parquet and overwrite the new.
@@ -496,7 +496,7 @@ def download_player_playoff_stats(
         playerstats.append(allstats)
         write_parquet(allstats, file)
 
-    allstats = pd.concat(playerstats)
+    allstats = pd.concat([df for df in playerstats if not df.empty])
     allstats.reset_index(drop=True, inplace=True)
 
     # delete the old playerstats_playoffs.parquet and overwrite the new.
