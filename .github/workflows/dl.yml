@@ -44,6 +44,31 @@ jobs:
         run: |
           timeout 5m sudo -E tailscale set --exit-node=apple-tv --exit-node-allow-lan-access=true
 
+      - name: Verify exit node is online and working
+        run: |
+          echo "Checking Tailscale status..."
+          STATUS=$(sudo tailscale status --json)
+
+          # Check if we're using an exit node
+          EXIT_NODE=$(echo "$STATUS" | jq -r '.ExitNodeStatus.Online // "null"')
+
+          if [ "$EXIT_NODE" != "true" ]; then
+            echo "❌ ERROR: Exit node 'apple-tv' is not online!"
+            echo "Exit node status: $EXIT_NODE"
+            exit 1
+          fi
+
+          echo "✅ Exit node is online"
+
+          # Verify we can actually reach the internet through it
+          echo "Testing connectivity through exit node..."
+          if ! curl --max-time 10 -s https://www.google.com > /dev/null; then
+            echo "❌ ERROR: Cannot reach internet through exit node"
+            exit 1
+          fi
+
+          echo "✅ Internet connectivity confirmed through exit node"
+
       - name: Run update
         run: make update-ci
         env:
