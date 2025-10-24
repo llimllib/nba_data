@@ -3,6 +3,7 @@ from time import sleep
 import traceback
 from typing import Callable, TypeVar
 from urllib3.exceptions import ReadTimeoutError
+from http.client import RemoteDisconnected
 
 import pandas as pd
 from nba_api.stats.endpoints import (
@@ -64,9 +65,12 @@ def retry(f: Callable[..., G], **kwargs) -> G:
                 raise RetryLimitExceeded(f.__name__, i, kwargs, exc)
             timeout = [1, 2, 5, 10, 15, 20, 25, 25, 25, 50, 50, 100][i]
             i += 1
-            print(f"failed {f.__name__}({kwargs}), sleeping {timeout}:\n{exc}")
+            args_str = ", ".join(f"{k}={v!r}" for k, v in kwargs.items())
+            print(f"failed {f.__name__}({args_str}), sleeping {timeout}:\n{exc}")
             # print the traceback unless it's a read timeout
-            if not isinstance(exc, (ReadTimeout, ReadTimeoutError, TimeoutError)):
+            if not isinstance(
+                exc, (ReadTimeout, ReadTimeoutError, TimeoutError, RemoteDisconnected)
+            ):
                 print(traceback.format_exc())
             sleep(timeout)
     raise Exception("this should never happen")
@@ -75,9 +79,11 @@ def retry(f: Callable[..., G], **kwargs) -> G:
 # get_box_score will return a combined traditional + advanced box score for a
 # given game
 def get_box_score(game_id: str) -> pd.DataFrame:
+    print(f"BoxScoreTraditionalV3(game_id={game_id}, timeout={TIMEOUT}")
     bs = retry(
         BoxScoreTraditionalV3, game_id=game_id, timeout=TIMEOUT
     ).get_data_frames()[0]
+    print(f"BoxScoreAdvancedV3(game_id={game_id}, timeout={TIMEOUT}")
     bsa = retry(BoxScoreAdvancedV3, game_id=game_id, timeout=TIMEOUT).get_data_frames()[
         0
     ]
