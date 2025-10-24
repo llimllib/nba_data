@@ -278,7 +278,9 @@ def main(opts: Options):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="download stats from stats.nba.com")
+    parser = argparse.ArgumentParser(
+        description="download stats from espnanalytics.com"
+    )
     parser.add_argument(
         "-e",
         "--every-season",
