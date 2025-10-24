@@ -76,7 +76,6 @@ jobs:
           # over tailscale can be quite slow
           GIT_HTTP_LOW_SPEED_LIMIT: 0
           GIT_HTTP_LOW_SPEED_TIME: 600
-          GIT_CURL_VERBOSE: 1
           GIT_TIMEOUT: 300
           # sometimes uv fails when downloading packages; increase its timeout
           UV_HTTP_TIMEOUT: 600
