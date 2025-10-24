@@ -16,6 +16,17 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Configure Git
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          # git pulls are failing, this seems to help a tiny bit?
+          git config --global http.version HTTP/1.1
+          git config --global http.postBuffer 524288000
+
       # nba.com doesn't let me use a github actions IP, so route through tailscale
       # https://til.simonwillison.net/tailscale/tailscale-github-actions
       - name: Setup Tailscale
@@ -33,17 +44,6 @@ jobs:
         run: |
           timeout 5m sudo -E tailscale set --exit-node=apple-tv --exit-node-allow-lan-access=true
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v6
-
-      - name: Configure Git
-        run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          # git pulls are failing, this seems to help a tiny bit?
-          git config --global http.version HTTP/1.1
-          git config --global http.postBuffer 524288000
-
       - name: Run update
         run: make update-ci
         env:
@@ -56,6 +56,12 @@ jobs:
           # sometimes uv fails when downloading packages; increase its timeout
           UV_HTTP_TIMEOUT: 600
         continue-on-error: false
+
+      # Disable exit node before accessing GitHub API
+      - name: Disable Tailscale exit node
+        if: always()
+        run: |
+          sudo -E tailscale set --exit-node=
 
       # if there's a failure:
       # - check for an existing ticket
