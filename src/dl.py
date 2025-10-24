@@ -27,7 +27,8 @@ from .stats import (
 )
 
 FIRST_SEASON = 2010
-CURRENT_SEASON = 2025
+# the year of the _end_ of the season
+CURRENT_SEASON = 2026
 TEAMS_BY_ID = {t[0]: t for t in teams}
 
 # TODO: refactor this to create a duckdb database; Here is a javascript code
