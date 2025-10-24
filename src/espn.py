@@ -11,7 +11,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 
-CURRENT_SEASON = 2024
+CURRENT_SEASON = 2025
 
 
 def fetch_espn_data(season, day):
