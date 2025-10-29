@@ -13,8 +13,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Create .gz copies to signal non-compressibility
+        run: |
+          # Workaround for GitHub Pages CDN bug: when serving range requests,
+          # the CDN tries to serve byte slices of cached, gzipped assets. This
+          # fails because the range is not a valid gzip stream. By creating
+          # copies with .gz appended, we signal that files are already
+          # compressed, preventing the CDN from attempting compression.
+          #
+          # https://github.com/orgs/community/discussions/178318
+          find ./data -type f ! -name "*.gz" -exec sh -c 'cp "$1" "$1.gz"' _ {} \;
+
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: ./data
   deploy:
