@@ -50,10 +50,11 @@ jobs:
 
       - name: Upload to DigitalOcean Spaces
         run: |
-          aws s3 sync ./data s3://nba-data \
-            --endpoint-url https://nyc3.digitaloceanspaces.com \
+          aws s3 sync ./data s3://nba-data/ \
+            --endpoint-url https://sfo3.digitaloceanspaces.com \
             --acl public-read \
             --delete
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.DO_SPACES_ACCESS_KEY }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.DO_SPACES_SECRET }}
+          AWS_DEFAULT_REGION: us-east-1 # maybe necessary to avoid an aws cli error?
