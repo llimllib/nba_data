@@ -87,6 +87,20 @@ jobs:
         run: |
           sudo -E tailscale set --exit-node=
 
+      # Trigger the gh-pages deployment workflow after successful update
+      - name: Trigger gh-pages deployment
+        if: success()
+        uses: actions/github-script@v8
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'gh-pages.yml',
+              ref: 'main'
+            });
+            console.log('✅ Triggered gh-pages deployment workflow');
+
       # if there's a failure:
       # - check for an existing ticket
       # - make one if not found
