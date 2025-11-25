@@ -126,6 +126,7 @@ def dump_to_parquet(base_dir: Path, output_dir: Path):
     four_factors = defaultdict(dict)
     player_boxes = defaultdict(dict)
     team_boxes = defaultdict(dict)
+    player_details = defaultdict(dict)
 
     for file_path in json_files:
         season = int(file_path.parts[-2])
@@ -254,7 +255,23 @@ def dump_to_parquet(base_dir: Path, output_dir: Path):
                     "win": tb["win"],
                 }
 
-            # TODO: player details. Separate parquet or same?
+            for pd in data.get("player_details", []):
+                game_id = pd["gmID"]
+                team_abbr = pd["deanAbbrev"]
+                action_type = pd["actionType"]
+                player_id = pd["plyrID"]
+
+                key = (player_id, game_id)
+
+                player_details[key] |= {
+                    "playerId": player_id,
+                    "gameId": game_id,
+                    "team": team_abbr,
+                    "season": season,
+                    f"{action_type}_oNetPts": pd.get("oNetPts"),
+                    f"{action_type}_dNetPts": pd.get("dNetPts"),
+                    f"{action_type}_tNetPts": pd.get("tNetPts"),
+                }
 
         except Exception as e:
             print(f"Error processing {file_path}: {e}")
@@ -276,6 +293,11 @@ def dump_to_parquet(base_dir: Path, output_dir: Path):
     pq.write_table(
         pa.Table.from_pylist(list(team_boxes.values())),
         output_dir / "team_box.parquet",
+    )
+
+    pq.write_table(
+        pa.Table.from_pylist(list(player_details.values())),
+        output_dir / "player_details.parquet",
     )
 
 
