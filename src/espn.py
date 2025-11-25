@@ -58,7 +58,19 @@ def fetch_espn_data(season, day):
             Bucket="espnsportsanalytics.com", Key=f"NBA/netpts/{season}/{day}.json"
         )
 
-        return json.loads(response["Body"].read().decode("utf-8"))
+        summary = json.loads(response["Body"].read().decode("utf-8"))
+
+        # there's player data broken down in more detail at {day}_player.json
+        playerdata = s3.get_object(
+            Bucket="espnsportsanalytics.com",
+            Key=f"NBA/netpts/{season}/{day}_player.json",
+        )
+
+        summary["player_details"] = json.loads(
+            playerdata["Body"].read().decode("utf-8")
+        )
+
+        return summary
 
     except Exception as e:
         print(f"Error retrieving data for {day}: {str(e)}")
@@ -81,6 +93,24 @@ def daterange(start_date_str, end_date_str=None):
         current_date += timedelta(days=1)
 
     return date_list
+
+
+def iget(obj: dict, field: str):
+    """
+    Case-insensitive dictionary get. Returns the value for field (case-insensitive)
+    or default if not found.
+    """
+    # Try exact match first (faster)
+    if field in obj:
+        return obj[field]
+
+    # Fall back to case-insensitive search
+    field_lower = field.lower()
+    for key in obj:
+        if key.lower() == field_lower:
+            return obj[key]
+
+    raise Exception(f"{field} not found in {obj}")
 
 
 def dump_to_parquet(base_dir: Path, output_dir: Path):
@@ -126,7 +156,7 @@ def dump_to_parquet(base_dir: Path, output_dir: Path):
                     "season": season,
                     "game_id": pb["gmId"],
                     "player_id": pb["plyrID"],
-                    "team_id": pb["teamId"],
+                    "team_id": pb.get("teamId"),
                     "team": pb["tmName"],
                     "home": pb["hmTm"],
                     "name": pb["displayName"],
@@ -142,7 +172,7 @@ def dump_to_parquet(base_dir: Path, output_dir: Path):
                     "assistedShooter": pb["assistedShooter"],
                     "assister": pb["assister"],
                     "assister3pt": pb["assister3pt"],
-                    "assisterLU": pb["assisterLU"],
+                    "assisterLU": iget(pb, "assisterLU"),
                     "blockplyr": pb["blockplyr"],
                     "dfoulplyr": pb["dfoulplyr"],
                     "drebounder": pb["drebounder"],
@@ -164,9 +194,9 @@ def dump_to_parquet(base_dir: Path, output_dir: Path):
                     "plusMinusPoints": pb["plusMinusPoints"],
                     "minutes_played": pb["minutes_played"],
                     "played": pb["played"],
-                    "oWPA": pb["oWPA"],
-                    "dWPA": pb["dWPA"],
-                    "tWPA": pb["tWPA"],
+                    "oWPA": pb.get("oWPA"),
+                    "dWPA": pb.get("dWPA"),
+                    "tWPA": pb.get("tWPA"),
                 }
 
             for tb in data["team_box"]:
@@ -181,7 +211,8 @@ def dump_to_parquet(base_dir: Path, output_dir: Path):
                     "assistedShooter": tb["assistedShooter"],
                     "assister": tb["assister"],
                     "assister3pt": tb["assister3pt"],
-                    "assisterLu": tb["assisterLU"],
+                    # sometimes assisterLU, others assisterLu
+                    "assisterLu": iget(tb, "assisterLU"),
                     "blockplyr": tb["blockplyr"],
                     "dfoulplyr": tb["dfoulplyr"],
                     "drebounder": tb["drebounder"],
@@ -212,16 +243,18 @@ def dump_to_parquet(base_dir: Path, output_dir: Path):
                     "netPtsTurnover": tb["netPtsTurnover"],
                     "netPtsRebound": tb["netPtsRebound"],
                     "netPtsFreethrow": tb["netPtsFreethrow"],
-                    "oPoss": tb["oPoss"],
-                    "dPoss": tb["dPoss"],
-                    "tPoss": tb["tPoss"],
-                    "oTmPoss": tb["oTmPoss"],
-                    "dTmPoss": tb["dTmPoss"],
-                    "tTmPoss": tb["tTmPoss"],
+                    "oPoss": tb.get("oPoss"),
+                    "dPoss": tb.get("dPoss"),
+                    "tPoss": tb.get("tPoss"),
+                    "oTmPoss": tb.get("oTmPoss"),
+                    "dTmPoss": tb.get("dTmPoss"),
+                    "tTmPoss": tb.get("tTmPoss"),
                     "oppPoss": tb["oppPoss"],
                     "oppPts": tb["oppPts"],
                     "win": tb["win"],
                 }
+
+            # TODO: player details. Separate parquet or same?
 
         except Exception as e:
             print(f"Error processing {file_path}: {e}")
