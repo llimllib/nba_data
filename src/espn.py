@@ -260,12 +260,14 @@ def dump_to_parquet(base_dir: Path, output_dir: Path):
                 team_abbr = pd["deanAbbrev"]
                 action_type = pd["actionType"]
                 player_id = pd["plyrID"]
+                name = pd["displayName"]
 
                 key = (player_id, game_id)
 
                 player_details[key] |= {
                     "playerId": player_id,
                     "gameId": game_id,
+                    "name": name,
                     "team": team_abbr,
                     "season": season,
                     f"{action_type}_oNetPts": pd.get("oNetPts"),
