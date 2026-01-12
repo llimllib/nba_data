@@ -69,23 +69,25 @@ jobs:
 
           echo "✅ Internet connectivity confirmed through exit node"
 
-      - name: Run update
-        run: make update-ci
+      - name: Download data
+        run: |
+          uv run python -m src.dl
+          uv run python -m src.espn
         env:
-          # I've been getting errors doing git operations because the network
-          # over tailscale can be quite slow
-          GIT_HTTP_LOW_SPEED_LIMIT: 0
-          GIT_HTTP_LOW_SPEED_TIME: 600
-          GIT_TIMEOUT: 300
           # sometimes uv fails when downloading packages; increase its timeout
           UV_HTTP_TIMEOUT: 600
         continue-on-error: false
 
-      # Disable exit node before accessing GitHub API
+      # Disable exit node before git operations to use fast GitHub connectivity
       - name: Disable Tailscale exit node
-        if: always()
         run: |
           sudo -E tailscale set --exit-node=
+
+      - name: Commit and push changes
+        run: |
+          git add data
+          git commit -m "Latest data: $(date -u)"
+          git push
 
       # Trigger the gh-pages deployment workflow after successful update
       - name: Trigger gh-pages deployment
