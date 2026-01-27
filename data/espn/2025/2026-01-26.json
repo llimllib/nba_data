@@ -464,9 +464,9 @@
       "deanAbbrev": "BOS",
       "actionType": "2pt",
       "oScPoss": 26,
-      "oPoss": 47.747,
+      "oPoss": 47.009,
       "oPtsProd": 52,
-      "oNetPts": -2.6005
+      "oNetPts": -1.7385
     },
     {
       "gameId": "0022500660",
@@ -509,9 +509,9 @@
       "deanAbbrev": "BOS",
       "actionType": "rebound",
       "oScPoss": 0,
-      "oPoss": -2.751,
+      "oPoss": -3.013,
       "oPtsProd": 0,
-      "oNetPts": 3.2132
+      "oNetPts": 3.5192
     },
     {
       "gameId": "0022500660",
@@ -536,18 +536,18 @@
       "deanAbbrev": "BOS",
       "actionType": "turnover",
       "oScPoss": 0,
-      "oPoss": 16,
+      "oPoss": 17,
       "oPtsProd": 0,
-      "oNetPts": -18.688
+      "oNetPts": -19.856
     },
     {
       "gameId": "0022500660",
       "deanAbbrev": "POR",
       "actionType": "2pt",
       "oScPoss": 22,
-      "oPoss": 32.81,
+      "oPoss": 32.76,
       "oPtsProd": 44,
-      "oNetPts": 5.6779
+      "oNetPts": 5.7363
     },
     {
       "gameId": "0022500660",
@@ -590,9 +590,9 @@
       "deanAbbrev": "POR",
       "actionType": "rebound",
       "oScPoss": 0,
-      "oPoss": 1.307,
+      "oPoss": 1.357,
       "oPtsProd": 0,
-      "oNetPts": -1.5266
+      "oNetPts": -1.585
     },
     {
       "gameId": "0022500660",
@@ -2854,14 +2854,14 @@
       "draftNumber": 0,
       "fromYear": 2019,
       "player_years": 6,
-      "oNetPts": -1.0055,
+      "oNetPts": -0.9574,
       "dNetPts": 0.389,
-      "tNetPts": -0.6165,
-      "oUsg": 0.1157,
+      "tNetPts": -0.5684,
+      "oUsg": 0.1168,
       "dUsg": 0.1794,
-      "oPoss": 2.7913,
+      "oPoss": 2.8163,
       "dPoss": 4.4854,
-      "tPoss": 7.2767,
+      "tPoss": 7.3017,
       "oTmPoss": 24.12,
       "dTmPoss": 25,
       "tTmPoss": 49.12,
@@ -2893,9 +2893,9 @@
       "minutes_played": "12:04",
       "played": 1,
       "seconds_played": 724,
-      "oWPA": 0.0222,
+      "oWPA": 0.023,
       "dWPA": -0.0546,
-      "tWPA": -0.0323
+      "tWPA": -0.0316
     },
     {
       "gmId": "0022500661",
@@ -2913,14 +2913,14 @@
       "draftNumber": 41,
       "fromYear": 2018,
       "player_years": 7,
-      "oNetPts": -1.3089,
+      "oNetPts": -1.4533,
       "dNetPts": 2.0787,
-      "tNetPts": 0.7698,
-      "oUsg": 0.1267,
+      "tNetPts": 0.6254,
+      "oUsg": 0.1246,
       "dUsg": 0.1801,
-      "oPoss": 4.6529,
+      "oPoss": 4.5779,
       "dPoss": 6.4617,
-      "tPoss": 11.1146,
+      "tPoss": 11.0396,
       "oTmPoss": 36.738,
       "dTmPoss": 35.88,
       "tTmPoss": 72.618,
@@ -2952,9 +2952,9 @@
       "minutes_played": "16:39",
       "played": 1,
       "seconds_played": 999,
-      "oWPA": 0.0293,
+      "oWPA": 0.0271,
       "dWPA": -0.0186,
-      "tWPA": 0.0107
+      "tWPA": 0.0084
     },
     {
       "gmId": "0022500661",
@@ -3031,14 +3031,14 @@
       "draftNumber": 9,
       "fromYear": 2019,
       "player_years": 6,
-      "oNetPts": 6.5473,
+      "oNetPts": 6.5954,
       "dNetPts": 2.0555,
-      "tNetPts": 8.6028,
-      "oUsg": 0.1767,
+      "tNetPts": 8.651,
+      "oUsg": 0.1771,
       "dUsg": 0.2032,
-      "oPoss": 10.9114,
+      "oPoss": 10.9364,
       "dPoss": 12.3974,
-      "tPoss": 23.3088,
+      "tPoss": 23.3338,
       "oTmPoss": 61.738,
       "dTmPoss": 61,
       "tTmPoss": 122.738,
@@ -3070,9 +3070,9 @@
       "minutes_played": "29:16",
       "played": 1,
       "seconds_played": 1756,
-      "oWPA": 0.2412,
+      "oWPA": 0.242,
       "dWPA": -0.0455,
-      "tWPA": 0.1957
+      "tWPA": 0.1964
     },
     {
       "gmId": "0022500661",
@@ -3090,14 +3090,14 @@
       "draftNumber": 8,
       "fromYear": 2019,
       "player_years": 6,
-      "oNetPts": 1.457,
+      "oNetPts": 1.5051,
       "dNetPts": 3.1982,
-      "tNetPts": 4.6552,
-      "oUsg": 0.1073,
+      "tNetPts": 4.7034,
+      "oUsg": 0.1079,
       "dUsg": 0.2247,
-      "oPoss": 5.0442,
+      "oPoss": 5.0692,
       "dPoss": 11.0123,
-      "tPoss": 16.0564,
+      "tPoss": 16.0814,
       "oTmPoss": 47,
       "dTmPoss": 49,
       "tTmPoss": 96,
@@ -3129,9 +3129,9 @@
       "minutes_played": "22:53",
       "played": 1,
       "seconds_played": 1373,
-      "oWPA": 0.0539,
+      "oWPA": 0.0546,
       "dWPA": -0.092,
-      "tWPA": -0.0381
+      "tWPA": -0.0374
     },
     {
       "gmId": "0022500662",
@@ -5038,13 +5038,13 @@
       "fromYear": 2009,
       "player_years": 16,
       "oNetPts": -0.2089,
-      "dNetPts": 1.9774,
-      "tNetPts": 1.7685,
+      "dNetPts": 2.3586,
+      "tNetPts": 2.1497,
       "oUsg": 0.2478,
-      "dUsg": 0.1902,
+      "dUsg": 0.1962,
       "oPoss": 12.5677,
-      "dPoss": 9.7021,
-      "tPoss": 22.2698,
+      "dPoss": 10.0042,
+      "tPoss": 22.5719,
       "oTmPoss": 50.713,
       "dTmPoss": 51,
       "tTmPoss": 101.713,
@@ -5054,9 +5054,9 @@
       "assister": 3,
       "assister3pt": 1,
       "assisterLU": 2,
-      "blockplyr": 1,
+      "blockplyr": 0,
       "dfoulplyr": 1,
-      "drebounder": 4,
+      "drebounder": 3,
       "fg3aplyr": 7,
       "fg3mplyr": 3,
       "fgaplyr": 11,
@@ -5069,16 +5069,16 @@
       "ofoulplyr": 0,
       "orebounder": 0,
       "pts": 14,
-      "rebounder": 4,
-      "stlr": 2,
+      "rebounder": 3,
+      "stlr": 3,
       "tov1": 2,
       "plusMinusPoints": 3,
       "minutes_played": "24:27",
       "played": 1,
       "seconds_played": 1467,
       "oWPA": 0.0586,
-      "dWPA": -0.054,
-      "tWPA": 0.0046
+      "dWPA": -0.0452,
+      "tWPA": 0.0134
     },
     {
       "gmId": "0022500660",
@@ -5096,14 +5096,14 @@
       "draftNumber": 7,
       "fromYear": 2022,
       "player_years": 3,
-      "oNetPts": -5.7436,
+      "oNetPts": -5.742,
       "dNetPts": 0.2131,
-      "tNetPts": -5.5305,
+      "tNetPts": -5.5289,
       "oUsg": 0.1952,
       "dUsg": 0.1988,
-      "oPoss": 13.4148,
+      "oPoss": 13.4133,
       "dPoss": 13.7202,
-      "tPoss": 27.135,
+      "tPoss": 27.1335,
       "oTmPoss": 68.713,
       "dTmPoss": 69,
       "tTmPoss": 137.713,
@@ -5135,9 +5135,9 @@
       "minutes_played": "34:19",
       "played": 1,
       "seconds_played": 2059,
-      "oWPA": 0.0263,
+      "oWPA": 0.0261,
       "dWPA": -0.0852,
-      "tWPA": -0.0589
+      "tWPA": -0.0591
     },
     {
       "gmId": "0022500660",
@@ -5145,7 +5145,7 @@
       "seasonType": "Regular Season",
       "hmTm": 0,
       "starter": 1,
-      "dAvgPos": 2.8462,
+      "dAvgPos": 2.8447,
       "teamId": 1610612757,
       "tmName": "POR",
       "plyrID": 1631321,
@@ -5156,13 +5156,13 @@
       "fromYear": 2023,
       "player_years": 2,
       "oNetPts": -2.5433,
-      "dNetPts": 0.7746,
-      "tNetPts": -1.7687,
+      "dNetPts": 0.7158,
+      "tNetPts": -1.8275,
       "oUsg": 0.1375,
-      "dUsg": 0.1909,
+      "dUsg": 0.19,
       "oPoss": 6.877,
-      "dPoss": 9.7369,
-      "tPoss": 16.6138,
+      "dPoss": 9.6902,
+      "tPoss": 16.5672,
       "oTmPoss": 50,
       "dTmPoss": 51,
       "tTmPoss": 101,
@@ -5194,9 +5194,9 @@
       "minutes_played": "24:46",
       "played": 1,
       "seconds_played": 1486,
-      "oWPA": -0.0154,
-      "dWPA": -0.066,
-      "tWPA": -0.0814
+      "oWPA": -0.0155,
+      "dWPA": -0.0648,
+      "tWPA": -0.0803
     },
     {
       "gmId": "0022500660",
@@ -5214,14 +5214,14 @@
       "draftNumber": 52,
       "fromYear": 2023,
       "player_years": 2,
-      "oNetPts": 1.8118,
+      "oNetPts": 1.8097,
       "dNetPts": 3.5462,
-      "tNetPts": 5.358,
+      "tNetPts": 5.3559,
       "oUsg": 0.1841,
       "dUsg": 0.2113,
-      "oPoss": 13.2009,
+      "oPoss": 13.2029,
       "dPoss": 15.0054,
-      "tPoss": 28.2063,
+      "tPoss": 28.2082,
       "oTmPoss": 71.713,
       "dTmPoss": 71,
       "tTmPoss": 142.713,
@@ -5253,9 +5253,9 @@
       "minutes_played": "36:13",
       "played": 1,
       "seconds_played": 2173,
-      "oWPA": 0.0678,
+      "oWPA": 0.0676,
       "dWPA": -0.0823,
-      "tWPA": -0.0145
+      "tWPA": -0.0147
     },
     {
       "gmId": "0022500660",
@@ -5273,14 +5273,14 @@
       "draftNumber": 7,
       "fromYear": 2024,
       "player_years": 1,
-      "oNetPts": -4.4226,
+      "oNetPts": -4.4185,
       "dNetPts": 2.4807,
-      "tNetPts": -1.9419,
-      "oUsg": 0.1953,
+      "tNetPts": -1.9378,
+      "oUsg": 0.1952,
       "dUsg": 0.2337,
-      "oPoss": 10.547,
+      "oPoss": 10.5432,
       "dPoss": 13.1129,
-      "tPoss": 23.6599,
+      "tPoss": 23.6561,
       "oTmPoss": 54,
       "dTmPoss": 56.12,
       "tTmPoss": 110.12,
@@ -5312,9 +5312,9 @@
       "minutes_played": "28:19",
       "played": 1,
       "seconds_played": 1699,
-      "oWPA": -0.014,
+      "oWPA": -0.0142,
       "dWPA": -0.1028,
-      "tWPA": -0.1169
+      "tWPA": -0.1171
     },
     {
       "gmId": "0022500660",
@@ -5322,7 +5322,7 @@
       "seasonType": "Regular Season",
       "hmTm": 0,
       "starter": 0,
-      "dAvgPos": 1.2252,
+      "dAvgPos": 1.2182,
       "teamId": 1610612757,
       "tmName": "POR",
       "plyrID": 1631126,
@@ -5332,14 +5332,14 @@
       "draftNumber": 0,
       "fromYear": 2025,
       "player_years": 0,
-      "oNetPts": -3.9028,
-      "dNetPts": -2.1618,
-      "tNetPts": -6.0646,
-      "oUsg": 0.262,
-      "dUsg": 0.1751,
-      "oPoss": 13.6243,
-      "dPoss": 8.9286,
-      "tPoss": 22.5529,
+      "oNetPts": -3.9092,
+      "dNetPts": -2.1953,
+      "tNetPts": -6.1045,
+      "oUsg": 0.2621,
+      "dUsg": 0.1745,
+      "oPoss": 13.6303,
+      "dPoss": 8.902,
+      "tPoss": 22.5323,
       "oTmPoss": 52,
       "dTmPoss": 51,
       "tTmPoss": 103,
@@ -5371,9 +5371,9 @@
       "minutes_played": "25:45",
       "played": 1,
       "seconds_played": 1545,
-      "oWPA": 0.0507,
-      "dWPA": -0.1022,
-      "tWPA": -0.0514
+      "oWPA": 0.0505,
+      "dWPA": -0.1003,
+      "tWPA": -0.0497
     },
     {
       "gmId": "0022500660",
@@ -5440,7 +5440,7 @@
       "seasonType": "Regular Season",
       "hmTm": 0,
       "starter": 0,
-      "dAvgPos": 3.25,
+      "dAvgPos": 3.2381,
       "teamId": 1610612757,
       "tmName": "POR",
       "plyrID": 1641712,
@@ -5451,13 +5451,13 @@
       "fromYear": 2023,
       "player_years": 2,
       "oNetPts": -4.1014,
-      "dNetPts": 0.1869,
-      "tNetPts": -3.9145,
+      "dNetPts": 0.1092,
+      "tNetPts": -3.9922,
       "oUsg": 0.2323,
-      "dUsg": 0.197,
+      "dUsg": 0.195,
       "oPoss": 7.4326,
-      "dPoss": 6.3028,
-      "tPoss": 13.7354,
+      "dPoss": 6.2412,
+      "tPoss": 13.6738,
       "oTmPoss": 32,
       "dTmPoss": 32,
       "tTmPoss": 64,
@@ -5490,8 +5490,8 @@
       "played": 1,
       "seconds_played": 948,
       "oWPA": -0.031,
-      "dWPA": -0.0495,
-      "tWPA": -0.0804
+      "dWPA": -0.049,
+      "tWPA": -0.08
     },
     {
       "gmId": "0022500660",
@@ -5509,14 +5509,14 @@
       "draftNumber": 39,
       "fromYear": 2014,
       "player_years": 11,
-      "oNetPts": 2.5723,
+      "oNetPts": 2.5751,
       "dNetPts": 0.6265,
-      "tNetPts": 3.1989,
-      "oUsg": 0.2745,
+      "tNetPts": 3.2017,
+      "oUsg": 0.2744,
       "dUsg": 0.1501,
-      "oPoss": 14.7422,
+      "oPoss": 14.7395,
       "dPoss": 7.9543,
-      "tPoss": 22.6965,
+      "tPoss": 22.6939,
       "oTmPoss": 53.713,
       "dTmPoss": 53,
       "tTmPoss": 106.713,
@@ -5548,9 +5548,9 @@
       "minutes_played": "26:34",
       "played": 1,
       "seconds_played": 1594,
-      "oWPA": 0.0815,
+      "oWPA": 0.0813,
       "dWPA": -0.0828,
-      "tWPA": -0.0013
+      "tWPA": -0.0015
     },
     {
       "gmId": "0022500660",
@@ -5569,13 +5569,13 @@
       "fromYear": 2018,
       "player_years": 7,
       "oNetPts": -0.5639,
-      "dNetPts": 1.5465,
-      "tNetPts": 0.9826,
+      "dNetPts": 1.3341,
+      "tNetPts": 0.7702,
       "oUsg": 0.0796,
-      "dUsg": 0.2448,
+      "dUsg": 0.2407,
       "oPoss": 3.3982,
-      "dPoss": 10.0083,
-      "tPoss": 13.4065,
+      "dPoss": 9.8399,
+      "tPoss": 13.2381,
       "oTmPoss": 42.713,
       "dTmPoss": 40.88,
       "tTmPoss": 83.593,
@@ -5609,7 +5609,7 @@
       "seconds_played": 1181,
       "oWPA": 0.0048,
       "dWPA": -0.0562,
-      "tWPA": -0.0514
+      "tWPA": -0.0513
     },
     {
       "gmId": "0022500659",
@@ -6277,13 +6277,13 @@
       "fromYear": 2020,
       "player_years": 5,
       "oNetPts": 5.8793,
-      "dNetPts": 3.5897,
-      "tNetPts": 9.469,
+      "dNetPts": 3.5782,
+      "tNetPts": 9.4575,
       "oUsg": 0.246,
-      "dUsg": 0.1733,
+      "dUsg": 0.1731,
       "oPoss": 16.9767,
-      "dPoss": 11.5882,
-      "tPoss": 28.565,
+      "dPoss": 11.5791,
+      "tPoss": 28.5558,
       "oTmPoss": 69,
       "dTmPoss": 66.88,
       "tTmPoss": 135.88,
@@ -6316,8 +6316,8 @@
       "played": 1,
       "seconds_played": 2084,
       "oWPA": 0.1733,
-      "dWPA": -0.0348,
-      "tWPA": 0.1385
+      "dWPA": -0.0346,
+      "tWPA": 0.1386
     },
     {
       "gmId": "0022500660",
@@ -6335,14 +6335,14 @@
       "draftNumber": 29,
       "fromYear": 2017,
       "player_years": 8,
-      "oNetPts": -4.4599,
-      "dNetPts": 2.9361,
-      "tNetPts": -1.5238,
-      "oUsg": 0.2676,
-      "dUsg": 0.1906,
-      "oPoss": 18.4327,
-      "dPoss": 13.2874,
-      "tPoss": 31.7201,
+      "oNetPts": -4.5868,
+      "dNetPts": 2.9777,
+      "tNetPts": -1.6091,
+      "oUsg": 0.2693,
+      "dUsg": 0.1911,
+      "oPoss": 18.5508,
+      "dPoss": 13.3204,
+      "tPoss": 31.8712,
       "oTmPoss": 68.88,
       "dTmPoss": 69.713,
       "tTmPoss": 138.593,
@@ -6357,11 +6357,11 @@
       "drebounder": 2,
       "fg3aplyr": 4,
       "fg3mplyr": 2,
-      "fgaplyr": 15,
+      "fgaplyr": 14,
       "fgmplyr": 7,
       "ftaplyr": 2,
       "ftmplyr": 2,
-      "livetov1": 7,
+      "livetov1": 8,
       "luaplyr": 5,
       "lumplyr": 2,
       "ofoulplyr": 0,
@@ -6369,14 +6369,14 @@
       "pts": 18,
       "rebounder": 4,
       "stlr": 2,
-      "tov1": 8,
+      "tov1": 9,
       "plusMinusPoints": 2,
       "minutes_played": "34:28",
       "played": 1,
       "seconds_played": 2068,
-      "oWPA": 0.0814,
-      "dWPA": -0.0391,
-      "tWPA": 0.0423
+      "oWPA": 0.0699,
+      "dWPA": -0.0386,
+      "tWPA": 0.0313
     },
     {
       "gmId": "0022500660",
@@ -6395,13 +6395,13 @@
       "fromYear": 2016,
       "player_years": 9,
       "oNetPts": 0.4788,
-      "dNetPts": 2.8714,
-      "tNetPts": 3.3502,
+      "dNetPts": 2.8723,
+      "tNetPts": 3.351,
       "oUsg": 0.2467,
       "dUsg": 0.2093,
       "oPoss": 17.5136,
-      "dPoss": 15.0085,
-      "tPoss": 32.5221,
+      "dPoss": 15.0092,
+      "tPoss": 32.5227,
       "oTmPoss": 71,
       "dTmPoss": 71.713,
       "tTmPoss": 142.713,
@@ -6434,8 +6434,8 @@
       "played": 1,
       "seconds_played": 2173,
       "oWPA": 0.2005,
-      "dWPA": -0.0413,
-      "tWPA": 0.1591
+      "dWPA": -0.0411,
+      "tWPA": 0.1593
     },
     {
       "gmId": "0022500660",
@@ -6453,14 +6453,14 @@
       "draftNumber": 0,
       "fromYear": 2021,
       "player_years": 4,
-      "oNetPts": -1.6481,
-      "dNetPts": 1.6137,
-      "tNetPts": -0.0343,
-      "oUsg": 0.1704,
-      "dUsg": 0.1966,
-      "oPoss": 10.224,
-      "dPoss": 11.5442,
-      "tPoss": 21.7682,
+      "oNetPts": -1.6187,
+      "dNetPts": 1.5999,
+      "tNetPts": -0.0188,
+      "oUsg": 0.1699,
+      "dUsg": 0.1964,
+      "oPoss": 10.1966,
+      "dPoss": 11.5332,
+      "tPoss": 21.7298,
       "oTmPoss": 60,
       "dTmPoss": 58.713,
       "tTmPoss": 118.713,
@@ -6492,9 +6492,9 @@
       "minutes_played": "29:40",
       "played": 1,
       "seconds_played": 1780,
-      "oWPA": 0.0677,
-      "dWPA": -0.0173,
-      "tWPA": 0.0504
+      "oWPA": 0.0675,
+      "dWPA": -0.0175,
+      "tWPA": 0.05
     },
     {
       "gmId": "0022500660",
@@ -6571,14 +6571,14 @@
       "draftNumber": 24,
       "fromYear": 2018,
       "player_years": 7,
-      "oNetPts": -0.9414,
-      "dNetPts": 1.0816,
-      "tNetPts": 0.1402,
-      "oUsg": 0.1994,
-      "dUsg": 0.1841,
-      "oPoss": 10.9925,
-      "dPoss": 10.1468,
-      "tPoss": 21.1394,
+      "oNetPts": -0.9039,
+      "dNetPts": 1.3928,
+      "tNetPts": 0.4889,
+      "oUsg": 0.1988,
+      "dUsg": 0.1886,
+      "oPoss": 10.9576,
+      "dPoss": 10.3935,
+      "tPoss": 21.3511,
       "oTmPoss": 55.12,
       "dTmPoss": 55.12,
       "tTmPoss": 110.24,
@@ -6610,9 +6610,9 @@
       "minutes_played": "26:25",
       "played": 1,
       "seconds_played": 1585,
-      "oWPA": 0.1068,
-      "dWPA": -0.0086,
-      "tWPA": 0.0982
+      "oWPA": 0.1066,
+      "dWPA": -0.0081,
+      "tWPA": 0.0985
     },
     {
       "gmId": "0022500660",
@@ -6631,13 +6631,13 @@
       "fromYear": 2025,
       "player_years": 0,
       "oNetPts": -0.2041,
-      "dNetPts": 2.8155,
-      "tNetPts": 2.6114,
+      "dNetPts": 2.8324,
+      "tNetPts": 2.6282,
       "oUsg": 0.0768,
-      "dUsg": 0.1762,
+      "dUsg": 0.1766,
       "oPoss": 2.3038,
-      "dPoss": 5.5875,
-      "tPoss": 7.8913,
+      "dPoss": 5.6009,
+      "tPoss": 7.9047,
       "oTmPoss": 30,
       "dTmPoss": 31.713,
       "tTmPoss": 61.713,
@@ -6670,8 +6670,8 @@
       "played": 1,
       "seconds_played": 853,
       "oWPA": 0.024,
-      "dWPA": 0.0084,
-      "tWPA": 0.0324
+      "dWPA": 0.0086,
+      "tWPA": 0.0326
     },
     {
       "gmId": "0022500660",
@@ -6689,14 +6689,14 @@
       "draftNumber": 30,
       "fromYear": 2024,
       "player_years": 1,
-      "oNetPts": -1.3921,
-      "dNetPts": -0.4557,
-      "tNetPts": -1.8479,
-      "oUsg": 0.1113,
-      "dUsg": 0.2243,
-      "oPoss": 3.005,
-      "dPoss": 5.8324,
-      "tPoss": 8.8374,
+      "oNetPts": -1.363,
+      "dNetPts": -0.5217,
+      "tNetPts": -1.8847,
+      "oUsg": 0.1103,
+      "dUsg": 0.2223,
+      "oPoss": 2.9779,
+      "dPoss": 5.7802,
+      "tPoss": 8.7581,
       "oTmPoss": 27,
       "dTmPoss": 26,
       "tTmPoss": 53,
@@ -6728,9 +6728,9 @@
       "minutes_played": "12:60",
       "played": 1,
       "seconds_played": 780,
-      "oWPA": 0.0206,
-      "dWPA": -0.0098,
-      "tWPA": 0.0108
+      "oWPA": 0.0204,
+      "dWPA": -0.0105,
+      "tWPA": 0.0099
     },
     {
       "gmId": "0022500660",
@@ -6807,14 +6807,14 @@
       "draftNumber": 46,
       "fromYear": 2025,
       "player_years": 0,
-      "oNetPts": -3.1167,
-      "dNetPts": 2.5075,
-      "tNetPts": -0.6092,
-      "oUsg": 0.1573,
-      "dUsg": 0.2392,
-      "oPoss": 8.3378,
-      "dPoss": 12.6487,
-      "tPoss": 20.9865,
+      "oNetPts": -3.0858,
+      "dNetPts": 2.2282,
+      "tNetPts": -0.8576,
+      "oUsg": 0.1568,
+      "dUsg": 0.235,
+      "oPoss": 8.3091,
+      "dPoss": 12.4274,
+      "tPoss": 20.7365,
       "oTmPoss": 53,
       "dTmPoss": 52.88,
       "tTmPoss": 105.88,
@@ -6846,9 +6846,9 @@
       "minutes_played": "25:53",
       "played": 1,
       "seconds_played": 1553,
-      "oWPA": 0.0243,
-      "dWPA": -0.044,
-      "tWPA": -0.0197
+      "oWPA": 0.0241,
+      "dWPA": -0.0437,
+      "tWPA": -0.0195
     },
     {
       "gmId": "0022500657",
@@ -7870,13 +7870,13 @@
       "fromYear": 2011,
       "player_years": 14,
       "oNetPts": 1.804,
-      "dNetPts": -0.2485,
-      "tNetPts": 1.5555,
+      "dNetPts": -0.1751,
+      "tNetPts": 1.6289,
       "oUsg": 0.1788,
-      "dUsg": 0.2336,
+      "dUsg": 0.233,
       "oPoss": 13.59,
-      "dPoss": 17.8974,
-      "tPoss": 31.4874,
+      "dPoss": 17.8552,
+      "tPoss": 31.4452,
       "oTmPoss": 76,
       "dTmPoss": 76.618,
       "tTmPoss": 152.618,
@@ -7909,8 +7909,8 @@
       "played": 1,
       "seconds_played": 2163,
       "oWPA": 0.1215,
-      "dWPA": -0.1954,
-      "tWPA": -0.0738
+      "dWPA": -0.1941,
+      "tWPA": -0.0726
     },
     {
       "gmId": "0022500661",
@@ -7988,13 +7988,13 @@
       "fromYear": 2021,
       "player_years": 4,
       "oNetPts": 0.8461,
-      "dNetPts": -0.0566,
-      "tNetPts": 0.7895,
+      "dNetPts": -0.0814,
+      "tNetPts": 0.7647,
       "oUsg": 0.255,
-      "dUsg": 0.2077,
+      "dUsg": 0.2079,
       "oPoss": 13.7722,
-      "dPoss": 10.976,
-      "tPoss": 24.7483,
+      "dPoss": 10.9903,
+      "tPoss": 24.7625,
       "oTmPoss": 54,
       "dTmPoss": 52.858,
       "tTmPoss": 106.858,
@@ -8027,8 +8027,8 @@
       "played": 1,
       "seconds_played": 1502,
       "oWPA": 0.1096,
-      "dWPA": -0.1084,
-      "tWPA": 0.0012
+      "dWPA": -0.1088,
+      "tWPA": 0.0008
     },
     {
       "gmId": "0022500661",
@@ -8047,13 +8047,13 @@
       "fromYear": 2018,
       "player_years": 7,
       "oNetPts": -5.0875,
-      "dNetPts": -1.8222,
-      "tNetPts": -6.9097,
+      "dNetPts": -1.8809,
+      "tNetPts": -6.9684,
       "oUsg": 0.1466,
-      "dUsg": 0.2091,
+      "dUsg": 0.2101,
       "oPoss": 5.0015,
-      "dPoss": 6.8439,
-      "tPoss": 11.8454,
+      "dPoss": 6.8777,
+      "tPoss": 11.8792,
       "oTmPoss": 34.12,
       "dTmPoss": 32.738,
       "tTmPoss": 66.858,
@@ -8086,8 +8086,8 @@
       "played": 1,
       "seconds_played": 932,
       "oWPA": -0.0141,
-      "dWPA": -0.1244,
-      "tWPA": -0.1385
+      "dWPA": -0.1254,
+      "tWPA": -0.1395
     },
     {
       "gmId": "0022500661",
@@ -8165,13 +8165,13 @@
       "fromYear": 2021,
       "player_years": 4,
       "oNetPts": 2.0536,
-      "dNetPts": -3.9479,
-      "tNetPts": -1.8943,
+      "dNetPts": -3.9665,
+      "tNetPts": -1.9129,
       "oUsg": 0.2923,
-      "dUsg": 0.1929,
+      "dUsg": 0.1931,
       "oPoss": 18.0894,
-      "dPoss": 11.3296,
-      "tPoss": 29.4189,
+      "dPoss": 11.3402,
+      "tPoss": 29.4296,
       "oTmPoss": 61.88,
       "dTmPoss": 58.738,
       "tTmPoss": 120.618,
@@ -8204,8 +8204,8 @@
       "played": 1,
       "seconds_played": 1684,
       "oWPA": 0.1288,
-      "dWPA": -0.1846,
-      "tWPA": -0.0558
+      "dWPA": -0.1849,
+      "tWPA": -0.0561
     },
     {
       "gmId": "0022500661",
@@ -8283,13 +8283,13 @@
       "fromYear": 2020,
       "player_years": 5,
       "oNetPts": -0.1724,
-      "dNetPts": -2.7261,
-      "tNetPts": -2.8986,
+      "dNetPts": -2.6974,
+      "tNetPts": -2.8699,
       "oUsg": 0.2127,
-      "dUsg": 0.1771,
+      "dUsg": 0.1765,
       "oPoss": 5.7442,
-      "dPoss": 4.5585,
-      "tPoss": 10.3028,
+      "dPoss": 4.542,
+      "tPoss": 10.2863,
       "oTmPoss": 27,
       "dTmPoss": 25.738,
       "tTmPoss": 52.738,
@@ -8322,8 +8322,8 @@
       "played": 1,
       "seconds_played": 710,
       "oWPA": 0.0567,
-      "dWPA": -0.1198,
-      "tWPA": -0.063
+      "dWPA": -0.1193,
+      "tWPA": -0.0625
     },
     {
       "gmId": "0022500661",
@@ -10569,9 +10569,9 @@
       "assister": 17,
       "assister3pt": 8,
       "assisterLu": 8,
-      "blockplyr": 9,
+      "blockplyr": 8,
       "dfoulplyr": 18,
-      "drebounder": 36,
+      "drebounder": 35,
       "fg3aplyr": 40,
       "fg3mplyr": 10,
       "fgaplyr": 78,
@@ -10584,8 +10584,8 @@
       "ofoulplyr": 4,
       "orebounder": 11,
       "pts": 94,
-      "rebounder": 47,
-      "stlr": 10,
+      "rebounder": 46,
+      "stlr": 11,
       "tov1": 18,
       "minutes_played": "240:00",
       "eFG": 0.4744,
@@ -10593,11 +10593,11 @@
       "fg3p": 0.25,
       "ftr": 0.2564,
       "totPoss": 96.713,
-      "netPts2s": 5.6779,
+      "netPts2s": 5.7363,
       "netPts3s": -6.4918,
-      "netPtsShooting": -0.8139,
+      "netPtsShooting": -0.7555,
       "netPtsTurnover": -21.024,
-      "netPtsRebound": -1.5266,
+      "netPtsRebound": -1.585,
       "netPtsFreethrow": 5.2365,
       "oppPoss": 97,
       "oppPts": 102,
@@ -10621,11 +10621,11 @@
       "drebounder": 31,
       "fg3aplyr": 34,
       "fg3mplyr": 13,
-      "fgaplyr": 91,
+      "fgaplyr": 90,
       "fgmplyr": 39,
       "ftaplyr": 18,
       "ftmplyr": 11,
-      "livetov1": 10,
+      "livetov1": 11,
       "luaplyr": 20,
       "lumplyr": 11,
       "ofoulplyr": 4,
@@ -10633,18 +10633,18 @@
       "pts": 102,
       "rebounder": 41,
       "stlr": 11,
-      "tov1": 16,
+      "tov1": 17,
       "minutes_played": "240:00",
-      "eFG": 0.5,
-      "fg2p": 0.4561,
+      "eFG": 0.5056,
+      "fg2p": 0.4643,
       "fg3p": 0.3824,
-      "ftr": 0.1209,
+      "ftr": 0.1222,
       "totPoss": 97,
-      "netPts2s": -2.6005,
+      "netPts2s": -1.7385,
       "netPts3s": 5.8708,
-      "netPtsShooting": 3.2704,
-      "netPtsTurnover": -18.688,
-      "netPtsRebound": 3.2132,
+      "netPtsShooting": 4.1323,
+      "netPtsTurnover": -19.856,
+      "netPtsRebound": 3.5192,
       "netPtsFreethrow": 2.0765,
       "oppPoss": 96.713,
       "oppPts": 94,
@@ -35526,9 +35526,9 @@
       "plyrID": 1642873,
       "displayName": "Amari Williams",
       "actionType": "2pt",
-      "oNetPts": -2.3755,
-      "dNetPts": 0.4614,
-      "tNetPts": -1.9141
+      "oNetPts": -2.3394,
+      "dNetPts": 0.1601,
+      "tNetPts": -2.1794
     },
     {
       "gmID": "0022500660",
@@ -35788,9 +35788,9 @@
       "plyrID": 1642873,
       "displayName": "Amari Williams",
       "actionType": "rebound",
-      "oNetPts": 0.5262,
-      "dNetPts": 0.7334,
-      "tNetPts": 1.2596
+      "oNetPts": 0.5935,
+      "dNetPts": 0.7451,
+      "tNetPts": 1.3385
     },
     {
       "gmID": "0022500660",
@@ -35834,9 +35834,9 @@
       "plyrID": 1642873,
       "displayName": "Amari Williams",
       "actionType": "turnover",
-      "oNetPts": -2.2799,
-      "dNetPts": 1.4382,
-      "tNetPts": -0.8417
+      "oNetPts": -2.3523,
+      "dNetPts": 1.4486,
+      "tNetPts": -0.9038
     },
     {
       "gmID": "0022500660",
@@ -35847,8 +35847,8 @@
       "displayName": "Amari Williams",
       "actionType": "fastbreak",
       "oNetPts": 0.6707,
-      "dNetPts": -0.2053,
-      "tNetPts": 0.4654
+      "dNetPts": 0.0012,
+      "tNetPts": 0.6719
     },
     {
       "gmID": "0022500660",
@@ -35870,9 +35870,9 @@
       "plyrID": 1642873,
       "displayName": "Amari Williams",
       "actionType": "total",
-      "oNetPts": -3.1167,
-      "dNetPts": 2.5075,
-      "tNetPts": -0.6092
+      "oNetPts": -3.0858,
+      "dNetPts": 2.2282,
+      "tNetPts": -0.8576
     },
     {
       "gmID": "0022500660",
@@ -35882,9 +35882,9 @@
       "plyrID": 1629014,
       "displayName": "Anfernee Simons",
       "actionType": "2pt",
-      "oNetPts": 0.4196,
-      "dNetPts": -1.2159,
-      "tNetPts": -0.7964
+      "oNetPts": 0.4705,
+      "dNetPts": -0.9442,
+      "tNetPts": -0.4737
     },
     {
       "gmID": "0022500660",
@@ -36132,9 +36132,9 @@
       "plyrID": 1629014,
       "displayName": "Anfernee Simons",
       "actionType": "rebound",
-      "oNetPts": 0.4106,
-      "dNetPts": 0.5922,
-      "tNetPts": 1.0028
+      "oNetPts": 0.4697,
+      "dNetPts": 0.6039,
+      "tNetPts": 1.0735
     },
     {
       "gmID": "0022500660",
@@ -36180,9 +36180,9 @@
       "plyrID": 1629014,
       "displayName": "Anfernee Simons",
       "actionType": "turnover",
-      "oNetPts": -1.8772,
-      "dNetPts": 2.356,
-      "tNetPts": 0.4787
+      "oNetPts": -1.9497,
+      "dNetPts": 2.3837,
+      "tNetPts": 0.4341
     },
     {
       "gmID": "0022500660",
@@ -36205,8 +36205,8 @@
       "displayName": "Anfernee Simons",
       "actionType": "fastbreak",
       "oNetPts": 0.3816,
-      "dNetPts": -1.2705,
-      "tNetPts": -0.8889
+      "dNetPts": -0.5172,
+      "tNetPts": -0.1356
     },
     {
       "gmID": "0022500660",
@@ -36228,9 +36228,9 @@
       "plyrID": 1629014,
       "displayName": "Anfernee Simons",
       "actionType": "total",
-      "oNetPts": -0.9414,
-      "dNetPts": 1.0816,
-      "tNetPts": 0.1402
+      "oNetPts": -0.9039,
+      "dNetPts": 1.3928,
+      "tNetPts": 0.4889
     },
     {
       "gmID": "0022500660",
@@ -36240,9 +36240,9 @@
       "plyrID": 1631248,
       "displayName": "Baylor Scheierman",
       "actionType": "2pt",
-      "oNetPts": -0.1539,
+      "oNetPts": -0.1142,
       "dNetPts": -0.4749,
-      "tNetPts": -0.6289
+      "tNetPts": -0.5891
     },
     {
       "gmID": "0022500660",
@@ -36490,9 +36490,9 @@
       "plyrID": 1631248,
       "displayName": "Baylor Scheierman",
       "actionType": "rebound",
-      "oNetPts": 0.2625,
+      "oNetPts": 0.3242,
       "dNetPts": 0.6603,
-      "tNetPts": 0.9227
+      "tNetPts": 0.9845
     },
     {
       "gmID": "0022500660",
@@ -36526,9 +36526,9 @@
       "plyrID": 1631248,
       "displayName": "Baylor Scheierman",
       "actionType": "turnover",
-      "oNetPts": -1.256,
-      "dNetPts": 1.2013,
-      "tNetPts": -0.0547
+      "oNetPts": -1.3284,
+      "dNetPts": 1.1354,
+      "tNetPts": -0.193
     },
     {
       "gmID": "0022500660",
@@ -36539,8 +36539,8 @@
       "displayName": "Baylor Scheierman",
       "actionType": "fastbreak",
       "oNetPts": -0.114,
-      "dNetPts": 0.1462,
-      "tNetPts": 0.0322
+      "dNetPts": 0.2285,
+      "tNetPts": 0.1145
     },
     {
       "gmID": "0022500660",
@@ -36562,9 +36562,9 @@
       "plyrID": 1631248,
       "displayName": "Baylor Scheierman",
       "actionType": "total",
-      "oNetPts": -1.3921,
-      "dNetPts": -0.4557,
-      "tNetPts": -1.8479
+      "oNetPts": -1.363,
+      "dNetPts": -0.5217,
+      "tNetPts": -1.8847
     },
     {
       "gmID": "0022500660",
@@ -36574,9 +36574,9 @@
       "plyrID": 1628401,
       "displayName": "Derrick White",
       "actionType": "2pt",
-      "oNetPts": -0.6261,
+      "oNetPts": 0.0676,
       "dNetPts": -0.7365,
-      "tNetPts": -1.3625
+      "tNetPts": -0.6689
     },
     {
       "gmID": "0022500660",
@@ -36586,9 +36586,9 @@
       "plyrID": 1628401,
       "displayName": "Derrick White",
       "actionType": "2ptShooting",
-      "oNetPts": -1.366,
+      "oNetPts": -0.6723,
       "dNetPts": -0.246,
-      "tNetPts": -1.612
+      "tNetPts": -0.9183
     },
     {
       "gmID": "0022500660",
@@ -36766,9 +36766,9 @@
       "plyrID": 1628401,
       "displayName": "Derrick White",
       "actionType": "grenade",
-      "oNetPts": -1.4247,
+      "oNetPts": -0.731,
       "dNetPts": 0,
-      "tNetPts": -1.4247
+      "tNetPts": -0.731
     },
     {
       "gmID": "0022500660",
@@ -36814,9 +36814,9 @@
       "plyrID": 1628401,
       "displayName": "Derrick White",
       "actionType": "mid",
-      "oNetPts": -0.0736,
+      "oNetPts": 0.62,
       "dNetPts": -0.4652,
-      "tNetPts": -0.5388
+      "tNetPts": 0.1548
     },
     {
       "gmID": "0022500660",
@@ -36836,9 +36836,9 @@
       "plyrID": 1628401,
       "displayName": "Derrick White",
       "actionType": "rebound",
-      "oNetPts": 0.2506,
+      "oNetPts": 0.3083,
       "dNetPts": -0.4567,
-      "tNetPts": -0.2061
+      "tNetPts": -0.1484
     },
     {
       "gmID": "0022500660",
@@ -36884,9 +36884,9 @@
       "plyrID": 1628401,
       "displayName": "Derrick White",
       "actionType": "turnover",
-      "oNetPts": -6.3035,
-      "dNetPts": 3.7735,
-      "tNetPts": -2.53
+      "oNetPts": -7.1818,
+      "dNetPts": 3.8151,
+      "tNetPts": -3.3667
     },
     {
       "gmID": "0022500660",
@@ -36909,8 +36909,8 @@
       "displayName": "Derrick White",
       "actionType": "fastbreak",
       "oNetPts": 0.8453,
-      "dNetPts": -0.3237,
-      "tNetPts": 0.5216
+      "dNetPts": -0.2415,
+      "tNetPts": 0.6039
     },
     {
       "gmID": "0022500660",
@@ -36932,9 +36932,9 @@
       "plyrID": 1628401,
       "displayName": "Derrick White",
       "actionType": "total",
-      "oNetPts": -4.4599,
-      "dNetPts": 2.9361,
-      "tNetPts": -1.5238
+      "oNetPts": -4.5868,
+      "dNetPts": 2.9777,
+      "tNetPts": -1.6091
     },
     {
       "gmID": "0022500660",
@@ -36945,8 +36945,8 @@
       "displayName": "Hugo Gonz\u00e1lez",
       "actionType": "2pt",
       "oNetPts": 0.5115,
-      "dNetPts": -0.1793,
-      "tNetPts": 0.3322
+      "dNetPts": -0.1741,
+      "tNetPts": 0.3374
     },
     {
       "gmID": "0022500660",
@@ -37209,8 +37209,8 @@
       "displayName": "Hugo Gonz\u00e1lez",
       "actionType": "rebound",
       "oNetPts": 0.2196,
-      "dNetPts": 0.213,
-      "tNetPts": 0.4326
+      "dNetPts": 0.2247,
+      "tNetPts": 0.4443
     },
     {
       "gmID": "0022500660",
@@ -37279,8 +37279,8 @@
       "displayName": "Hugo Gonz\u00e1lez",
       "actionType": "fastbreak",
       "oNetPts": -0.637,
-      "dNetPts": -0.3309,
-      "tNetPts": -0.9678
+      "dNetPts": -0.2066,
+      "tNetPts": -0.8436
     },
     {
       "gmID": "0022500660",
@@ -37303,8 +37303,8 @@
       "displayName": "Hugo Gonz\u00e1lez",
       "actionType": "total",
       "oNetPts": -0.2041,
-      "dNetPts": 2.8155,
-      "tNetPts": 2.6114
+      "dNetPts": 2.8324,
+      "tNetPts": 2.6282
     },
     {
       "gmID": "0022500660",
@@ -37315,8 +37315,8 @@
       "displayName": "Jaylen Brown",
       "actionType": "2pt",
       "oNetPts": 1.0965,
-      "dNetPts": -0.7364,
-      "tNetPts": 0.3601
+      "dNetPts": -0.7472,
+      "tNetPts": 0.3493
     },
     {
       "gmID": "0022500660",
@@ -37579,8 +37579,8 @@
       "displayName": "Jaylen Brown",
       "actionType": "rebound",
       "oNetPts": 0.5644,
-      "dNetPts": 0.3925,
-      "tNetPts": 0.9569
+      "dNetPts": 0.4042,
+      "tNetPts": 0.9686
     },
     {
       "gmID": "0022500660",
@@ -37639,8 +37639,8 @@
       "displayName": "Jaylen Brown",
       "actionType": "fastbreak",
       "oNetPts": 2.1208,
-      "dNetPts": -0.1272,
-      "tNetPts": 1.9936
+      "dNetPts": -0.0029,
+      "tNetPts": 2.1178
     },
     {
       "gmID": "0022500660",
@@ -37663,8 +37663,8 @@
       "displayName": "Jaylen Brown",
       "actionType": "total",
       "oNetPts": 0.4788,
-      "dNetPts": 2.8714,
-      "tNetPts": 3.3502
+      "dNetPts": 2.8723,
+      "tNetPts": 3.351
     },
     {
       "gmID": "0022500660",
@@ -38367,8 +38367,8 @@
       "displayName": "Payton Pritchard",
       "actionType": "2pt",
       "oNetPts": 2.2224,
-      "dNetPts": -0.0297,
-      "tNetPts": 2.1927
+      "dNetPts": -0.0529,
+      "tNetPts": 2.1695
     },
     {
       "gmID": "0022500660",
@@ -38379,8 +38379,8 @@
       "displayName": "Payton Pritchard",
       "actionType": "2ptShooting",
       "oNetPts": 2.037,
-      "dNetPts": 0.1046,
-      "tNetPts": 2.1415
+      "dNetPts": 0.0814,
+      "tNetPts": 2.1183
     },
     {
       "gmID": "0022500660",
@@ -38487,8 +38487,8 @@
       "displayName": "Payton Pritchard",
       "actionType": "driving",
       "oNetPts": 0,
-      "dNetPts": 0.1102,
-      "tNetPts": 0.1102
+      "dNetPts": 0.0613,
+      "tNetPts": 0.0613
     },
     {
       "gmID": "0022500660",
@@ -38559,8 +38559,8 @@
       "displayName": "Payton Pritchard",
       "actionType": "grenade",
       "oNetPts": 1.1868,
-      "dNetPts": 0.0488,
-      "tNetPts": 1.2356
+      "dNetPts": 0.0256,
+      "tNetPts": 1.2124
     },
     {
       "gmID": "0022500660",
@@ -38595,8 +38595,8 @@
       "displayName": "Payton Pritchard",
       "actionType": "layup",
       "oNetPts": 0,
-      "dNetPts": -0.431,
-      "tNetPts": -0.431
+      "dNetPts": -0.4542,
+      "tNetPts": -0.4542
     },
     {
       "gmID": "0022500660",
@@ -38631,8 +38631,8 @@
       "displayName": "Payton Pritchard",
       "actionType": "rebound",
       "oNetPts": 0.5841,
-      "dNetPts": 0.427,
-      "tNetPts": 1.0111
+      "dNetPts": 0.4387,
+      "tNetPts": 1.0228
     },
     {
       "gmID": "0022500660",
@@ -38643,8 +38643,8 @@
       "displayName": "Payton Pritchard",
       "actionType": "rim",
       "oNetPts": 0,
-      "dNetPts": -0.431,
-      "tNetPts": -0.431
+      "dNetPts": -0.4542,
+      "tNetPts": -0.4542
     },
     {
       "gmID": "0022500660",
@@ -38691,8 +38691,8 @@
       "displayName": "Payton Pritchard",
       "actionType": "fastbreak",
       "oNetPts": 0.2986,
-      "dNetPts": 0.001,
-      "tNetPts": 0.2996
+      "dNetPts": 0.1252,
+      "tNetPts": 0.4239
     },
     {
       "gmID": "0022500660",
@@ -38715,8 +38715,8 @@
       "displayName": "Payton Pritchard",
       "actionType": "total",
       "oNetPts": 5.8793,
-      "dNetPts": 3.5897,
-      "tNetPts": 9.469
+      "dNetPts": 3.5782,
+      "tNetPts": 9.4575
     },
     {
       "gmID": "0022500660",
@@ -38726,9 +38726,9 @@
       "plyrID": 1630573,
       "displayName": "Sam Hauser",
       "actionType": "2pt",
-      "oNetPts": -2.2766,
+      "oNetPts": -2.2349,
       "dNetPts": -1.3385,
-      "tNetPts": -3.615
+      "tNetPts": -3.5734
     },
     {
       "gmID": "0022500660",
@@ -38990,9 +38990,9 @@
       "plyrID": 1630573,
       "displayName": "Sam Hauser",
       "actionType": "rebound",
-      "oNetPts": -0.1447,
+      "oNetPts": -0.0845,
       "dNetPts": -0.4246,
-      "tNetPts": -0.5694
+      "tNetPts": -0.5092
     },
     {
       "gmID": "0022500660",
@@ -39038,9 +39038,9 @@
       "plyrID": 1630573,
       "displayName": "Sam Hauser",
       "actionType": "turnover",
-      "oNetPts": -0.8227,
-      "dNetPts": 3.6977,
-      "tNetPts": 2.8749
+      "oNetPts": -0.8952,
+      "dNetPts": 3.6838,
+      "tNetPts": 2.7886
     },
     {
       "gmID": "0022500660",
@@ -39063,8 +39063,8 @@
       "displayName": "Sam Hauser",
       "actionType": "fastbreak",
       "oNetPts": 1.3287,
-      "dNetPts": -0.4996,
-      "tNetPts": 0.8291
+      "dNetPts": 0.3396,
+      "tNetPts": 1.6682
     },
     {
       "gmID": "0022500660",
@@ -39086,9 +39086,9 @@
       "plyrID": 1630573,
       "displayName": "Sam Hauser",
       "actionType": "total",
-      "oNetPts": -1.6481,
-      "dNetPts": 1.6137,
-      "tNetPts": -0.0343
+      "oNetPts": -1.6187,
+      "dNetPts": 1.5999,
+      "tNetPts": -0.0188
     },
     {
       "gmID": "0022500660",
@@ -39098,9 +39098,9 @@
       "plyrID": 1631126,
       "displayName": "Caleb Love",
       "actionType": "2pt",
-      "oNetPts": 1.7588,
-      "dNetPts": -0.5542,
-      "tNetPts": 1.2047
+      "oNetPts": 1.7638,
+      "dNetPts": -0.7156,
+      "tNetPts": 1.0482
     },
     {
       "gmID": "0022500660",
@@ -39110,9 +39110,9 @@
       "plyrID": 1631126,
       "displayName": "Caleb Love",
       "actionType": "2ptShooting",
-      "oNetPts": 0.8535,
+      "oNetPts": 0.8584,
       "dNetPts": -0.8672,
-      "tNetPts": -0.0137
+      "tNetPts": -0.0088
     },
     {
       "gmID": "0022500660",
@@ -39218,9 +39218,9 @@
       "plyrID": 1631126,
       "displayName": "Caleb Love",
       "actionType": "driving",
-      "oNetPts": -0.6672,
+      "oNetPts": -0.0954,
       "dNetPts": 0,
-      "tNetPts": -0.6672
+      "tNetPts": -0.0954
     },
     {
       "gmID": "0022500660",
@@ -39290,9 +39290,9 @@
       "plyrID": 1631126,
       "displayName": "Caleb Love",
       "actionType": "grenade",
-      "oNetPts": -0.5719,
+      "oNetPts": -0.5669,
       "dNetPts": -0.5071,
-      "tNetPts": -1.079
+      "tNetPts": -1.074
     },
     {
       "gmID": "0022500660",
@@ -39326,9 +39326,9 @@
       "plyrID": 1631126,
       "displayName": "Caleb Love",
       "actionType": "layup",
-      "oNetPts": 1.4767,
+      "oNetPts": 1.4816,
       "dNetPts": 0,
-      "tNetPts": 1.4767
+      "tNetPts": 1.4816
     },
     {
       "gmID": "0022500660",
@@ -39360,9 +39360,9 @@
       "plyrID": 1631126,
       "displayName": "Caleb Love",
       "actionType": "rebound",
-      "oNetPts": -0.0935,
-      "dNetPts": -0.4889,
-      "tNetPts": -0.5825
+      "oNetPts": -0.1049,
+      "dNetPts": -0.5346,
+      "tNetPts": -0.6395
     },
     {
       "gmID": "0022500660",
@@ -39372,9 +39372,9 @@
       "plyrID": 1631126,
       "displayName": "Caleb Love",
       "actionType": "rim",
-      "oNetPts": 1.4767,
+      "oNetPts": 1.4816,
       "dNetPts": 0,
-      "tNetPts": 1.4767
+      "tNetPts": 1.4816
     },
     {
       "gmID": "0022500660",
@@ -39409,8 +39409,8 @@
       "displayName": "Caleb Love",
       "actionType": "turnover",
       "oNetPts": -2.1472,
-      "dNetPts": 0.558,
-      "tNetPts": -1.5891
+      "dNetPts": 0.7317,
+      "tNetPts": -1.4155
     },
     {
       "gmID": "0022500660",
@@ -39420,9 +39420,9 @@
       "plyrID": 1631126,
       "displayName": "Caleb Love",
       "actionType": "fastbreak",
-      "oNetPts": 2.9901,
+      "oNetPts": 2.2952,
       "dNetPts": -0.0489,
-      "tNetPts": 2.9412
+      "tNetPts": 2.2463
     },
     {
       "gmID": "0022500660",
@@ -39444,9 +39444,9 @@
       "plyrID": 1631126,
       "displayName": "Caleb Love",
       "actionType": "total",
-      "oNetPts": -3.9028,
-      "dNetPts": -2.1618,
-      "tNetPts": -6.0646
+      "oNetPts": -3.9092,
+      "dNetPts": -2.1953,
+      "tNetPts": -6.1045
     },
     {
       "gmID": "0022500660",
@@ -39456,9 +39456,9 @@
       "plyrID": 1642270,
       "displayName": "Donovan Clingan",
       "actionType": "2pt",
-      "oNetPts": 1.2361,
+      "oNetPts": 1.2526,
       "dNetPts": 2.1699,
-      "tNetPts": 3.406
+      "tNetPts": 3.4225
     },
     {
       "gmID": "0022500660",
@@ -39720,9 +39720,9 @@
       "plyrID": 1642270,
       "displayName": "Donovan Clingan",
       "actionType": "rebound",
-      "oNetPts": 0.0759,
+      "oNetPts": 0.0635,
       "dNetPts": -0.2251,
-      "tNetPts": -0.1492
+      "tNetPts": -0.1617
     },
     {
       "gmID": "0022500660",
@@ -39780,9 +39780,9 @@
       "plyrID": 1642270,
       "displayName": "Donovan Clingan",
       "actionType": "fastbreak",
-      "oNetPts": 0.7492,
+      "oNetPts": 0.6265,
       "dNetPts": -0.7751,
-      "tNetPts": -0.0259
+      "tNetPts": -0.1486
     },
     {
       "gmID": "0022500660",
@@ -39804,9 +39804,9 @@
       "plyrID": 1642270,
       "displayName": "Donovan Clingan",
       "actionType": "total",
-      "oNetPts": -4.4226,
+      "oNetPts": -4.4185,
       "dNetPts": 2.4807,
-      "tNetPts": -1.9419
+      "tNetPts": -1.9378
     },
     {
       "gmID": "0022500660",
@@ -40126,9 +40126,9 @@
       "plyrID": 203924,
       "displayName": "Jerami Grant",
       "actionType": "2pt",
-      "oNetPts": 0.7537,
+      "oNetPts": 0.7682,
       "dNetPts": 0.8467,
-      "tNetPts": 1.6004
+      "tNetPts": 1.6149
     },
     {
       "gmID": "0022500660",
@@ -40390,9 +40390,9 @@
       "plyrID": 203924,
       "displayName": "Jerami Grant",
       "actionType": "rebound",
-      "oNetPts": -0.2299,
+      "oNetPts": -0.2416,
       "dNetPts": -1.1221,
-      "tNetPts": -1.3521
+      "tNetPts": -1.3637
     },
     {
       "gmID": "0022500660",
@@ -40462,9 +40462,9 @@
       "plyrID": 203924,
       "displayName": "Jerami Grant",
       "actionType": "fastbreak",
-      "oNetPts": 0.0208,
+      "oNetPts": -0.1013,
       "dNetPts": -0.189,
-      "tNetPts": -0.1682
+      "tNetPts": -0.2903
     },
     {
       "gmID": "0022500660",
@@ -40486,9 +40486,9 @@
       "plyrID": 203924,
       "displayName": "Jerami Grant",
       "actionType": "total",
-      "oNetPts": 2.5723,
+      "oNetPts": 2.5751,
       "dNetPts": 0.6265,
-      "tNetPts": 3.1989
+      "tNetPts": 3.2017
     },
     {
       "gmID": "0022500660",
@@ -40499,8 +40499,8 @@
       "displayName": "Jrue Holiday",
       "actionType": "2pt",
       "oNetPts": 0.5209,
-      "dNetPts": -0.3093,
-      "tNetPts": 0.2117
+      "dNetPts": -0.61,
+      "tNetPts": -0.0891
     },
     {
       "gmID": "0022500660",
@@ -40511,8 +40511,8 @@
       "displayName": "Jrue Holiday",
       "actionType": "2ptShooting",
       "oNetPts": 0.2917,
-      "dNetPts": 0.4958,
-      "tNetPts": 0.7875
+      "dNetPts": 0.1951,
+      "tNetPts": 0.4867
     },
     {
       "gmID": "0022500660",
@@ -40691,8 +40691,8 @@
       "displayName": "Jrue Holiday",
       "actionType": "grenade",
       "oNetPts": 0,
-      "dNetPts": 0.3007,
-      "tNetPts": 0.3007
+      "dNetPts": 0,
+      "tNetPts": 0
     },
     {
       "gmID": "0022500660",
@@ -40739,8 +40739,8 @@
       "displayName": "Jrue Holiday",
       "actionType": "mid",
       "oNetPts": 0.9098,
-      "dNetPts": 0.4958,
-      "tNetPts": 1.4056
+      "dNetPts": 0.1951,
+      "tNetPts": 1.1048
     },
     {
       "gmID": "0022500660",
@@ -40763,8 +40763,8 @@
       "displayName": "Jrue Holiday",
       "actionType": "rebound",
       "oNetPts": -0.2444,
-      "dNetPts": -0.0622,
-      "tNetPts": -0.3066
+      "dNetPts": -0.186,
+      "tNetPts": -0.4304
     },
     {
       "gmID": "0022500660",
@@ -40811,8 +40811,8 @@
       "displayName": "Jrue Holiday",
       "actionType": "turnover",
       "oNetPts": -2.1406,
-      "dNetPts": 2.642,
-      "tNetPts": 0.5014
+      "dNetPts": 3.4477,
+      "tNetPts": 1.3071
     },
     {
       "gmID": "0022500660",
@@ -40834,9 +40834,9 @@
       "plyrID": 201950,
       "displayName": "Jrue Holiday",
       "actionType": "fastbreak",
-      "oNetPts": -0.0647,
+      "oNetPts": -0.0968,
       "dNetPts": -0.7678,
-      "tNetPts": -0.8325
+      "tNetPts": -0.8647
     },
     {
       "gmID": "0022500660",
@@ -40859,8 +40859,8 @@
       "displayName": "Jrue Holiday",
       "actionType": "total",
       "oNetPts": -0.2089,
-      "dNetPts": 1.9774,
-      "tNetPts": 1.7685
+      "dNetPts": 2.3586,
+      "tNetPts": 2.1497
     },
     {
       "gmID": "0022500660",
@@ -40871,8 +40871,8 @@
       "displayName": "Rayan Rupert",
       "actionType": "2pt",
       "oNetPts": 0.2583,
-      "dNetPts": -0.4279,
-      "tNetPts": -0.1695
+      "dNetPts": -0.5153,
+      "tNetPts": -0.257
     },
     {
       "gmID": "0022500660",
@@ -41121,8 +41121,8 @@
       "displayName": "Rayan Rupert",
       "actionType": "rebound",
       "oNetPts": -0.2078,
-      "dNetPts": -0.335,
-      "tNetPts": -0.5427
+      "dNetPts": -0.3809,
+      "tNetPts": -0.5887
     },
     {
       "gmID": "0022500660",
@@ -41167,8 +41167,8 @@
       "displayName": "Rayan Rupert",
       "actionType": "turnover",
       "oNetPts": -3.3312,
-      "dNetPts": 1.5746,
-      "tNetPts": -1.7566
+      "dNetPts": 1.6304,
+      "tNetPts": -1.7009
     },
     {
       "gmID": "0022500660",
@@ -41190,9 +41190,9 @@
       "plyrID": 1641712,
       "displayName": "Rayan Rupert",
       "actionType": "fastbreak",
-      "oNetPts": -0.9353,
+      "oNetPts": -1.9748,
       "dNetPts": -0.361,
-      "tNetPts": -1.2963
+      "tNetPts": -2.3358
     },
     {
       "gmID": "0022500660",
@@ -41215,8 +41215,8 @@
       "displayName": "Rayan Rupert",
       "actionType": "total",
       "oNetPts": -4.1014,
-      "dNetPts": 0.1869,
-      "tNetPts": -3.9145
+      "dNetPts": 0.1092,
+      "tNetPts": -3.9922
     },
     {
       "gmID": "0022500660",
@@ -41227,8 +41227,8 @@
       "displayName": "Robert Williams III",
       "actionType": "2pt",
       "oNetPts": 1.2019,
-      "dNetPts": 0.7939,
-      "tNetPts": 1.9958
+      "dNetPts": 0.6093,
+      "tNetPts": 1.8112
     },
     {
       "gmID": "0022500660",
@@ -41489,8 +41489,8 @@
       "displayName": "Robert Williams III",
       "actionType": "rebound",
       "oNetPts": -0.2559,
-      "dNetPts": -0.4249,
-      "tNetPts": -0.6808
+      "dNetPts": -0.471,
+      "tNetPts": -0.7269
     },
     {
       "gmID": "0022500660",
@@ -41537,8 +41537,8 @@
       "displayName": "Robert Williams III",
       "actionType": "turnover",
       "oNetPts": -1.4459,
-      "dNetPts": 3.0868,
-      "tNetPts": 1.6409
+      "dNetPts": 3.105,
+      "tNetPts": 1.6591
     },
     {
       "gmID": "0022500660",
@@ -41560,9 +41560,9 @@
       "plyrID": 1629057,
       "displayName": "Robert Williams III",
       "actionType": "fastbreak",
-      "oNetPts": -0.225,
+      "oNetPts": -0.2571,
       "dNetPts": -0.9871,
-      "tNetPts": -1.2121
+      "tNetPts": -1.2442
     },
     {
       "gmID": "0022500660",
@@ -41585,8 +41585,8 @@
       "displayName": "Robert Williams III",
       "actionType": "total",
       "oNetPts": -0.5639,
-      "dNetPts": 1.5465,
-      "tNetPts": 0.9826
+      "dNetPts": 1.3341,
+      "tNetPts": 0.7702
     },
     {
       "gmID": "0022500660",
@@ -41596,9 +41596,9 @@
       "plyrID": 1631101,
       "displayName": "Shaedon Sharpe",
       "actionType": "2pt",
-      "oNetPts": -1.2289,
+      "oNetPts": -1.2159,
       "dNetPts": 0.1115,
-      "tNetPts": -1.1174
+      "tNetPts": -1.1044
     },
     {
       "gmID": "0022500660",
@@ -41860,9 +41860,9 @@
       "plyrID": 1631101,
       "displayName": "Shaedon Sharpe",
       "actionType": "rebound",
-      "oNetPts": 0.1867,
+      "oNetPts": 0.1753,
       "dNetPts": -0.1368,
-      "tNetPts": 0.05
+      "tNetPts": 0.0385
     },
     {
       "gmID": "0022500660",
@@ -41920,9 +41920,9 @@
       "plyrID": 1631101,
       "displayName": "Shaedon Sharpe",
       "actionType": "fastbreak",
-      "oNetPts": -0.1576,
+      "oNetPts": -0.2903,
       "dNetPts": -0.8311,
-      "tNetPts": -0.9888
+      "tNetPts": -1.1214
     },
     {
       "gmID": "0022500660",
@@ -41944,9 +41944,9 @@
       "plyrID": 1631101,
       "displayName": "Shaedon Sharpe",
       "actionType": "total",
-      "oNetPts": -5.7436,
+      "oNetPts": -5.742,
       "dNetPts": 0.2131,
-      "tNetPts": -5.5305
+      "tNetPts": -5.5289
     },
     {
       "gmID": "0022500660",
@@ -41957,8 +41957,8 @@
       "displayName": "Sidy Cissoko",
       "actionType": "2pt",
       "oNetPts": 0.6969,
-      "dNetPts": -0.6124,
-      "tNetPts": 0.0845
+      "dNetPts": -0.7401,
+      "tNetPts": -0.0432
     },
     {
       "gmID": "0022500660",
@@ -42219,8 +42219,8 @@
       "displayName": "Sidy Cissoko",
       "actionType": "rebound",
       "oNetPts": -0.4166,
-      "dNetPts": 0.162,
-      "tNetPts": -0.2546
+      "dNetPts": 0.1162,
+      "tNetPts": -0.3005
     },
     {
       "gmID": "0022500660",
@@ -42267,8 +42267,8 @@
       "displayName": "Sidy Cissoko",
       "actionType": "turnover",
       "oNetPts": -2.316,
-      "dNetPts": 1.7521,
-      "tNetPts": -0.5639
+      "dNetPts": 1.8668,
+      "tNetPts": -0.4491
     },
     {
       "gmID": "0022500660",
@@ -42290,9 +42290,9 @@
       "plyrID": 1631321,
       "displayName": "Sidy Cissoko",
       "actionType": "fastbreak",
-      "oNetPts": -0.6335,
+      "oNetPts": -0.6656,
       "dNetPts": -0.8553,
-      "tNetPts": -1.4889
+      "tNetPts": -1.521
     },
     {
       "gmID": "0022500660",
@@ -42315,8 +42315,8 @@
       "displayName": "Sidy Cissoko",
       "actionType": "total",
       "oNetPts": -2.5433,
-      "dNetPts": 0.7746,
-      "tNetPts": -1.7687
+      "dNetPts": 0.7158,
+      "tNetPts": -1.8275
     },
     {
       "gmID": "0022500660",
@@ -42326,9 +42326,9 @@
       "plyrID": 1641739,
       "displayName": "Toumani Camara",
       "actionType": "2pt",
-      "oNetPts": 1.1077,
+      "oNetPts": 1.1171,
       "dNetPts": 0.5028,
-      "tNetPts": 1.6104
+      "tNetPts": 1.6199
     },
     {
       "gmID": "0022500660",
@@ -42590,9 +42590,9 @@
       "plyrID": 1641739,
       "displayName": "Toumani Camara",
       "actionType": "rebound",
-      "oNetPts": -0.0291,
+      "oNetPts": -0.0407,
       "dNetPts": -0.5141,
-      "tNetPts": -0.5432
+      "tNetPts": -0.5547
     },
     {
       "gmID": "0022500660",
@@ -42650,9 +42650,9 @@
       "plyrID": 1641739,
       "displayName": "Toumani Camara",
       "actionType": "fastbreak",
-      "oNetPts": 1.2542,
+      "oNetPts": 1.1265,
       "dNetPts": -0.59,
-      "tNetPts": 0.6642
+      "tNetPts": 0.5364
     },
     {
       "gmID": "0022500660",
@@ -42674,9 +42674,9 @@
       "plyrID": 1641739,
       "displayName": "Toumani Camara",
       "actionType": "total",
-      "oNetPts": 1.8118,
+      "oNetPts": 1.8097,
       "dNetPts": 3.5462,
-      "tNetPts": 5.358
+      "tNetPts": 5.3559
     },
     {
       "gmID": "0022500661",
@@ -42711,8 +42711,8 @@
       "displayName": "Ayo Dosunmu",
       "actionType": "3pt",
       "oNetPts": -0.4196,
-      "dNetPts": -0.954,
-      "tNetPts": -1.3736
+      "dNetPts": -0.9788,
+      "tNetPts": -1.3984
     },
     {
       "gmID": "0022500661",
@@ -43021,8 +43021,8 @@
       "displayName": "Ayo Dosunmu",
       "actionType": "fastbreak",
       "oNetPts": 0.0808,
-      "dNetPts": -0.1677,
-      "tNetPts": -0.087
+      "dNetPts": 0.2856,
+      "tNetPts": 0.3663
     },
     {
       "gmID": "0022500661",
@@ -43045,8 +43045,8 @@
       "displayName": "Ayo Dosunmu",
       "actionType": "total",
       "oNetPts": 0.8461,
-      "dNetPts": -0.0566,
-      "tNetPts": 0.7895
+      "dNetPts": -0.0814,
+      "tNetPts": 0.7647
     },
     {
       "gmID": "0022500661",
@@ -44777,8 +44777,8 @@
       "displayName": "Josh Giddey",
       "actionType": "3pt",
       "oNetPts": 1.3559,
-      "dNetPts": -2.6898,
-      "tNetPts": -1.3339
+      "dNetPts": -2.7083,
+      "tNetPts": -1.3524
     },
     {
       "gmID": "0022500661",
@@ -45089,8 +45089,8 @@
       "displayName": "Josh Giddey",
       "actionType": "fastbreak",
       "oNetPts": 1.4808,
-      "dNetPts": -1.1868,
-      "tNetPts": 0.294
+      "dNetPts": -0.7856,
+      "tNetPts": 0.6952
     },
     {
       "gmID": "0022500661",
@@ -45113,8 +45113,8 @@
       "displayName": "Josh Giddey",
       "actionType": "total",
       "oNetPts": 2.0536,
-      "dNetPts": -3.9479,
-      "tNetPts": -1.8943
+      "dNetPts": -3.9665,
+      "tNetPts": -1.9129
     },
     {
       "gmID": "0022500661",
@@ -45459,8 +45459,8 @@
       "displayName": "Kevin Huerter",
       "actionType": "3pt",
       "oNetPts": -3.9402,
-      "dNetPts": -1.5,
-      "tNetPts": -5.4402
+      "dNetPts": -1.5587,
+      "tNetPts": -5.4989
     },
     {
       "gmID": "0022500661",
@@ -45471,8 +45471,8 @@
       "displayName": "Kevin Huerter",
       "actionType": "3ptShooting",
       "oNetPts": -3.5764,
-      "dNetPts": -0.7922,
-      "tNetPts": -4.3686
+      "dNetPts": -0.8509,
+      "tNetPts": -4.4273
     },
     {
       "gmID": "0022500661",
@@ -45495,8 +45495,8 @@
       "displayName": "Kevin Huerter",
       "actionType": "atb",
       "oNetPts": -2.1457,
-      "dNetPts": -0.7922,
-      "tNetPts": -2.9379
+      "dNetPts": -0.8509,
+      "tNetPts": -2.9966
     },
     {
       "gmID": "0022500661",
@@ -45755,8 +45755,8 @@
       "displayName": "Kevin Huerter",
       "actionType": "fastbreak",
       "oNetPts": -0.2785,
-      "dNetPts": -0.9474,
-      "tNetPts": -1.2259
+      "dNetPts": -0.5114,
+      "tNetPts": -0.79
     },
     {
       "gmID": "0022500661",
@@ -45779,8 +45779,8 @@
       "displayName": "Kevin Huerter",
       "actionType": "total",
       "oNetPts": -5.0875,
-      "dNetPts": -1.8222,
-      "tNetPts": -6.9097
+      "dNetPts": -1.8809,
+      "tNetPts": -6.9684
     },
     {
       "gmID": "0022500661",
@@ -46473,8 +46473,8 @@
       "displayName": "Nikola Vucevic",
       "actionType": "3pt",
       "oNetPts": 0.7979,
-      "dNetPts": -0.4666,
-      "tNetPts": 0.3313
+      "dNetPts": -0.3932,
+      "tNetPts": 0.4047
     },
     {
       "gmID": "0022500661",
@@ -46785,8 +46785,8 @@
       "displayName": "Nikola Vucevic",
       "actionType": "fastbreak",
       "oNetPts": 0.514,
-      "dNetPts": -1.3082,
-      "tNetPts": -0.7942
+      "dNetPts": -1.0635,
+      "tNetPts": -0.5495
     },
     {
       "gmID": "0022500661",
@@ -46809,8 +46809,8 @@
       "displayName": "Nikola Vucevic",
       "actionType": "total",
       "oNetPts": 1.804,
-      "dNetPts": -0.2485,
-      "tNetPts": 1.5555
+      "dNetPts": -0.1751,
+      "tNetPts": 1.6289
     },
     {
       "gmID": "0022500661",
@@ -46845,8 +46845,8 @@
       "displayName": "Patrick Williams",
       "actionType": "3pt",
       "oNetPts": 0.0027,
-      "dNetPts": -1.2515,
-      "tNetPts": -1.2488
+      "dNetPts": -1.2228,
+      "tNetPts": -1.2201
     },
     {
       "gmID": "0022500661",
@@ -47153,8 +47153,8 @@
       "displayName": "Patrick Williams",
       "actionType": "fastbreak",
       "oNetPts": -0.1367,
-      "dNetPts": -1.0208,
-      "tNetPts": -1.1575
+      "dNetPts": -0.724,
+      "tNetPts": -0.8607
     },
     {
       "gmID": "0022500661",
@@ -47177,8 +47177,8 @@
       "displayName": "Patrick Williams",
       "actionType": "total",
       "oNetPts": -0.1724,
-      "dNetPts": -2.7261,
-      "tNetPts": -2.8986
+      "dNetPts": -2.6974,
+      "tNetPts": -2.8699
     },
     {
       "gmID": "0022500661",
@@ -47880,9 +47880,9 @@
       "plyrID": 1629216,
       "displayName": "Gabe Vincent",
       "actionType": "3pt",
-      "oNetPts": -0.3723,
+      "oNetPts": -0.3242,
       "dNetPts": 1.3408,
-      "tNetPts": 0.9685
+      "tNetPts": 1.0166
     },
     {
       "gmID": "0022500661",
@@ -48164,9 +48164,9 @@
       "plyrID": 1629216,
       "displayName": "Gabe Vincent",
       "actionType": "fastbreak",
-      "oNetPts": 0.0874,
+      "oNetPts": 0.1061,
       "dNetPts": 0.0167,
-      "tNetPts": 0.1042
+      "tNetPts": 0.1229
     },
     {
       "gmID": "0022500661",
@@ -48188,9 +48188,9 @@
       "plyrID": 1629216,
       "displayName": "Gabe Vincent",
       "actionType": "total",
-      "oNetPts": -1.0055,
+      "oNetPts": -0.9574,
       "dNetPts": 0.389,
-      "tNetPts": -0.6165
+      "tNetPts": -0.5684
     },
     {
       "gmID": "0022500661",
@@ -48596,9 +48596,9 @@
       "plyrID": 1629020,
       "displayName": "Jarred Vanderbilt",
       "actionType": "3pt",
-      "oNetPts": -1.147,
+      "oNetPts": -1.2914,
       "dNetPts": 1.3021,
-      "tNetPts": 0.1552
+      "tNetPts": 0.0107
     },
     {
       "gmID": "0022500661",
@@ -48904,9 +48904,9 @@
       "plyrID": 1629020,
       "displayName": "Jarred Vanderbilt",
       "actionType": "fastbreak",
-      "oNetPts": -0.2138,
+      "oNetPts": -0.3876,
       "dNetPts": -0.2472,
-      "tNetPts": -0.4609
+      "tNetPts": -0.6348
     },
     {
       "gmID": "0022500661",
@@ -48928,9 +48928,9 @@
       "plyrID": 1629020,
       "displayName": "Jarred Vanderbilt",
       "actionType": "total",
-      "oNetPts": -1.3089,
+      "oNetPts": -1.4533,
       "dNetPts": 2.0787,
-      "tNetPts": 0.7698
+      "tNetPts": 0.6254
     },
     {
       "gmID": "0022500661",
@@ -48964,9 +48964,9 @@
       "plyrID": 1629637,
       "displayName": "Jaxson Hayes",
       "actionType": "3pt",
-      "oNetPts": 0.1929,
+      "oNetPts": 0.241,
       "dNetPts": 1.9867,
-      "tNetPts": 2.1796
+      "tNetPts": 2.2277
     },
     {
       "gmID": "0022500661",
@@ -49264,9 +49264,9 @@
       "plyrID": 1629637,
       "displayName": "Jaxson Hayes",
       "actionType": "fastbreak",
-      "oNetPts": 0.7891,
+      "oNetPts": 0.8078,
       "dNetPts": 0.7634,
-      "tNetPts": 1.5525
+      "tNetPts": 1.5712
     },
     {
       "gmID": "0022500661",
@@ -49288,9 +49288,9 @@
       "plyrID": 1629637,
       "displayName": "Jaxson Hayes",
       "actionType": "total",
-      "oNetPts": 1.457,
+      "oNetPts": 1.5051,
       "dNetPts": 3.1982,
-      "tNetPts": 4.6552
+      "tNetPts": 4.7034
     },
     {
       "gmID": "0022500661",
@@ -50006,9 +50006,9 @@
       "plyrID": 1629029,
       "displayName": "Luka Doncic",
       "actionType": "fastbreak",
-      "oNetPts": 1.6136,
+      "oNetPts": -0.1006,
       "dNetPts": -0.4156,
-      "tNetPts": 1.198
+      "tNetPts": -0.5162
     },
     {
       "gmID": "0022500661",
@@ -50436,9 +50436,9 @@
       "plyrID": 1629060,
       "displayName": "Rui Hachimura",
       "actionType": "3pt",
-      "oNetPts": 5.6675,
+      "oNetPts": 5.7156,
       "dNetPts": 1.0577,
-      "tNetPts": 6.7252
+      "tNetPts": 6.7733
     },
     {
       "gmID": "0022500661",
@@ -50736,9 +50736,9 @@
       "plyrID": 1629060,
       "displayName": "Rui Hachimura",
       "actionType": "fastbreak",
-      "oNetPts": 2.5796,
+      "oNetPts": 2.5983,
       "dNetPts": -0.2294,
-      "tNetPts": 2.3501
+      "tNetPts": 2.3688
     },
     {
       "gmID": "0022500661",
@@ -50760,9 +50760,9 @@
       "plyrID": 1629060,
       "displayName": "Rui Hachimura",
       "actionType": "total",
-      "oNetPts": 6.5473,
+      "oNetPts": 6.5954,
       "dNetPts": 2.0555,
-      "tNetPts": 8.6028
+      "tNetPts": 8.651
     },
     {
       "gmID": "0022500662",
