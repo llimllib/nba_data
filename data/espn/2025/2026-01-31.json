@@ -2093,14 +2093,14 @@
       "draftNumber": 35,
       "fromYear": 2022,
       "player_years": 3,
-      "oNetPts": -2.0904,
+      "oNetPts": -2.8963,
       "dNetPts": -2.5609,
-      "tNetPts": -4.6513,
-      "oUsg": 0.1614,
+      "tNetPts": -5.4572,
+      "oUsg": 0.1729,
       "dUsg": 0.1651,
-      "oPoss": 10.4917,
+      "oPoss": 11.2417,
       "dPoss": 10.5873,
-      "tPoss": 21.079,
+      "tPoss": 21.829,
       "oTmPoss": 65,
       "dTmPoss": 64.12,
       "tTmPoss": 129.12,
@@ -2119,7 +2119,7 @@
       "fgmplyr": 4,
       "ftaplyr": 0,
       "ftmplyr": 0,
-      "livetov1": 0,
+      "livetov1": 1,
       "luaplyr": 2,
       "lumplyr": 0,
       "ofoulplyr": 0,
@@ -2127,14 +2127,14 @@
       "pts": 11,
       "rebounder": 2,
       "stlr": 0,
-      "tov1": 1,
+      "tov1": 2,
       "plusMinusPoints": -7,
       "minutes_played": "31:60",
       "played": 1,
       "seconds_played": 1920,
-      "oWPA": 0.1307,
+      "oWPA": 0.1168,
       "dWPA": -0.2858,
-      "tWPA": -0.1551
+      "tWPA": -0.169
     },
     {
       "gmId": "0022500701",
@@ -2624,14 +2624,14 @@
       "draftNumber": 0,
       "fromYear": 2025,
       "player_years": 0,
-      "oNetPts": -0.9328,
+      "oNetPts": -0.1269,
       "dNetPts": 0.7077,
-      "tNetPts": -0.225,
-      "oUsg": 0.1171,
+      "tNetPts": 0.5808,
+      "oUsg": 0.0882,
       "dUsg": 0.2822,
-      "oPoss": 3.0441,
+      "oPoss": 2.2941,
       "dPoss": 7.1234,
-      "tPoss": 10.1676,
+      "tPoss": 9.4176,
       "oTmPoss": 26,
       "dTmPoss": 25.24,
       "tTmPoss": 51.24,
@@ -2650,7 +2650,7 @@
       "fgmplyr": 1,
       "ftaplyr": 2,
       "ftmplyr": 1,
-      "livetov1": 1,
+      "livetov1": 0,
       "luaplyr": 1,
       "lumplyr": 1,
       "ofoulplyr": 0,
@@ -2658,14 +2658,14 @@
       "pts": 3,
       "rebounder": 1,
       "stlr": 0,
-      "tov1": 1,
+      "tov1": 0,
       "plusMinusPoints": 7,
       "minutes_played": "13:20",
       "played": 1,
       "seconds_played": 800,
-      "oWPA": -0.0124,
+      "oWPA": 0.0015,
       "dWPA": -0.0981,
-      "tWPA": -0.1105
+      "tWPA": -0.0966
     },
     {
       "gmId": "0022500701",
@@ -5044,13 +5044,13 @@
       "fromYear": 2023,
       "player_years": 2,
       "oNetPts": 3.3575,
-      "dNetPts": 1.1853,
-      "tNetPts": 4.5427,
+      "dNetPts": 1.4051,
+      "tNetPts": 4.7626,
       "oUsg": 0.2118,
-      "dUsg": 0.168,
+      "dUsg": 0.1701,
       "oPoss": 17.1781,
-      "dPoss": 14.1103,
-      "tPoss": 31.2884,
+      "dPoss": 14.2846,
+      "tPoss": 31.4626,
       "oTmPoss": 81.12,
       "dTmPoss": 84,
       "tTmPoss": 165.12,
@@ -5083,8 +5083,8 @@
       "played": 1,
       "seconds_played": 2439,
       "oWPA": 0.3943,
-      "dWPA": -0.1455,
-      "tWPA": 0.2489
+      "dWPA": -0.1422,
+      "tWPA": 0.2521
     },
     {
       "gmId": "0022500701",
@@ -5103,13 +5103,13 @@
       "fromYear": 2022,
       "player_years": 3,
       "oNetPts": 0.865,
-      "dNetPts": -0.4418,
-      "tNetPts": 0.4232,
+      "dNetPts": -0.2863,
+      "tNetPts": 0.5787,
       "oUsg": 0.1617,
-      "dUsg": 0.1936,
+      "dUsg": 0.1956,
       "oPoss": 10.1902,
-      "dPoss": 12.0024,
-      "tPoss": 22.1926,
+      "dPoss": 12.1257,
+      "tPoss": 22.3159,
       "oTmPoss": 63,
       "dTmPoss": 62,
       "tTmPoss": 125,
@@ -5142,8 +5142,8 @@
       "played": 1,
       "seconds_played": 1884,
       "oWPA": 0.251,
-      "dWPA": -0.1221,
-      "tWPA": 0.1289
+      "dWPA": -0.1198,
+      "tWPA": 0.1312
     },
     {
       "gmId": "0022500701",
@@ -5162,13 +5162,13 @@
       "fromYear": 2007,
       "player_years": 18,
       "oNetPts": -1.812,
-      "dNetPts": -0.5758,
-      "tNetPts": -2.3878,
+      "dNetPts": -0.4954,
+      "tNetPts": -2.3074,
       "oUsg": 0.2137,
-      "dUsg": 0.2023,
+      "dUsg": 0.2031,
       "oPoss": 16.6976,
-      "dPoss": 15.9848,
-      "tPoss": 32.6823,
+      "dPoss": 16.0485,
+      "tPoss": 32.7461,
       "oTmPoss": 78.12,
       "dTmPoss": 79,
       "tTmPoss": 157.12,
@@ -5201,8 +5201,8 @@
       "played": 1,
       "seconds_played": 2295,
       "oWPA": 0.3079,
-      "dWPA": -0.1988,
-      "tWPA": 0.1091
+      "dWPA": -0.1976,
+      "tWPA": 0.1103
     },
     {
       "gmId": "0022500701",
@@ -5221,13 +5221,13 @@
       "fromYear": 2022,
       "player_years": 3,
       "oNetPts": 3.6709,
-      "dNetPts": 2.2989,
-      "tNetPts": 5.9698,
+      "dNetPts": 2.2507,
+      "tNetPts": 5.9216,
       "oUsg": 0.1722,
-      "dUsg": 0.1836,
+      "dUsg": 0.1831,
       "oPoss": 11.8784,
-      "dPoss": 12.8543,
-      "tPoss": 24.7327,
+      "dPoss": 12.8161,
+      "tPoss": 24.6945,
       "oTmPoss": 69,
       "dTmPoss": 70,
       "tTmPoss": 139,
@@ -5260,8 +5260,8 @@
       "played": 1,
       "seconds_played": 1996,
       "oWPA": 0.3005,
-      "dWPA": -0.1129,
-      "tWPA": 0.1877
+      "dWPA": -0.1136,
+      "tWPA": 0.187
     },
     {
       "gmId": "0022500701",
@@ -5516,13 +5516,13 @@
       "fromYear": 2014,
       "player_years": 11,
       "oNetPts": -1.2493,
-      "dNetPts": 2.5101,
-      "tNetPts": 1.2609,
+      "dNetPts": 2.1027,
+      "tNetPts": 0.8534,
       "oUsg": 0.1793,
-      "dUsg": 0.2501,
+      "dUsg": 0.2381,
       "oPoss": 4.6831,
-      "dPoss": 6.7516,
-      "tPoss": 11.4347,
+      "dPoss": 6.4286,
+      "tPoss": 11.1117,
       "oTmPoss": 26.12,
       "dTmPoss": 27,
       "tTmPoss": 53.12,
@@ -5555,8 +5555,8 @@
       "played": 1,
       "seconds_played": 762,
       "oWPA": 0.034,
-      "dWPA": -0.0135,
-      "tWPA": 0.0204
+      "dWPA": -0.0195,
+      "tWPA": 0.0144
     },
     {
       "gmId": "0022500698",
@@ -45504,9 +45504,9 @@
       "plyrID": 1631108,
       "displayName": "Max Christie",
       "actionType": "turnover",
-      "oNetPts": -1.2762,
+      "oNetPts": -2.0821,
       "dNetPts": 0.4602,
-      "tNetPts": -0.8161
+      "tNetPts": -1.6219
     },
     {
       "gmID": "0022500701",
@@ -45552,9 +45552,9 @@
       "plyrID": 1631108,
       "displayName": "Max Christie",
       "actionType": "total",
-      "oNetPts": -2.0904,
+      "oNetPts": -2.8963,
       "dNetPts": -2.5609,
-      "tNetPts": -4.6513
+      "tNetPts": -5.4572
     },
     {
       "gmID": "0022500701",
@@ -45864,9 +45864,9 @@
       "plyrID": 1630619,
       "displayName": "Moussa Cisse",
       "actionType": "turnover",
-      "oNetPts": -1.059,
+      "oNetPts": -0.2531,
       "dNetPts": 1.1448,
-      "tNetPts": 0.0858
+      "tNetPts": 0.8917
     },
     {
       "gmID": "0022500701",
@@ -45900,9 +45900,9 @@
       "plyrID": 1630619,
       "displayName": "Moussa Cisse",
       "actionType": "total",
-      "oNetPts": -0.9328,
+      "oNetPts": -0.1269,
       "dNetPts": 0.7077,
-      "tNetPts": -0.225
+      "tNetPts": 0.5808
     },
     {
       "gmID": "0022500701",
@@ -47643,8 +47643,8 @@
       "displayName": "Amen Thompson",
       "actionType": "turnover",
       "oNetPts": -0.5762,
-      "dNetPts": 2.4113,
-      "tNetPts": 1.835
+      "dNetPts": 2.6311,
+      "tNetPts": 2.0549
     },
     {
       "gmID": "0022500701",
@@ -47691,8 +47691,8 @@
       "displayName": "Amen Thompson",
       "actionType": "total",
       "oNetPts": 3.3575,
-      "dNetPts": 1.1853,
-      "tNetPts": 4.5427
+      "dNetPts": 1.4051,
+      "tNetPts": 4.7626
     },
     {
       "gmID": "0022500701",
@@ -48001,8 +48001,8 @@
       "displayName": "Clint Capela",
       "actionType": "turnover",
       "oNetPts": -0.1082,
-      "dNetPts": 1.5046,
-      "tNetPts": 1.3963
+      "dNetPts": 1.0971,
+      "tNetPts": 0.9889
     },
     {
       "gmID": "0022500701",
@@ -48037,8 +48037,8 @@
       "displayName": "Clint Capela",
       "actionType": "total",
       "oNetPts": -1.2493,
-      "dNetPts": 2.5101,
-      "tNetPts": 1.2609
+      "dNetPts": 2.1027,
+      "tNetPts": 0.8534
     },
     {
       "gmID": "0022500701",
@@ -48695,8 +48695,8 @@
       "displayName": "Jabari Smith Jr.",
       "actionType": "turnover",
       "oNetPts": -0.2165,
-      "dNetPts": 1.0392,
-      "tNetPts": 0.8227
+      "dNetPts": 0.991,
+      "tNetPts": 0.7745
     },
     {
       "gmID": "0022500701",
@@ -48743,8 +48743,8 @@
       "displayName": "Jabari Smith Jr.",
       "actionType": "total",
       "oNetPts": 3.6709,
-      "dNetPts": 2.2989,
-      "tNetPts": 5.9698
+      "dNetPts": 2.2507,
+      "tNetPts": 5.9216
     },
     {
       "gmID": "0022500701",
@@ -49413,8 +49413,8 @@
       "displayName": "Kevin Durant",
       "actionType": "turnover",
       "oNetPts": -1.3874,
-      "dNetPts": 2.5417,
-      "tNetPts": 1.1544
+      "dNetPts": 2.6222,
+      "tNetPts": 1.2348
     },
     {
       "gmID": "0022500701",
@@ -49461,8 +49461,8 @@
       "displayName": "Kevin Durant",
       "actionType": "total",
       "oNetPts": -1.812,
-      "dNetPts": -0.5758,
-      "tNetPts": -2.3878
+      "dNetPts": -0.4954,
+      "tNetPts": -2.3074
     },
     {
       "gmID": "0022500701",
@@ -50129,8 +50129,8 @@
       "displayName": "Tari Eason",
       "actionType": "turnover",
       "oNetPts": -1.0276,
-      "dNetPts": 1.8352,
-      "tNetPts": 0.8076
+      "dNetPts": 1.9907,
+      "tNetPts": 0.9631
     },
     {
       "gmID": "0022500701",
@@ -50177,8 +50177,8 @@
       "displayName": "Tari Eason",
       "actionType": "total",
       "oNetPts": 0.865,
-      "dNetPts": -0.4418,
-      "tNetPts": 0.4232
+      "dNetPts": -0.2863,
+      "tNetPts": 0.5787
     }
   ]
 }
