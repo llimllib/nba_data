@@ -973,13 +973,13 @@
       "fromYear": 2022,
       "player_years": 3,
       "oNetPts": -0.2727,
-      "dNetPts": 1.0232,
-      "tNetPts": 0.7505,
+      "dNetPts": 1.0988,
+      "tNetPts": 0.8261,
       "oUsg": 0.153,
-      "dUsg": 0.1913,
+      "dUsg": 0.1922,
       "oPoss": 9.942,
-      "dPoss": 12.627,
-      "tPoss": 22.569,
+      "dPoss": 12.6869,
+      "tPoss": 22.6289,
       "oTmPoss": 65,
       "dTmPoss": 66,
       "tTmPoss": 131,
@@ -991,7 +991,7 @@
       "assisterLU": 1,
       "blockplyr": 0,
       "dfoulplyr": 4,
-      "drebounder": 4,
+      "drebounder": 5,
       "fg3aplyr": 0,
       "fg3mplyr": 0,
       "fgaplyr": 7,
@@ -1004,7 +1004,7 @@
       "ofoulplyr": 0,
       "orebounder": 3,
       "pts": 8,
-      "rebounder": 7,
+      "rebounder": 8,
       "stlr": 2,
       "tov1": 2,
       "plusMinusPoints": 5,
@@ -1012,8 +1012,8 @@
       "played": 1,
       "seconds_played": 1744,
       "oWPA": 0.135,
-      "dWPA": -0.1003,
-      "tWPA": 0.0347
+      "dWPA": -0.0962,
+      "tWPA": 0.0387
     },
     {
       "gmId": "0022500698",
@@ -1032,13 +1032,13 @@
       "fromYear": 2019,
       "player_years": 6,
       "oNetPts": -0.1142,
-      "dNetPts": -1.9337,
-      "tNetPts": -2.0479,
+      "dNetPts": -1.9344,
+      "tNetPts": -2.0486,
       "oUsg": 0.2171,
       "dUsg": 0.1962,
       "oPoss": 17.1486,
-      "dPoss": 15.1292,
-      "tPoss": 32.2778,
+      "dPoss": 15.1287,
+      "tPoss": 32.2772,
       "oTmPoss": 79,
       "dTmPoss": 77.12,
       "tTmPoss": 156.12,
@@ -1150,13 +1150,13 @@
       "fromYear": 2021,
       "player_years": 4,
       "oNetPts": 1.8157,
-      "dNetPts": 0.1603,
-      "tNetPts": 1.9761,
+      "dNetPts": 0.0842,
+      "tNetPts": 1.8999,
       "oUsg": 0.3673,
-      "dUsg": 0.1805,
+      "dUsg": 0.1797,
       "oPoss": 30.1165,
-      "dPoss": 14.4606,
-      "tPoss": 44.5771,
+      "dPoss": 14.4003,
+      "tPoss": 44.5168,
       "oTmPoss": 82,
       "dTmPoss": 80.12,
       "tTmPoss": 162.12,
@@ -1168,7 +1168,7 @@
       "assisterLU": 4,
       "blockplyr": 0,
       "dfoulplyr": 1,
-      "drebounder": 8,
+      "drebounder": 7,
       "fg3aplyr": 6,
       "fg3mplyr": 3,
       "fgaplyr": 29,
@@ -1181,7 +1181,7 @@
       "ofoulplyr": 0,
       "orebounder": 4,
       "pts": 33,
-      "rebounder": 12,
+      "rebounder": 11,
       "stlr": 3,
       "tov1": 4,
       "plusMinusPoints": -5,
@@ -1189,8 +1189,8 @@
       "played": 1,
       "seconds_played": 2189,
       "oWPA": 0.5009,
-      "dWPA": -0.1805,
-      "tWPA": 0.3204
+      "dWPA": -0.1846,
+      "tWPA": 0.3163
     },
     {
       "gmId": "0022500698",
@@ -1209,13 +1209,13 @@
       "fromYear": 2023,
       "player_years": 2,
       "oNetPts": -0.4964,
-      "dNetPts": 2.3456,
-      "tNetPts": 1.8491,
+      "dNetPts": 2.3449,
+      "tNetPts": 1.8485,
       "oUsg": 0.1581,
       "dUsg": 0.2408,
       "oPoss": 11.2277,
-      "dPoss": 16.6468,
-      "tPoss": 27.8745,
+      "dPoss": 16.6463,
+      "tPoss": 27.874,
       "oTmPoss": 71,
       "dTmPoss": 69.12,
       "tTmPoss": 140.12,
@@ -1386,13 +1386,13 @@
       "fromYear": 2021,
       "player_years": 4,
       "oNetPts": 3.1271,
-      "dNetPts": -1.7607,
-      "tNetPts": 1.3663,
+      "dNetPts": -1.7613,
+      "tNetPts": 1.3657,
       "oUsg": 0.1321,
       "dUsg": 0.1733,
       "oPoss": 6.3426,
-      "dPoss": 8.3196,
-      "tPoss": 14.6622,
+      "dPoss": 8.3191,
+      "tPoss": 14.6617,
       "oTmPoss": 48,
       "dTmPoss": 48,
       "tTmPoss": 96,
@@ -1425,7 +1425,7 @@
       "played": 1,
       "seconds_played": 1326,
       "oWPA": 0.1781,
-      "dWPA": -0.1931,
+      "dWPA": -0.1932,
       "tWPA": -0.015
     },
     {
@@ -23271,8 +23271,8 @@
       "displayName": "Corey Kispert",
       "actionType": "rebound",
       "oNetPts": -0.7408,
-      "dNetPts": -0.271,
-      "tNetPts": -1.0118
+      "dNetPts": -0.2716,
+      "tNetPts": -1.0124
     },
     {
       "gmID": "0022500698",
@@ -23367,8 +23367,8 @@
       "displayName": "Corey Kispert",
       "actionType": "total",
       "oNetPts": 3.1271,
-      "dNetPts": -1.7607,
-      "tNetPts": 1.3663
+      "dNetPts": -1.7613,
+      "tNetPts": 1.3657
     },
     {
       "gmID": "0022500698",
@@ -23643,8 +23643,8 @@
       "displayName": "Dyson Daniels",
       "actionType": "rebound",
       "oNetPts": -0.0002,
-      "dNetPts": -0.1734,
-      "tNetPts": -0.1736
+      "dNetPts": -0.0979,
+      "tNetPts": -0.0981
     },
     {
       "gmID": "0022500698",
@@ -23727,8 +23727,8 @@
       "displayName": "Dyson Daniels",
       "actionType": "total",
       "oNetPts": -0.2727,
-      "dNetPts": 1.0232,
-      "tNetPts": 0.7505
+      "dNetPts": 1.0988,
+      "tNetPts": 0.8261
     },
     {
       "gmID": "0022500698",
@@ -24003,8 +24003,8 @@
       "displayName": "Jalen Johnson",
       "actionType": "rebound",
       "oNetPts": -0.2523,
-      "dNetPts": 0.2316,
-      "tNetPts": -0.0208
+      "dNetPts": 0.1554,
+      "tNetPts": -0.0969
     },
     {
       "gmID": "0022500698",
@@ -24099,8 +24099,8 @@
       "displayName": "Jalen Johnson",
       "actionType": "total",
       "oNetPts": 1.8157,
-      "dNetPts": 0.1603,
-      "tNetPts": 1.9761
+      "dNetPts": 0.0842,
+      "tNetPts": 1.8999
     },
     {
       "gmID": "0022500698",
@@ -24719,8 +24719,8 @@
       "displayName": "Mouhamed Gueye",
       "actionType": "rebound",
       "oNetPts": -0.7185,
-      "dNetPts": -0.1658,
-      "tNetPts": -0.8843
+      "dNetPts": -0.1664,
+      "tNetPts": -0.8849
     },
     {
       "gmID": "0022500698",
@@ -24815,8 +24815,8 @@
       "displayName": "Mouhamed Gueye",
       "actionType": "total",
       "oNetPts": -0.4964,
-      "dNetPts": 2.3456,
-      "tNetPts": 1.8491
+      "dNetPts": 2.3449,
+      "tNetPts": 1.8485
     },
     {
       "gmID": "0022500698",
@@ -25091,8 +25091,8 @@
       "displayName": "Nickeil Alexander-Walker",
       "actionType": "rebound",
       "oNetPts": -0.9001,
-      "dNetPts": -0.1914,
-      "tNetPts": -1.0915
+      "dNetPts": -0.1921,
+      "tNetPts": -1.0922
     },
     {
       "gmID": "0022500698",
@@ -25187,8 +25187,8 @@
       "displayName": "Nickeil Alexander-Walker",
       "actionType": "total",
       "oNetPts": -0.1142,
-      "dNetPts": -1.9337,
-      "tNetPts": -2.0479
+      "dNetPts": -1.9344,
+      "tNetPts": -2.0486
     },
     {
       "gmID": "0022500698",
