@@ -14,12 +14,30 @@ import pyarrow.parquet as pq
 CURRENT_SEASON = 2025
 
 
-def fetch_espn_data(season, day):
+def get_s3_client():
+    """Get authenticated S3 client using ESPN's Cognito credentials."""
+    cognito_identity = boto3.client("cognito-identity", region_name="us-east-1")
+    identity_id = "us-east-1:bf788d54-d676-c9e0-049d-ef3e67cf0372"
+
+    cognito_data = cognito_identity.get_credentials_for_identity(IdentityId=identity_id)
+
+    session = boto3.Session(
+        aws_access_key_id=cognito_data["Credentials"]["AccessKeyId"],
+        aws_secret_access_key=cognito_data["Credentials"]["SecretKey"],
+        aws_session_token=cognito_data["Credentials"]["SessionToken"],
+        region_name="us-east-1",
+    )
+
+    return session.client("s3")
+
+
+def fetch_espn_data(s3, season, day):
     """
     Fetches NBA net points data from ESPN's S3 bucket for a specific season and
     day.
 
     Parameters:
+        s3: Authenticated boto3 S3 client
         season (str): The year when the NBA season started (e.g., "2023" for
                       the 2023-2024 season)
         day (str): The specific date to retrieve data for, in 'yyyy-mm-dd'
@@ -30,28 +48,9 @@ def fetch_espn_data(season, day):
         None: If an error occurs during the data retrieval process
 
     Note:
-        Uses AWS Cognito for authentication with a hardcoded identity ID.
         The data is stored in the 'espnsportsanalytics.com' S3 bucket.
     """
-    cognito_identity = boto3.client("cognito-identity", region_name="us-east-1")
-    identity_id = "us-east-1:bf788d54-d676-c9e0-049d-ef3e67cf0372"
-
     try:
-        # Get credentials from Cognito
-        cognito_data = cognito_identity.get_credentials_for_identity(
-            IdentityId=identity_id
-        )
-
-        # Configure a new session with the temporary credentials
-        session = boto3.Session(
-            aws_access_key_id=cognito_data["Credentials"]["AccessKeyId"],
-            aws_secret_access_key=cognito_data["Credentials"]["SecretKey"],
-            aws_session_token=cognito_data["Credentials"]["SessionToken"],
-            region_name="us-east-1",
-        )
-
-        s3 = session.client("s3")
-
         # seems like the structure is
         # NBA/netpts/<year of start of season>/yyyy-mm-dd.json
         response = s3.get_object(
@@ -309,16 +308,23 @@ class Options(Protocol):
 
 
 def main(opts: Options):
-    # the data on the site appears to go back to the 2021-2022 season
+    s3 = get_s3_client()
+
+    # the data on the site appears to go back to the 2018-2019 season
     for season in range(
-        2021 if opts.every_season else CURRENT_SEASON, CURRENT_SEASON + 1
+        2018 if opts.every_season else CURRENT_SEASON, CURRENT_SEASON + 1
     ):
         output_dir = opts.espndir / str(season)
         os.makedirs(output_dir, exist_ok=True)
 
         # - I verified that preseason games don't yield results
         # - I don't think any season started before 10-15 in this sample
-        dates = daterange(f"{season}-10-15", f"{season+1}-06-30")
+        #
+        # Change the start date for 2020 season (COVID delayed)
+        if season == 2020:
+            dates = daterange(f"{season}-12-20", f"{season+1}-07-31")
+        else:
+            dates = daterange(f"{season}-10-15", f"{season+1}-06-30")
 
         print(f"Downloading data for {len(dates)} days...")
 
@@ -332,7 +338,7 @@ def main(opts: Options):
                 continue
 
             print(f"Fetching data for {season} {date}...")
-            data = fetch_espn_data(season, date)
+            data = fetch_espn_data(s3, season, date)
 
             if data:
                 with open(outfile, "w") as f:
