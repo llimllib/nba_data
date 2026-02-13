@@ -21,12 +21,13 @@ In the `data` directory, all seasons represent the end of the season, so 2025 me
 
 ## data/espn
 
-Data collected from [espnanalytics.com](https://espnanalytics.com/). Covers the 2021-22 season through the current season.
+Data collected from [espnanalytics.com](https://espnanalytics.com/). Covers the 2018-19 season through the current season.
 
 **note**: in this directory, the season name represents the _first_ year of the season, not the last. Apologies for the inconsistency
 
 - **`four_factors.parquet`**: four factors data per game
 - **`player_box.parquet`**: player box score data per game
+- **`player_details.parquet`**: more detailed player box scores
 - **`team_box.parquet`**: team box score data per game
 
 ## src
