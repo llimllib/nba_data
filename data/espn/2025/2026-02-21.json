@@ -3540,8 +3540,8 @@
       "played": 1,
       "seconds_played": 1997,
       "oWPA": 0.2858,
-      "dWPA": -0.1275,
-      "tWPA": 0.1583
+      "dWPA": -0.159,
+      "tWPA": 0.1268
     },
     {
       "gmId": "0022500812",
@@ -3599,8 +3599,8 @@
       "played": 1,
       "seconds_played": 1736,
       "oWPA": 0.0777,
-      "dWPA": -0.1353,
-      "tWPA": -0.0576
+      "dWPA": -0.1037,
+      "tWPA": -0.0261
     },
     {
       "gmId": "0022500812",
@@ -6214,9 +6214,9 @@
       "draftNumber": 19,
       "fromYear": 2020,
       "player_years": 5,
-      "oNetPts": 1.0814,
+      "oNetPts": 1.8814,
       "dNetPts": -0.8658,
-      "tNetPts": 0.2156,
+      "tNetPts": 1.0156,
       "oUsg": 0.268,
       "dUsg": 0.1875,
       "oPoss": 14.7377,
@@ -6332,9 +6332,9 @@
       "draftNumber": 13,
       "fromYear": 2025,
       "player_years": 0,
-      "oNetPts": -0.3,
+      "oNetPts": -1.1,
       "dNetPts": 0.7968,
-      "tNetPts": 0.4968,
+      "tNetPts": -0.3032,
       "oUsg": 0.2229,
       "dUsg": 0.1841,
       "oPoss": 9.8298,
@@ -18066,9 +18066,9 @@
       "plyrID": 1642852,
       "displayName": "Derik Queen",
       "actionType": "foul",
-      "oNetPts": 3.1793,
+      "oNetPts": 2.3793,
       "dNetPts": -0.9805,
-      "tNetPts": 2.1988
+      "tNetPts": 1.3988
     },
     {
       "gmID": "0022500812",
@@ -18246,9 +18246,9 @@
       "plyrID": 1642852,
       "displayName": "Derik Queen",
       "actionType": "total",
-      "oNetPts": -0.3,
+      "oNetPts": -1.1,
       "dNetPts": 0.7968,
-      "tNetPts": 0.4968
+      "tNetPts": -0.3032
     },
     {
       "gmID": "0022500812",
@@ -20158,9 +20158,9 @@
       "plyrID": 1630180,
       "displayName": "Saddiq Bey",
       "actionType": "foul",
-      "oNetPts": -0.0908,
+      "oNetPts": 0.7092,
       "dNetPts": -1.5379,
-      "tNetPts": -1.6287
+      "tNetPts": -0.8287
     },
     {
       "gmID": "0022500812",
@@ -20338,9 +20338,9 @@
       "plyrID": 1630180,
       "displayName": "Saddiq Bey",
       "actionType": "total",
-      "oNetPts": 1.0814,
+      "oNetPts": 1.8814,
       "dNetPts": -0.8658,
-      "tNetPts": 0.2156
+      "tNetPts": 1.0156
     },
     {
       "gmID": "0022500812",
