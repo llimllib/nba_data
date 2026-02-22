@@ -4032,13 +4032,13 @@
       "fromYear": 2008,
       "player_years": 17,
       "oNetPts": -6.0041,
-      "dNetPts": -1.3609,
-      "tNetPts": -7.365,
+      "dNetPts": -1.3454,
+      "tNetPts": -7.3495,
       "oUsg": 0.2326,
-      "dUsg": 0.1682,
+      "dUsg": 0.1685,
       "oPoss": 11.6322,
-      "dPoss": 8.2426,
-      "tPoss": 19.8748,
+      "dPoss": 8.2549,
+      "tPoss": 19.8871,
       "oTmPoss": 50,
       "dTmPoss": 49,
       "tTmPoss": 99,
@@ -4091,13 +4091,13 @@
       "fromYear": 2009,
       "player_years": 16,
       "oNetPts": -0.6103,
-      "dNetPts": -2.7132,
-      "tNetPts": -3.3234,
+      "dNetPts": -2.6805,
+      "tNetPts": -3.2908,
       "oUsg": 0.2378,
-      "dUsg": 0.1762,
+      "dUsg": 0.1765,
       "oPoss": 19.0209,
-      "dPoss": 14.0745,
-      "tPoss": 33.0955,
+      "dPoss": 14.1004,
+      "tPoss": 33.1213,
       "oTmPoss": 80,
       "dTmPoss": 79.88,
       "tTmPoss": 159.88,
@@ -4150,13 +4150,13 @@
       "fromYear": 2022,
       "player_years": 3,
       "oNetPts": -1.0102,
-      "dNetPts": -1.3642,
-      "tNetPts": -2.3744,
+      "dNetPts": -1.6158,
+      "tNetPts": -2.626,
       "oUsg": 0.2028,
-      "dUsg": 0.1955,
+      "dUsg": 0.1931,
       "oPoss": 16.628,
-      "dPoss": 16.0313,
-      "tPoss": 32.6592,
+      "dPoss": 15.8318,
+      "tPoss": 32.4598,
       "oTmPoss": 82,
       "dTmPoss": 82,
       "tTmPoss": 164,
@@ -4166,7 +4166,7 @@
       "assister": 2,
       "assister3pt": 0,
       "assisterLU": 2,
-      "blockplyr": 2,
+      "blockplyr": 1,
       "dfoulplyr": 3,
       "drebounder": 2,
       "fg3aplyr": 8,
@@ -4268,13 +4268,13 @@
       "fromYear": 2025,
       "player_years": 0,
       "oNetPts": -1.0532,
-      "dNetPts": -6.7553,
-      "tNetPts": -7.8086,
+      "dNetPts": -6.5837,
+      "tNetPts": -7.6369,
       "oUsg": 0.2079,
-      "dUsg": 0.2886,
+      "dUsg": 0.2908,
       "oPoss": 12.6807,
-      "dPoss": 17.6023,
-      "tPoss": 30.283,
+      "dPoss": 17.7383,
+      "tPoss": 30.419,
       "oTmPoss": 61,
       "dTmPoss": 61,
       "tTmPoss": 122,
@@ -4362,7 +4362,7 @@
       "stlr": 0,
       "tov1": 0,
       "plusMinusPoints": 9,
-      "minutes_played": "05:30",
+      "minutes_played": "5:30",
       "played": 1,
       "seconds_played": 330,
       "oWPA": 0,
@@ -4445,13 +4445,13 @@
       "fromYear": 2025,
       "player_years": 0,
       "oNetPts": -1.3267,
-      "dNetPts": -1.0248,
-      "tNetPts": -2.3514,
+      "dNetPts": -0.9929,
+      "tNetPts": -2.3196,
       "oUsg": 0.1675,
-      "dUsg": 0.1928,
+      "dUsg": 0.1932,
       "oPoss": 10.5516,
-      "dPoss": 12.7262,
-      "tPoss": 23.2779,
+      "dPoss": 12.7514,
+      "tPoss": 23.3031,
       "oTmPoss": 63,
       "dTmPoss": 66,
       "tTmPoss": 129,
@@ -4598,7 +4598,7 @@
       "stlr": 1,
       "tov1": 0,
       "plusMinusPoints": 9,
-      "minutes_played": "05:17",
+      "minutes_played": "5:17",
       "played": 1,
       "seconds_played": 317,
       "oWPA": 0,
@@ -8315,7 +8315,7 @@
       "stlr": 0,
       "tov1": 0,
       "plusMinusPoints": -9,
-      "minutes_played": "04:24",
+      "minutes_played": "4:24",
       "played": 1,
       "seconds_played": 264,
       "oWPA": 0,
@@ -8433,7 +8433,7 @@
       "stlr": 1,
       "tov1": 0,
       "plusMinusPoints": -9,
-      "minutes_played": "04:24",
+      "minutes_played": "4:24",
       "played": 1,
       "seconds_played": 264,
       "oWPA": 0,
@@ -8492,7 +8492,7 @@
       "stlr": 0,
       "tov1": 0,
       "plusMinusPoints": -9,
-      "minutes_played": "04:24",
+      "minutes_played": "4:24",
       "played": 1,
       "seconds_played": 264,
       "oWPA": 0,
@@ -8787,7 +8787,7 @@
       "stlr": 0,
       "tov1": 2,
       "plusMinusPoints": -9,
-      "minutes_played": "05:30",
+      "minutes_played": "5:30",
       "played": 1,
       "seconds_played": 330,
       "oWPA": 0,
@@ -9232,7 +9232,7 @@
       "assister": 33,
       "assister3pt": 8,
       "assisterLu": 10,
-      "blockplyr": 8,
+      "blockplyr": 7,
       "dfoulplyr": 19,
       "drebounder": 25,
       "fg3aplyr": 32,
@@ -40927,8 +40927,8 @@
       "displayName": "DeMar DeRozan",
       "actionType": "2pt",
       "oNetPts": -1.2402,
-      "dNetPts": -2.0747,
-      "tNetPts": -3.3149
+      "dNetPts": -2.042,
+      "tNetPts": -3.2822
     },
     {
       "gmID": "0022500815",
@@ -41285,8 +41285,8 @@
       "displayName": "DeMar DeRozan",
       "actionType": "total",
       "oNetPts": -0.6103,
-      "dNetPts": -2.7132,
-      "tNetPts": -3.3234
+      "dNetPts": -2.6805,
+      "tNetPts": -3.2908
     },
     {
       "gmID": "0022500815",
@@ -42287,8 +42287,8 @@
       "displayName": "Keegan Murray",
       "actionType": "2pt",
       "oNetPts": 1.1239,
-      "dNetPts": -1.0632,
-      "tNetPts": 0.0607
+      "dNetPts": -1.3148,
+      "tNetPts": -0.191
     },
     {
       "gmID": "0022500815",
@@ -42299,8 +42299,8 @@
       "displayName": "Keegan Murray",
       "actionType": "2ptShooting",
       "oNetPts": 0.7856,
-      "dNetPts": 0.1205,
-      "tNetPts": 0.9061
+      "dNetPts": -0.1311,
+      "tNetPts": 0.6545
     },
     {
       "gmID": "0022500815",
@@ -42515,8 +42515,8 @@
       "displayName": "Keegan Murray",
       "actionType": "layup",
       "oNetPts": 0,
-      "dNetPts": 0.1697,
-      "tNetPts": 0.1697
+      "dNetPts": -0.082,
+      "tNetPts": -0.082
     },
     {
       "gmID": "0022500815",
@@ -42563,8 +42563,8 @@
       "displayName": "Keegan Murray",
       "actionType": "rim",
       "oNetPts": 0.1194,
-      "dNetPts": -0.2181,
-      "tNetPts": -0.0987
+      "dNetPts": -0.4697,
+      "tNetPts": -0.3503
     },
     {
       "gmID": "0022500815",
@@ -42647,8 +42647,8 @@
       "displayName": "Keegan Murray",
       "actionType": "total",
       "oNetPts": -1.0102,
-      "dNetPts": -1.3642,
-      "tNetPts": -2.3744
+      "dNetPts": -1.6158,
+      "tNetPts": -2.626
     },
     {
       "gmID": "0022500815",
@@ -43005,8 +43005,8 @@
       "displayName": "Maxime Raynaud",
       "actionType": "2pt",
       "oNetPts": -0.5251,
-      "dNetPts": -4.16,
-      "tNetPts": -4.6851
+      "dNetPts": -3.9884,
+      "tNetPts": -4.5134
     },
     {
       "gmID": "0022500815",
@@ -43353,8 +43353,8 @@
       "displayName": "Maxime Raynaud",
       "actionType": "total",
       "oNetPts": -1.0532,
-      "dNetPts": -6.7553,
-      "tNetPts": -7.8086
+      "dNetPts": -6.5837,
+      "tNetPts": -7.6369
     },
     {
       "gmID": "0022500815",
@@ -43365,8 +43365,8 @@
       "displayName": "Nique Clifford",
       "actionType": "2pt",
       "oNetPts": 2.9239,
-      "dNetPts": -2.1881,
-      "tNetPts": 0.7358
+      "dNetPts": -2.1563,
+      "tNetPts": 0.7676
     },
     {
       "gmID": "0022500815",
@@ -43699,8 +43699,8 @@
       "displayName": "Nique Clifford",
       "actionType": "total",
       "oNetPts": -1.3267,
-      "dNetPts": -1.0248,
-      "tNetPts": -2.3514
+      "dNetPts": -0.9929,
+      "tNetPts": -2.3196
     },
     {
       "gmID": "0022500815",
@@ -44083,8 +44083,8 @@
       "displayName": "Russell Westbrook",
       "actionType": "2pt",
       "oNetPts": -1.1851,
-      "dNetPts": -0.6218,
-      "tNetPts": -1.8069
+      "dNetPts": -0.6063,
+      "tNetPts": -1.7914
     },
     {
       "gmID": "0022500815",
@@ -44431,8 +44431,8 @@
       "displayName": "Russell Westbrook",
       "actionType": "total",
       "oNetPts": -6.0041,
-      "dNetPts": -1.3609,
-      "tNetPts": -7.365
+      "dNetPts": -1.3454,
+      "tNetPts": -7.3495
     },
     {
       "gmID": "0022500815",
