@@ -33,3 +33,20 @@ Data collected from [espnanalytics.com](https://espnanalytics.com/). Covers the 
 ## src
 
 The source code for updating the data. See the makefile for how to run it
+
+## NBA Game ID Prefixes
+
+| Prefix | Game Type                            | Example                                                |
+| ------ | ------------------------------------ | ------------------------------------------------------ |
+| 001    | Preseason                            | 0012500068 - Oct 2-17 games                            |
+| 002    | Regular Season                       | 0022400123 - main season games                         |
+| 003    | All-Star                             | 0032400001 - All-Star weekend games                    |
+| 004    | Playoffs                             | 0042400101 - playoff games (round/series/game encoded) |
+| 005    | Play-In Tournament                   | 0052400101 - play-in games                             |
+| 006    | NBA Cup (In-Season Tournament) Final | 0062500001 - the championship game                     |
+
+The full game ID format is: `00X YYZZ GGGG` where:
+
+- `00X` = game type prefix
+- `YY` = season year (24 = 2024-25 season)
+- `ZZ` + `GGGG` = game-specific identifier (varies by type)
