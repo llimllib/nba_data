@@ -36,14 +36,14 @@ The source code for updating the data. See the makefile for how to run it
 
 ## NBA Game ID Prefixes
 
-| Prefix | Game Type                            | Example                                                |
-| ------ | ------------------------------------ | ------------------------------------------------------ |
-| 001    | Preseason                            | 0012500068 - Oct 2-17 games                            |
-| 002    | Regular Season                       | 0022400123 - main season games                         |
-| 003    | All-Star                             | 0032400001 - All-Star weekend games                    |
-| 004    | Playoffs                             | 0042400101 - playoff games (round/series/game encoded) |
-| 005    | Play-In Tournament                   | 0052400101 - play-in games                             |
-| 006    | NBA Cup (In-Season Tournament) Final | 0062500001 - the championship game                     |
+| Prefix | Game Type                            | Example                                                 |
+| ------ | ------------------------------------ | ------------------------------------------------------- |
+| 001    | Preseason                            | `0012500068` - Oct 2-17 game                            |
+| 002    | Regular Season                       | `0022400123` - main season game                         |
+| 003    | All-Star                             | `0032400001` - All-Star weekend game                    |
+| 004    | Playoffs                             | `0042400101` - playoff game (round/series/game encoded) |
+| 005    | Play-In Tournament                   | `0052400101` - play-in game                             |
+| 006    | NBA Cup (In-Season Tournament) Final | `0062500001` - the NBA Cup championship game            |
 
 The full game ID format is: `00X YYZZ GGGG` where:
 
