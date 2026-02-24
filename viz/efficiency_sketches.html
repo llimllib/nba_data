@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Celtics Offensive Efficiency - Visualization Sketches</title>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6.14"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #fafafa;
+    }
+    h1 { color: #333; }
+    h2 { color: #555; margin-top: 40px; }
+    .sketch {
+      background: white;
+      padding: 20px;
+      margin: 20px 0;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .note {
+      color: #666;
+      font-size: 14px;
+      margin-top: 10px;
+    }
+    .highlight { color: #007A33; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>Boston's Offensive Efficiency: Visualization Sketches</h1>
+  <p>Exploring how to show that Boston has great <em>team</em> offensive efficiency despite not having elite <em>individual</em> efficiency — through broad positive contributions and zero negative contributors.</p>
+
+  <div class="sketch">
+    <h2>1. Dot Plot with Minutes as Size (Your Original Idea)</h2>
+    <p class="note">Each dot is a player, size = minutes played, y = offensive rating. Teams sorted by floor (worst player's rating).</p>
+    <div id="plot1"></div>
+  </div>
+
+  <div class="sketch">
+    <h2>2. Strip Plot (Minutes as opacity)</h2>
+    <p class="note">Same data but using opacity for minutes. Horizontal line at league average (112).</p>
+    <div id="plot2"></div>
+  </div>
+
+  <div class="sketch">
+    <h2>3. Small Multiples: Distribution per Team</h2>
+    <p class="note">Each team gets its own column showing the distribution of player offensive ratings.</p>
+    <div id="plot3"></div>
+  </div>
+
+  <div class="sketch">
+    <h2>4. Stacked Bar: Minutes by Efficiency Tier</h2>
+    <p class="note">What percentage of each team's minutes go to negative (<110), neutral (110-115), and positive (>115) contributors?</p>
+    <div id="plot4"></div>
+  </div>
+
+  <div class="sketch">
+    <h2>5. Beeswarm-ish: Offset by Minutes Rank</h2>
+    <p class="note">Players offset horizontally by minutes rank within team (1st = leftmost), y = off rating. Shows depth clearly.</p>
+    <div id="plot5"></div>
+  </div>
+
+  <div class="sketch">
+    <h2>6. Floor vs Ceiling Scatter</h2>
+    <p class="note">Each team as a point: x = worst player's rating (floor), y = best player's rating (ceiling). Boston has highest floor.</p>
+    <div id="plot6"></div>
+  </div>
+
+  <div class="sketch">
+    <h2>7. Cumulative Minutes by Efficiency</h2>
+    <p class="note">For each team, show cumulative % of minutes as you go from worst to best offensive rating. Steeper = more minutes to better players.</p>
+    <div id="plot7"></div>
+  </div>
+
+<script type="module">
+const data = [
+  {"team":"ATL","player":"Bogdan Bogdanović","minutes":1426,"off_rating":118.0,"ts_pct":0.57},
+  {"team":"ATL","player":"Trae Young","minutes":1908,"off_rating":116.1,"ts_pct":0.565},
+  {"team":"ATL","player":"Onyeka Okongwu","minutes":1389,"off_rating":113.5,"ts_pct":0.657},
+  {"team":"ATL","player":"Jalen Johnson","minutes":1657,"off_rating":113.4,"ts_pct":0.571},
+  {"team":"ATL","player":"De'Andre Hunter","minutes":1496,"off_rating":112.7,"ts_pct":0.526},
+  {"team":"ATL","player":"Dyson Daniels","minutes":1637,"off_rating":111.2,"ts_pct":0.541},
+  {"team":"ATL","player":"Clint Capela","minutes":945,"off_rating":110.0,"ts_pct":0.632},
+  {"team":"ATL","player":"Garrison Mathews","minutes":865,"off_rating":109.6,"ts_pct":0.578},
+  {"team":"ATL","player":"Zaccharie Risacher","minutes":1399,"off_rating":108.1,"ts_pct":0.495},
+  {"team":"ATL","player":"David Roddy","minutes":707,"off_rating":107.5,"ts_pct":0.564},
+  {"team":"ATL","player":"Larry Nance Jr.","minutes":612,"off_rating":107.4,"ts_pct":0.6},
+  {"team":"BKN","player":"Cam Thomas","minutes":1543,"off_rating":116.3,"ts_pct":0.563},
+  {"team":"BKN","player":"D'Angelo Russell","minutes":1221,"off_rating":112.4,"ts_pct":0.553},
+  {"team":"BKN","player":"Cameron Johnson","minutes":1236,"off_rating":110.2,"ts_pct":0.577},
+  {"team":"BKN","player":"Nic Claxton","minutes":1217,"off_rating":108.0,"ts_pct":0.642},
+  {"team":"BKN","player":"Ziaire Williams","minutes":1373,"off_rating":107.7,"ts_pct":0.536},
+  {"team":"BKN","player":"Ben Simmons","minutes":956,"off_rating":106.3,"ts_pct":0.595},
+  {"team":"BKN","player":"Keon Johnson","minutes":1053,"off_rating":105.5,"ts_pct":0.542},
+  {"team":"BKN","player":"Noah Clowney","minutes":1048,"off_rating":105.4,"ts_pct":0.536},
+  {"team":"BKN","player":"Trendon Watford","minutes":806,"off_rating":104.1,"ts_pct":0.527},
+  {"team":"BKN","player":"Dariq Whitehead","minutes":498,"off_rating":103.6,"ts_pct":0.467},
+  {"team":"BKN","player":"Maxwell Lewis","minutes":626,"off_rating":102.9,"ts_pct":0.573},
+  {"team":"BKN","player":"Jalen Wilson","minutes":1058,"off_rating":101.1,"ts_pct":0.507},
+  {"team":"BOS","player":"Hugo González","minutes":771,"off_rating":120.7,"ts_pct":0.544},
+  {"team":"BOS","player":"Payton Pritchard","minutes":1803,"off_rating":119.5,"ts_pct":0.588},
+  {"team":"BOS","player":"Derrick White","minutes":1855,"off_rating":119.5,"ts_pct":0.518},
+  {"team":"BOS","player":"Jordan Walsh","minutes":901,"off_rating":119.3,"ts_pct":0.622},
+  {"team":"BOS","player":"Jaylen Brown","minutes":1749,"off_rating":119.2,"ts_pct":0.57},
+  {"team":"BOS","player":"Sam Hauser","minutes":1283,"off_rating":118.9,"ts_pct":0.589},
+  {"team":"BOS","player":"Luka Garza","minutes":753,"off_rating":118.6,"ts_pct":0.691},
+  {"team":"BOS","player":"Neemias Queta","minutes":1323,"off_rating":117.1,"ts_pct":0.658},
+  {"team":"BOS","player":"Baylor Scheierman","minutes":758,"off_rating":116.4,"ts_pct":0.592},
+  {"team":"BOS","player":"Nikola Vučević","minutes":1607,"off_rating":113.4,"ts_pct":0.584},
+  {"team":"CHA","player":"Ryan Kalkbrenner","minutes":1067,"off_rating":122.7,"ts_pct":0.761},
+  {"team":"CHA","player":"LaMelo Ball","minutes":1675,"off_rating":119.7,"ts_pct":0.586},
+  {"team":"CHA","player":"Brandon Miller","minutes":1803,"off_rating":117.3,"ts_pct":0.586},
+  {"team":"CHA","player":"Miles Bridges","minutes":1765,"off_rating":116.6,"ts_pct":0.554},
+  {"team":"CHA","player":"Moussa Diabaté","minutes":1258,"off_rating":116.5,"ts_pct":0.657},
+  {"team":"CHA","player":"Tre Mann","minutes":972,"off_rating":113.5,"ts_pct":0.609},
+  {"team":"CHA","player":"Grant Williams","minutes":1101,"off_rating":113.3,"ts_pct":0.579},
+  {"team":"CHA","player":"Seth Curry","minutes":835,"off_rating":112.6,"ts_pct":0.633},
+  {"team":"CHA","player":"Cody Martin","minutes":757,"off_rating":110.6,"ts_pct":0.464},
+  {"team":"CHA","player":"Josh Green","minutes":878,"off_rating":110.5,"ts_pct":0.591},
+  {"team":"CHA","player":"Nick Richards","minutes":511,"off_rating":109.1,"ts_pct":0.605},
+  {"team":"CHI","player":"Nikola Vučević","minutes":430,"off_rating":116.9,"ts_pct":0.601},
+  {"team":"CHI","player":"Coby White","minutes":1545,"off_rating":114.6,"ts_pct":0.568},
+  {"team":"CHI","player":"Josh Giddey","minutes":1752,"off_rating":113.9,"ts_pct":0.541},
+  {"team":"CHI","player":"Zach LaVine","minutes":1578,"off_rating":113.9,"ts_pct":0.609},
+  {"team":"CHI","player":"Patrick Williams","minutes":1183,"off_rating":111.9,"ts_pct":0.565},
+  {"team":"CHI","player":"Ayo Dosunmu","minutes":1199,"off_rating":110.8,"ts_pct":0.568},
+  {"team":"CHI","player":"Matas Buzelis","minutes":1163,"off_rating":108.9,"ts_pct":0.521},
+  {"team":"CHI","player":"Torrey Craig","minutes":551,"off_rating":108.9,"ts_pct":0.575},
+  {"team":"CHI","player":"Chris Duarte","minutes":521,"off_rating":105.3,"ts_pct":0.495},
+  {"team":"CHI","player":"Jalen Smith","minutes":723,"off_rating":105.3,"ts_pct":0.532},
+  {"team":"CLE","player":"Sam Merrill","minutes":861,"off_rating":120.1,"ts_pct":0.698},
+  {"team":"CLE","player":"Jarrett Allen","minutes":1260,"off_rating":119.7,"ts_pct":0.662},
+  {"team":"CLE","player":"James Harden","minutes":1752,"off_rating":119.5,"ts_pct":0.604},
+  {"team":"CLE","player":"Donovan Mitchell","minutes":1809,"off_rating":118.9,"ts_pct":0.616},
+  {"team":"CLE","player":"Jaylon Tyson","minutes":1445,"off_rating":118.3,"ts_pct":0.626},
+  {"team":"CLE","player":"Evan Mobley","minutes":1445,"off_rating":116.4,"ts_pct":0.577},
+  {"team":"CLE","player":"Dean Wade","minutes":1040,"off_rating":115.5,"ts_pct":0.586},
+  {"team":"CLE","player":"Craig Porter Jr.","minutes":893,"off_rating":114.9,"ts_pct":0.521},
+  {"team":"CLE","player":"Nae'Qwan Tomlin","minutes":773,"off_rating":114.0,"ts_pct":0.55},
+  {"team":"CLE","player":"Thomas Bryant","minutes":424,"off_rating":111.5,"ts_pct":0.629},
+  {"team":"CLE","player":"Ty Jerome","minutes":752,"off_rating":110.9,"ts_pct":0.581},
+  {"team":"CLE","player":"Tristan Thompson","minutes":472,"off_rating":107.0,"ts_pct":0.432},
+  {"team":"CLE","player":"Georges Niang","minutes":635,"off_rating":106.9,"ts_pct":0.55},
+  {"team":"CLE","player":"Caris LeVert","minutes":722,"off_rating":105.4,"ts_pct":0.505},
+  {"team":"DAL","player":"Klay Thompson","minutes":1405,"off_rating":114.6,"ts_pct":0.564},
+  {"team":"DAL","player":"Quentin Grimes","minutes":1262,"off_rating":113.9,"ts_pct":0.563},
+  {"team":"DAL","player":"P.J. Washington","minutes":1595,"off_rating":111.1,"ts_pct":0.561},
+  {"team":"DAL","player":"Kyrie Irving","minutes":1355,"off_rating":110.8,"ts_pct":0.575},
+  {"team":"DAL","player":"Daniel Gafford","minutes":859,"off_rating":109.9,"ts_pct":0.663},
+  {"team":"DAL","player":"Dereck Lively II","minutes":1188,"off_rating":108.0,"ts_pct":0.635},
+  {"team":"DAL","player":"Naji Marshall","minutes":1260,"off_rating":107.7,"ts_pct":0.545},
+  {"team":"DAL","player":"Marvin Bagley III","minutes":850,"off_rating":107.1,"ts_pct":0.651},
+  {"team":"DAL","player":"Spencer Dinwiddie","minutes":807,"off_rating":106.9,"ts_pct":0.513},
+  {"team":"DAL","player":"Jaden Hardy","minutes":692,"off_rating":106.2,"ts_pct":0.526},
+  {"team":"DAL","player":"Dante Exum","minutes":600,"off_rating":104.9,"ts_pct":0.523},
+  {"team":"DAL","player":"Justin Holiday","minutes":426,"off_rating":103.9,"ts_pct":0.47},
+  {"team":"DAL","player":"Olivier-Maxence Prosper","minutes":500,"off_rating":103.9,"ts_pct":0.5},
+  {"team":"DEN","player":"Nikola Jokić","minutes":1439,"off_rating":126.7,"ts_pct":0.693},
+  {"team":"DEN","player":"Michael Porter Jr.","minutes":1485,"off_rating":123.7,"ts_pct":0.645},
+  {"team":"DEN","player":"Christian Braun","minutes":1651,"off_rating":121.4,"ts_pct":0.609},
+  {"team":"DEN","player":"Russell Westbrook","minutes":1163,"off_rating":120.9,"ts_pct":0.559},
+  {"team":"DEN","player":"Julian Strawther","minutes":1031,"off_rating":120.1,"ts_pct":0.609},
+  {"team":"DEN","player":"Aaron Gordon","minutes":1238,"off_rating":119.5,"ts_pct":0.624},
+  {"team":"DEN","player":"Jamal Murray","minutes":1093,"off_rating":118.9,"ts_pct":0.574},
+  {"team":"DEN","player":"Dario Šarić","minutes":648,"off_rating":117.4,"ts_pct":0.6},
+  {"team":"DEN","player":"Peyton Watson","minutes":999,"off_rating":114.9,"ts_pct":0.593},
+  {"team":"DEN","player":"DeAndre Jordan","minutes":414,"off_rating":114.7,"ts_pct":0.628},
+  {"team":"DEN","player":"Hunter Tyson","minutes":580,"off_rating":113.9,"ts_pct":0.606},
+  {"team":"DEN","player":"Jalen Pickett","minutes":677,"off_rating":111.9,"ts_pct":0.53},
+  {"team":"DEN","player":"Zeke Nnaji","minutes":500,"off_rating":107.7,"ts_pct":0.582},
+  {"team":"DET","player":"Cade Cunningham","minutes":1910,"off_rating":119.5,"ts_pct":0.577},
+  {"team":"DET","player":"Tim Hardaway Jr.","minutes":1133,"off_rating":117.9,"ts_pct":0.582},
+  {"team":"DET","player":"Malik Beasley","minutes":1322,"off_rating":116.9,"ts_pct":0.593},
+  {"team":"DET","player":"Tobias Harris","minutes":1441,"off_rating":115.9,"ts_pct":0.593},
+  {"team":"DET","player":"Jalen Duren","minutes":1247,"off_rating":115.1,"ts_pct":0.664},
+  {"team":"DET","player":"Ausar Thompson","minutes":1107,"off_rating":113.4,"ts_pct":0.576},
+  {"team":"DET","player":"Simone Fontecchio","minutes":960,"off_rating":113.0,"ts_pct":0.56},
+  {"team":"DET","player":"Isaiah Stewart","minutes":782,"off_rating":112.5,"ts_pct":0.567},
+  {"team":"DET","player":"Ron Holland II","minutes":875,"off_rating":111.9,"ts_pct":0.513},
+  {"team":"DET","player":"Jaden Ivey","minutes":870,"off_rating":110.4,"ts_pct":0.542},
+  {"team":"DET","player":"Wendell Moore Jr.","minutes":457,"off_rating":110.2,"ts_pct":0.578},
+  {"team":"DET","player":"Marcus Sasser","minutes":673,"off_rating":110.0,"ts_pct":0.526},
+  {"team":"GSW","player":"Stephen Curry","minutes":1443,"off_rating":122.3,"ts_pct":0.634},
+  {"team":"GSW","player":"Andrew Wiggins","minutes":1435,"off_rating":115.9,"ts_pct":0.58},
+  {"team":"GSW","player":"Dennis Schröder","minutes":1097,"off_rating":115.3,"ts_pct":0.536},
+  {"team":"GSW","player":"Buddy Hield","minutes":1380,"off_rating":115.3,"ts_pct":0.592},
+  {"team":"GSW","player":"Draymond Green","minutes":1323,"off_rating":114.7,"ts_pct":0.556},
+  {"team":"GSW","player":"Jonathan Kuminga","minutes":1283,"off_rating":112.9,"ts_pct":0.594},
+  {"team":"GSW","player":"Trayce Jackson-Davis","minutes":917,"off_rating":111.9,"ts_pct":0.646},
+  {"team":"GSW","player":"Kevon Looney","minutes":656,"off_rating":110.7,"ts_pct":0.586},
+  {"team":"GSW","player":"Brandin Podziemski","minutes":914,"off_rating":110.7,"ts_pct":0.563},
+  {"team":"GSW","player":"Lindy Waters III","minutes":632,"off_rating":110.3,"ts_pct":0.523},
+  {"team":"GSW","player":"Moses Moody","minutes":655,"off_rating":109.7,"ts_pct":0.6},
+  {"team":"GSW","player":"Gary Payton II","minutes":614,"off_rating":109.6,"ts_pct":0.573},
+  {"team":"GSW","player":"Kyle Anderson","minutes":508,"off_rating":109.6,"ts_pct":0.582},
+  {"team":"HOU","player":"Amen Thompson","minutes":1482,"off_rating":117.3,"ts_pct":0.597},
+  {"team":"HOU","player":"Fred VanVleet","minutes":1574,"off_rating":117.2,"ts_pct":0.571},
+  {"team":"HOU","player":"Jalen Green","minutes":1632,"off_rating":117.0,"ts_pct":0.567},
+  {"team":"HOU","player":"Alperen Şengün","minutes":1475,"off_rating":116.1,"ts_pct":0.597},
+  {"team":"HOU","player":"Dillon Brooks","minutes":1389,"off_rating":115.3,"ts_pct":0.534},
+  {"team":"HOU","player":"Jabari Smith Jr.","minutes":1328,"off_rating":114.9,"ts_pct":0.546},
+  {"team":"HOU","player":"Tari Eason","minutes":845,"off_rating":114.4,"ts_pct":0.583},
+  {"team":"HOU","player":"Steven Adams","minutes":538,"off_rating":112.9,"ts_pct":0.542},
+  {"team":"HOU","player":"Jeff Green","minutes":480,"off_rating":111.1,"ts_pct":0.546},
+  {"team":"HOU","player":"Reed Sheppard","minutes":844,"off_rating":111.1,"ts_pct":0.561},
+  {"team":"IND","player":"Myles Turner","minutes":810,"off_rating":115.7,"ts_pct":0.633},
+  {"team":"IND","player":"Pascal Siakam","minutes":1564,"off_rating":111.4,"ts_pct":0.559},
+  {"team":"IND","player":"Bennedict Mathurin","minutes":1572,"off_rating":108.2,"ts_pct":0.545},
+  {"team":"IND","player":"T.J. McConnell","minutes":1075,"off_rating":107.8,"ts_pct":0.587},
+  {"team":"IND","player":"Andrew Nembhard","minutes":1349,"off_rating":105.9,"ts_pct":0.574},
+  {"team":"IND","player":"Obi Toppin","minutes":1212,"off_rating":105.4,"ts_pct":0.561},
+  {"team":"IND","player":"Thomas Bryant","minutes":649,"off_rating":105.4,"ts_pct":0.566},
+  {"team":"IND","player":"Aaron Nesmith","minutes":1360,"off_rating":105.0,"ts_pct":0.517},
+  {"team":"IND","player":"Jarace Walker","minutes":540,"off_rating":104.3,"ts_pct":0.561},
+  {"team":"LAC","player":"James Harden","minutes":730,"off_rating":117.8,"ts_pct":0.649},
+  {"team":"LAC","player":"Norman Powell","minutes":1587,"off_rating":117.5,"ts_pct":0.634},
+  {"team":"LAC","player":"John Collins","minutes":1473,"off_rating":115.8,"ts_pct":0.659},
+  {"team":"LAC","player":"Kevin Porter Jr.","minutes":831,"off_rating":114.6,"ts_pct":0.575},
+  {"team":"LAC","player":"Ivica Zubac","minutes":1361,"off_rating":113.4,"ts_pct":0.636},
+  {"team":"LAC","player":"Derrick Jones Jr.","minutes":1217,"off_rating":112.5,"ts_pct":0.573},
+  {"team":"LAC","player":"Kris Dunn","minutes":908,"off_rating":110.7,"ts_pct":0.532},
+  {"team":"LAC","player":"Terance Mann","minutes":1051,"off_rating":109.9,"ts_pct":0.586},
+  {"team":"LAC","player":"Amir Coffey","minutes":658,"off_rating":109.3,"ts_pct":0.568},
+  {"team":"LAC","player":"Bones Hyland","minutes":683,"off_rating":107.6,"ts_pct":0.546},
+  {"team":"LAC","player":"Kai Jones","minutes":657,"off_rating":107.6,"ts_pct":0.606},
+  {"team":"LAL","player":"Anthony Davis","minutes":1547,"off_rating":118.0,"ts_pct":0.628},
+  {"team":"LAL","player":"Austin Reaves","minutes":1004,"off_rating":117.7,"ts_pct":0.667},
+  {"team":"LAL","player":"Dorian Finney-Smith","minutes":1290,"off_rating":117.5,"ts_pct":0.614},
+  {"team":"LAL","player":"LeBron James","minutes":1427,"off_rating":117.3,"ts_pct":0.612},
+  {"team":"LAL","player":"Luke Kennard","minutes":1079,"off_rating":115.9,"ts_pct":0.721},
+  {"team":"LAL","player":"Rui Hachimura","minutes":1091,"off_rating":115.2,"ts_pct":0.6},
+  {"team":"LAL","player":"Jaxson Hayes","minutes":812,"off_rating":114.9,"ts_pct":0.768},
+  {"team":"LAL","player":"Gabe Vincent","minutes":1027,"off_rating":112.9,"ts_pct":0.555},
+  {"team":"LAL","player":"Max Christie","minutes":1018,"off_rating":112.4,"ts_pct":0.593},
+  {"team":"LAL","player":"Deandre Ayton","minutes":1351,"off_rating":111.3,"ts_pct":0.673},
+  {"team":"LAL","player":"Dalton Knecht","minutes":828,"off_rating":105.6,"ts_pct":0.541},
+  {"team":"MEM","player":"Desmond Bane","minutes":1531,"off_rating":114.7,"ts_pct":0.579},
+  {"team":"MEM","player":"Cam Spencer","minutes":1271,"off_rating":114.4,"ts_pct":0.65},
+  {"team":"MEM","player":"Jaren Jackson Jr.","minutes":883,"off_rating":114.0,"ts_pct":0.587},
+  {"team":"MEM","player":"Santi Aldama","minutes":1132,"off_rating":112.9,"ts_pct":0.592},
+  {"team":"MEM","player":"Jake LaRavia","minutes":1062,"off_rating":112.6,"ts_pct":0.608},
+  {"team":"MEM","player":"Jaylen Wells","minutes":949,"off_rating":111.7,"ts_pct":0.553},
+  {"team":"MEM","player":"Scotty Pippen Jr.","minutes":1118,"off_rating":109.7,"ts_pct":0.5},
+  {"team":"MEM","player":"Zach Edey","minutes":1125,"off_rating":106.5,"ts_pct":0.593},
+  {"team":"MEM","player":"Jay Huff","minutes":460,"off_rating":102.5,"ts_pct":0.584},
+  {"team":"MEM","player":"John Konchar","minutes":646,"off_rating":101.8,"ts_pct":0.511},
+  {"team":"MIA","player":"Tyler Herro","minutes":1727,"off_rating":115.8,"ts_pct":0.577},
+  {"team":"MIA","player":"Bam Adebayo","minutes":1737,"off_rating":115.5,"ts_pct":0.609},
+  {"team":"MIA","player":"Terry Rozier","minutes":1369,"off_rating":115.4,"ts_pct":0.604},
+  {"team":"MIA","player":"Duncan Robinson","minutes":1169,"off_rating":114.9,"ts_pct":0.642},
+  {"team":"MIA","player":"Nikola Jović","minutes":1019,"off_rating":112.9,"ts_pct":0.576},
+  {"team":"MIA","player":"Jaime Jaquez Jr.","minutes":1401,"off_rating":111.7,"ts_pct":0.519},
+  {"team":"MIA","player":"Haywood Highsmith","minutes":874,"off_rating":111.4,"ts_pct":0.517},
+  {"team":"MIA","player":"Kel'el Ware","minutes":1042,"off_rating":111.1,"ts_pct":0.59},
+  {"team":"MIA","player":"Kevin Love","minutes":507,"off_rating":110.5,"ts_pct":0.593},
+  {"team":"MIA","player":"Alec Burks","minutes":644,"off_rating":107.3,"ts_pct":0.528},
+  {"team":"MIA","player":"Pelle Larsson","minutes":637,"off_rating":107.3,"ts_pct":0.521},
+  {"team":"MIL","player":"Giannis Antetokounmpo","minutes":876,"off_rating":120.8,"ts_pct":0.679},
+  {"team":"MIL","player":"Damian Lillard","minutes":1732,"off_rating":117.2,"ts_pct":0.618},
+  {"team":"MIL","player":"Brook Lopez","minutes":1200,"off_rating":112.9,"ts_pct":0.606},
+  {"team":"MIL","player":"Taurean Prince","minutes":1023,"off_rating":112.4,"ts_pct":0.576},
+  {"team":"MIL","player":"Gary Trent Jr.","minutes":1326,"off_rating":112.3,"ts_pct":0.543},
+  {"team":"MIL","player":"Bobby Portis","minutes":1178,"off_rating":110.9,"ts_pct":0.589},
+  {"team":"MIL","player":"Ryan Rollins","minutes":547,"off_rating":109.9,"ts_pct":0.63},
+  {"team":"MIL","player":"Andre Jackson Jr.","minutes":687,"off_rating":109.4,"ts_pct":0.532},
+  {"team":"MIL","player":"Khris Middleton","minutes":659,"off_rating":108.7,"ts_pct":0.536},
+  {"team":"MIL","player":"AJ Green","minutes":606,"off_rating":108.5,"ts_pct":0.567},
+  {"team":"MIL","player":"Pat Connaughton","minutes":491,"off_rating":107.1,"ts_pct":0.811},
+  {"team":"MIN","player":"Anthony Edwards","minutes":1812,"off_rating":119.1,"ts_pct":0.578},
+  {"team":"MIN","player":"Julius Randle","minutes":1706,"off_rating":118.3,"ts_pct":0.598},
+  {"team":"MIN","player":"Jaden McDaniels","minutes":1581,"off_rating":117.1,"ts_pct":0.54},
+  {"team":"MIN","player":"Rudy Gobert","minutes":1721,"off_rating":116.5,"ts_pct":0.676},
+  {"team":"MIN","player":"Nickeil Alexander-Walker","minutes":1055,"off_rating":115.4,"ts_pct":0.602},
+  {"team":"MIN","player":"Mike Conley","minutes":1276,"off_rating":113.2,"ts_pct":0.54},
+  {"team":"MIN","player":"Donte DiVincenzo","minutes":1410,"off_rating":112.5,"ts_pct":0.578},
+  {"team":"MIN","player":"Naz Reid","minutes":1086,"off_rating":111.9,"ts_pct":0.61},
+  {"team":"MIN","player":"Joe Ingles","minutes":578,"off_rating":111.5,"ts_pct":0.497},
+  {"team":"MIN","player":"Rob Dillingham","minutes":691,"off_rating":110.6,"ts_pct":0.597},
+  {"team":"NOP","player":"CJ McCollum","minutes":1588,"off_rating":113.9,"ts_pct":0.556},
+  {"team":"NOP","player":"Trey Murphy III","minutes":1379,"off_rating":113.8,"ts_pct":0.597},
+  {"team":"NOP","player":"Jordan Hawkins","minutes":1197,"off_rating":113.3,"ts_pct":0.558},
+  {"team":"NOP","player":"Zion Williamson","minutes":814,"off_rating":112.5,"ts_pct":0.633},
+  {"team":"NOP","player":"Javonte Green","minutes":597,"off_rating":111.8,"ts_pct":0.579},
+  {"team":"NOP","player":"Jeremiah Robinson-Earl","minutes":1003,"off_rating":111.1,"ts_pct":0.556},
+  {"team":"NOP","player":"Dejounte Murray","minutes":1200,"off_rating":110.5,"ts_pct":0.543},
+  {"team":"NOP","player":"Jose Alvarado","minutes":1003,"off_rating":110.0,"ts_pct":0.559},
+  {"team":"NOP","player":"Yves Missi","minutes":1078,"off_rating":109.3,"ts_pct":0.591},
+  {"team":"NOP","player":"Daniel Theis","minutes":467,"off_rating":106.0,"ts_pct":0.576},
+  {"team":"NOP","player":"Brandon Ingram","minutes":832,"off_rating":105.0,"ts_pct":0.523},
+  {"team":"NOP","player":"Herbert Jones","minutes":889,"off_rating":105.0,"ts_pct":0.482},
+  {"team":"NYK","player":"Karl-Anthony Towns","minutes":1856,"off_rating":121.4,"ts_pct":0.642},
+  {"team":"NYK","player":"Jalen Brunson","minutes":1784,"off_rating":121.1,"ts_pct":0.598},
+  {"team":"NYK","player":"OG Anunoby","minutes":1459,"off_rating":118.1,"ts_pct":0.591},
+  {"team":"NYK","player":"Josh Hart","minutes":1402,"off_rating":117.9,"ts_pct":0.602},
+  {"team":"NYK","player":"Mikal Bridges","minutes":1982,"off_rating":117.9,"ts_pct":0.6},
+  {"team":"NYK","player":"Landry Shamet","minutes":736,"off_rating":114.6,"ts_pct":0.631},
+  {"team":"NYK","player":"Jordan Clarkson","minutes":963,"off_rating":114.0,"ts_pct":0.537},
+  {"team":"NYK","player":"Jericho Sims","minutes":447,"off_rating":112.9,"ts_pct":0.617},
+  {"team":"NYK","player":"Precious Achiuwa","minutes":657,"off_rating":111.7,"ts_pct":0.567},
+  {"team":"NYK","player":"Tyler Kolek","minutes":636,"off_rating":110.7,"ts_pct":0.513},
+  {"team":"NYK","player":"Jose Alvarado","minutes":1024,"off_rating":109.3,"ts_pct":0.553},
+  {"team":"OKC","player":"Shai Gilgeous-Alexander","minutes":1632,"off_rating":121.6,"ts_pct":0.67},
+  {"team":"OKC","player":"Alex Caruso","minutes":690,"off_rating":119.8,"ts_pct":0.544},
+  {"team":"OKC","player":"Isaiah Hartenstein","minutes":822,"off_rating":119.4,"ts_pct":0.655},
+  {"team":"OKC","player":"Chet Holmgren","minutes":1490,"off_rating":117.6,"ts_pct":0.649},
+  {"team":"OKC","player":"Isaiah Joe","minutes":1045,"off_rating":116.9,"ts_pct":0.649},
+  {"team":"OKC","player":"Cason Wallace","minutes":1482,"off_rating":116.9,"ts_pct":0.526},
+  {"team":"OKC","player":"Ajay Mitchell","minutes":1129,"off_rating":116.8,"ts_pct":0.59},
+  {"team":"OKC","player":"Luguentz Dort","minutes":1310,"off_rating":116.5,"ts_pct":0.536},
+  {"team":"OKC","player":"Jalen Williams","minutes":755,"off_rating":116.0,"ts_pct":0.555},
+  {"team":"OKC","player":"Kenrich Williams","minutes":614,"off_rating":114.8,"ts_pct":0.621},
+  {"team":"OKC","player":"Jared McCain","minutes":732,"off_rating":114.5,"ts_pct":0.53},
+  {"team":"OKC","player":"Jaylin Williams","minutes":827,"off_rating":113.3,"ts_pct":0.542},
+  {"team":"OKC","player":"Aaron Wiggins","minutes":1025,"off_rating":112.9,"ts_pct":0.555},
+  {"team":"ORL","player":"Goga Bitadze","minutes":1126,"off_rating":114.2,"ts_pct":0.621},
+  {"team":"ORL","player":"Franz Wagner","minutes":1687,"off_rating":113.6,"ts_pct":0.579},
+  {"team":"ORL","player":"Kentavious Caldwell-Pope","minutes":1242,"off_rating":113.3,"ts_pct":0.559},
+  {"team":"ORL","player":"Jalen Suggs","minutes":1316,"off_rating":113.0,"ts_pct":0.553},
+  {"team":"ORL","player":"Tristan da Silva","minutes":1080,"off_rating":112.2,"ts_pct":0.589},
+  {"team":"ORL","player":"Moritz Wagner","minutes":751,"off_rating":111.7,"ts_pct":0.546},
+  {"team":"ORL","player":"Cole Anthony","minutes":896,"off_rating":111.5,"ts_pct":0.593},
+  {"team":"ORL","player":"Jett Howard","minutes":735,"off_rating":111.0,"ts_pct":0.576},
+  {"team":"ORL","player":"Anthony Black","minutes":1063,"off_rating":110.3,"ts_pct":0.505},
+  {"team":"PHI","player":"Tyrese Maxey","minutes":1755,"off_rating":119.2,"ts_pct":0.577},
+  {"team":"PHI","player":"Joel Embiid","minutes":851,"off_rating":117.0,"ts_pct":0.622},
+  {"team":"PHI","player":"Guerschon Yabusele","minutes":1404,"off_rating":115.9,"ts_pct":0.603},
+  {"team":"PHI","player":"Caleb Martin","minutes":1311,"off_rating":114.3,"ts_pct":0.525},
+  {"team":"PHI","player":"Paul George","minutes":1126,"off_rating":113.9,"ts_pct":0.569},
+  {"team":"PHI","player":"Kelly Oubre Jr.","minutes":1250,"off_rating":113.2,"ts_pct":0.569},
+  {"team":"PHI","player":"Kyle Lowry","minutes":1180,"off_rating":112.9,"ts_pct":0.55},
+  {"team":"PHI","player":"Eric Gordon","minutes":843,"off_rating":111.9,"ts_pct":0.557},
+  {"team":"PHI","player":"Andre Drummond","minutes":764,"off_rating":111.7,"ts_pct":0.595},
+  {"team":"PHI","player":"Jared McCain","minutes":660,"off_rating":110.4,"ts_pct":0.611},
+  {"team":"PHI","player":"KJ Martin","minutes":755,"off_rating":110.4,"ts_pct":0.557},
+  {"team":"PHI","player":"Ricky Council IV","minutes":477,"off_rating":107.6,"ts_pct":0.565},
+  {"team":"PHI","player":"Adem Bona","minutes":663,"off_rating":106.3,"ts_pct":0.603},
+  {"team":"PHX","player":"Devin Booker","minutes":1714,"off_rating":115.7,"ts_pct":0.572},
+  {"team":"PHX","player":"Bradley Beal","minutes":1249,"off_rating":115.6,"ts_pct":0.587},
+  {"team":"PHX","player":"Kevin Durant","minutes":1195,"off_rating":114.9,"ts_pct":0.624},
+  {"team":"PHX","player":"Mark Williams","minutes":1268,"off_rating":114.7,"ts_pct":0.678},
+  {"team":"PHX","player":"Jusuf Nurkić","minutes":1034,"off_rating":114.1,"ts_pct":0.597},
+  {"team":"PHX","player":"Ryan Dunn","minutes":1085,"off_rating":111.9,"ts_pct":0.524},
+  {"team":"PHX","player":"Tyus Jones","minutes":1260,"off_rating":111.3,"ts_pct":0.539},
+  {"team":"PHX","player":"Royce O'Neale","minutes":1248,"off_rating":111.0,"ts_pct":0.509},
+  {"team":"PHX","player":"Mason Plumlee","minutes":606,"off_rating":105.7,"ts_pct":0.57},
+  {"team":"PHX","player":"Josh Okogie","minutes":698,"off_rating":103.4,"ts_pct":0.531},
+  {"team":"POR","player":"Deni Avdija","minutes":1752,"off_rating":115.8,"ts_pct":0.559},
+  {"team":"POR","player":"Jerami Grant","minutes":1269,"off_rating":114.9,"ts_pct":0.577},
+  {"team":"POR","player":"Toumani Camara","minutes":1507,"off_rating":114.2,"ts_pct":0.595},
+  {"team":"POR","player":"Shaedon Sharpe","minutes":1398,"off_rating":113.9,"ts_pct":0.562},
+  {"team":"POR","player":"Anfernee Simons","minutes":1467,"off_rating":112.9,"ts_pct":0.57},
+  {"team":"POR","player":"Scoot Henderson","minutes":1398,"off_rating":111.6,"ts_pct":0.5},
+  {"team":"POR","player":"Deandre Ayton","minutes":820,"off_rating":111.2,"ts_pct":0.642},
+  {"team":"POR","player":"Robert Williams III","minutes":707,"off_rating":110.8,"ts_pct":0.769},
+  {"team":"POR","player":"Donovan Clingan","minutes":835,"off_rating":110.3,"ts_pct":0.638},
+  {"team":"POR","player":"Dalano Banton","minutes":729,"off_rating":109.9,"ts_pct":0.516},
+  {"team":"POR","player":"Kris Murray","minutes":659,"off_rating":108.8,"ts_pct":0.593},
+  {"team":"SAC","player":"DeMar DeRozan","minutes":1650,"off_rating":114.1,"ts_pct":0.579},
+  {"team":"SAC","player":"De'Aaron Fox","minutes":1669,"off_rating":113.2,"ts_pct":0.565},
+  {"team":"SAC","player":"Domantas Sabonis","minutes":1777,"off_rating":112.5,"ts_pct":0.624},
+  {"team":"SAC","player":"Devin Carter","minutes":1007,"off_rating":109.1,"ts_pct":0.573},
+  {"team":"SAC","player":"Keegan Murray","minutes":1603,"off_rating":108.6,"ts_pct":0.545},
+  {"team":"SAC","player":"Malik Monk","minutes":1280,"off_rating":107.6,"ts_pct":0.528},
+  {"team":"SAC","player":"Kevin Huerter","minutes":1033,"off_rating":107.4,"ts_pct":0.518},
+  {"team":"SAC","player":"Keon Ellis","minutes":1100,"off_rating":107.2,"ts_pct":0.516},
+  {"team":"SAC","player":"Alex Len","minutes":470,"off_rating":107.0,"ts_pct":0.608},
+  {"team":"SAC","player":"Trey Lyles","minutes":836,"off_rating":106.9,"ts_pct":0.522},
+  {"team":"SAC","player":"Doug McDermott","minutes":475,"off_rating":106.9,"ts_pct":0.611},
+  {"team":"SAS","player":"Victor Wembanyama","minutes":1727,"off_rating":119.9,"ts_pct":0.626},
+  {"team":"SAS","player":"Stephon Castle","minutes":1454,"off_rating":119.1,"ts_pct":0.592},
+  {"team":"SAS","player":"Harrison Barnes","minutes":1402,"off_rating":117.6,"ts_pct":0.587},
+  {"team":"SAS","player":"Devin Vassell","minutes":1179,"off_rating":117.3,"ts_pct":0.614},
+  {"team":"SAS","player":"Julian Champagnie","minutes":1184,"off_rating":116.7,"ts_pct":0.605},
+  {"team":"SAS","player":"Luke Kornet","minutes":1035,"off_rating":115.9,"ts_pct":0.702},
+  {"team":"SAS","player":"Chris Paul","minutes":1183,"off_rating":115.6,"ts_pct":0.479},
+  {"team":"SAS","player":"Keldon Johnson","minutes":1160,"off_rating":113.1,"ts_pct":0.571},
+  {"team":"SAS","player":"Zach Collins","minutes":636,"off_rating":113.1,"ts_pct":0.606},
+  {"team":"SAS","player":"Jeremy Sochan","minutes":600,"off_rating":106.0,"ts_pct":0.52},
+  {"team":"TOR","player":"RJ Barrett","minutes":1661,"off_rating":116.8,"ts_pct":0.581},
+  {"team":"TOR","player":"Scottie Barnes","minutes":1564,"off_rating":114.5,"ts_pct":0.541},
+  {"team":"TOR","player":"Jakob Poeltl","minutes":1484,"off_rating":114.1,"ts_pct":0.645},
+  {"team":"TOR","player":"Immanuel Quickley","minutes":1374,"off_rating":114.0,"ts_pct":0.57},
+  {"team":"TOR","player":"Gradey Dick","minutes":1526,"off_rating":113.9,"ts_pct":0.559},
+  {"team":"TOR","player":"Ochai Agbaji","minutes":1286,"off_rating":111.9,"ts_pct":0.582},
+  {"team":"TOR","player":"Chris Boucher","minutes":806,"off_rating":111.9,"ts_pct":0.601},
+  {"team":"TOR","player":"Bruce Brown","minutes":813,"off_rating":109.8,"ts_pct":0.489},
+  {"team":"TOR","player":"Kelly Olynyk","minutes":543,"off_rating":108.1,"ts_pct":0.605},
+  {"team":"TOR","player":"Davion Mitchell","minutes":1082,"off_rating":108.1,"ts_pct":0.54},
+  {"team":"UTA","player":"John Collins","minutes":553,"off_rating":117.9,"ts_pct":0.688},
+  {"team":"UTA","player":"Collin Sexton","minutes":1424,"off_rating":117.5,"ts_pct":0.605},
+  {"team":"UTA","player":"Lauri Markkanen","minutes":1670,"off_rating":115.9,"ts_pct":0.572},
+  {"team":"UTA","player":"Walker Kessler","minutes":1377,"off_rating":115.9,"ts_pct":0.667},
+  {"team":"UTA","player":"Jordan Clarkson","minutes":666,"off_rating":115.5,"ts_pct":0.588},
+  {"team":"UTA","player":"Keyonte George","minutes":1554,"off_rating":112.7,"ts_pct":0.524},
+  {"team":"UTA","player":"Brice Sensabaugh","minutes":1159,"off_rating":111.7,"ts_pct":0.541},
+  {"team":"UTA","player":"Kyle Filipowski","minutes":920,"off_rating":108.9,"ts_pct":0.548},
+  {"team":"UTA","player":"Cody Williams","minutes":977,"off_rating":108.0,"ts_pct":0.594},
+  {"team":"UTA","player":"Isaiah Collier","minutes":740,"off_rating":105.9,"ts_pct":0.499},
+  {"team":"UTA","player":"Svi Mykhailiuk","minutes":687,"off_rating":105.7,"ts_pct":0.577},
+  {"team":"UTA","player":"Johnny Juzang","minutes":640,"off_rating":105.5,"ts_pct":0.553},
+  {"team":"UTA","player":"Patty Mills","minutes":499,"off_rating":104.8,"ts_pct":0.527},
+  {"team":"WAS","player":"Jordan Poole","minutes":1565,"off_rating":110.8,"ts_pct":0.537},
+  {"team":"WAS","player":"Bilal Coulibaly","minutes":1533,"off_rating":110.2,"ts_pct":0.555},
+  {"team":"WAS","player":"Corey Kispert","minutes":1289,"off_rating":109.3,"ts_pct":0.624},
+  {"team":"WAS","player":"Malcolm Brogdon","minutes":964,"off_rating":108.9,"ts_pct":0.592},
+  {"team":"WAS","player":"Jonas Valančiūnas","minutes":1148,"off_rating":108.2,"ts_pct":0.588},
+  {"team":"WAS","player":"Alexandre Sarr","minutes":1345,"off_rating":106.7,"ts_pct":0.506},
+  {"team":"WAS","player":"Kyle Kuzma","minutes":918,"off_rating":106.1,"ts_pct":0.538},
+  {"team":"WAS","player":"Kyshawn George","minutes":595,"off_rating":105.1,"ts_pct":0.525},
+  {"team":"WAS","player":"Carlton Carrington","minutes":794,"off_rating":104.2,"ts_pct":0.491}
+];
+
+// Sort teams by their floor (lowest player rating)
+const teamFloors = d3.rollup(data, v => d3.min(v, d => d.off_rating), d => d.team);
+const teamsSortedByFloor = Array.from(teamFloors.entries())
+  .sort((a, b) => b[1] - a[1])
+  .map(d => d[0]);
+
+console.log("Teams sorted by floor:", teamsSortedByFloor);
+console.log("Number of data points:", data.length);
+console.log("Sample data:", data.slice(0, 3));
+console.log("Unique teams in data:", [...new Set(data.map(d => d.team))]);
+console.log("ATL players:", data.filter(d => d.team === "ATL"));
+
+// Calculate team stats for later plots
+const teamStats = d3.rollup(data, v => ({
+  floor: d3.min(v, d => d.off_rating),
+  ceiling: d3.max(v, d => d.off_rating),
+  totalMinutes: d3.sum(v, d => d.minutes),
+  players: v
+}), d => d.team);
+
+// 1. Dot plot with size = minutes
+const plot1 = Plot.plot({
+  width: 1200,
+  height: 500,
+  marginBottom: 60,
+  marginLeft: 50,
+  x: {
+    type: "point",
+    domain: teamsSortedByFloor,
+    label: "Team (sorted by floor)",
+    tickRotate: -45
+  },
+  y: {
+    domain: [100, 128],
+    label: "Offensive Rating",
+    grid: true
+  },
+  marks: [
+    Plot.ruleY([112], {stroke: "#999", strokeDasharray: "4,4", strokeWidth: 1}),
+    Plot.ruleY([115], {stroke: "#090", strokeDasharray: "2,2", strokeWidth: 1, opacity: 0.5}),
+    Plot.text([{y: 112, text: "League Avg"}], {y: "y", text: "text", x: teamsSortedByFloor[0], dx: -35, fontSize: 10, fill: "#666"}),
+    Plot.dot(data, {
+      x: "team",
+      y: "off_rating",
+      r: d => Math.sqrt(d.minutes / 50),
+      fill: d => d.team === "BOS" ? "#007A33" : d.off_rating < 110 ? "#c00" : d.off_rating < 115 ? "#888" : "#069",
+      fillOpacity: 0.7,
+      stroke: d => d.team === "BOS" ? "#004d20" : null,
+      strokeWidth: d => d.team === "BOS" ? 2 : 0,
+      title: d => `${d.player}\n${d.team}: ${d.off_rating} off_rtg\n${d.minutes} min`
+    })
+  ]
+});
+document.getElementById("plot1").appendChild(plot1);
+
+// 2. Strip plot with opacity for minutes
+const plot2 = Plot.plot({
+  width: 1200,
+  height: 500,
+  marginBottom: 60,
+  marginLeft: 50,
+  x: {
+    type: "point",
+    domain: teamsSortedByFloor,
+    label: "Team (sorted by floor)",
+    tickRotate: -45
+  },
+  y: {
+    domain: [100, 128],
+    label: "Offensive Rating",
+    grid: true
+  },
+  marks: [
+    Plot.ruleY([112], {stroke: "#c00", strokeDasharray: "4,4", strokeWidth: 2}),
+    Plot.dot(data, {
+      x: "team",
+      y: "off_rating",
+      r: 5,
+      fill: d => d.team === "BOS" ? "#007A33" : "#333",
+      fillOpacity: d => 0.3 + (d.minutes / 2000) * 0.7,
+      stroke: d => d.team === "BOS" ? "#004d20" : null,
+      strokeWidth: d => d.team === "BOS" ? 2 : 0,
+      title: d => `${d.player}\n${d.team}: ${d.off_rating}\n${d.minutes} min`
+    })
+  ]
+});
+document.getElementById("plot2").appendChild(plot2);
+
+// 3. Small multiples - faceted view
+const plot3 = Plot.plot({
+  width: 1200,
+  height: 400,
+  marginLeft: 40,
+  marginRight: 10,
+  marginBottom: 30,
+  fx: {domain: teamsSortedByFloor, padding: 0.1, label: null},
+  y: {label: "Off Rating", domain: [100, 128], ticks: 5},
+  marks: [
+    Plot.ruleY([112], {stroke: "#c00", strokeDasharray: "2,2", strokeWidth: 1}),
+    Plot.ruleY([115], {stroke: "#090", strokeDasharray: "2,2", strokeWidth: 1, opacity: 0.5}),
+    Plot.dot(data, {
+      fx: "team",
+      y: "off_rating",
+      r: d => Math.sqrt(d.minutes / 100),
+      fill: d => d.team === "BOS" ? "#007A33" : d.off_rating < 110 ? "#c00" : d.off_rating < 115 ? "#888" : "#069",
+      fillOpacity: 0.7
+    })
+  ]
+});
+document.getElementById("plot3").appendChild(plot3);
+
+// 4. Stacked bar chart - minutes by tier
+const tierData = [];
+for (const [team, stats] of teamStats) {
+  const negative = d3.sum(stats.players.filter(p => p.off_rating < 110), p => p.minutes);
+  const neutral = d3.sum(stats.players.filter(p => p.off_rating >= 110 && p.off_rating < 115), p => p.minutes);
+  const positive = d3.sum(stats.players.filter(p => p.off_rating >= 115), p => p.minutes);
+  const total = negative + neutral + positive;
+  tierData.push({team, tier: "Negative (<110)", minutes: negative, pct: negative/total});
+  tierData.push({team, tier: "Neutral (110-115)", minutes: neutral, pct: neutral/total});
+  tierData.push({team, tier: "Positive (≥115)", minutes: positive, pct: positive/total});
+}
+
+const plot4 = Plot.plot({
+  width: 1200,
+  height: 500,
+  marginBottom: 60,
+  marginLeft: 50,
+  x: {
+    domain: teamsSortedByFloor,
+    label: "Team (sorted by floor)",
+    tickRotate: -45
+  },
+  y: {
+    label: "% of Minutes",
+    percent: true
+  },
+  color: {
+    domain: ["Negative (<110)", "Neutral (110-115)", "Positive (≥115)"],
+    range: ["#c00", "#888", "#069"],
+    legend: true
+  },
+  marks: [
+    Plot.barY(tierData, Plot.stackY({
+      x: "team",
+      y: "pct",
+      fill: "tier",
+      title: d => `${d.team}\n${d.tier}: ${(d.pct * 100).toFixed(1)}%`,
+      order: ["Negative (<110)", "Neutral (110-115)", "Positive (≥115)"]
+    })),
+    Plot.ruleY([0])
+  ]
+});
+document.getElementById("plot4").appendChild(plot4);
+
+// 5. Beeswarm-ish by minutes rank
+const dataWithRank = data.map(d => ({...d}));
+for (const team of teamsSortedByFloor) {
+  const teamPlayers = dataWithRank.filter(d => d.team === team)
+    .sort((a, b) => b.minutes - a.minutes);
+  teamPlayers.forEach((p, i) => p.minRank = i);
+}
+
+const plot5 = Plot.plot({
+  width: 1200,
+  height: 500,
+  marginBottom: 60,
+  marginLeft: 50,
+  x: {
+    domain: teamsSortedByFloor,
+    label: "Team (sorted by floor)",
+    tickRotate: -45
+  },
+  y: {
+    domain: [100, 128],
+    label: "Offensive Rating",
+    grid: true
+  },
+  marks: [
+    Plot.ruleY([112], {stroke: "#c00", strokeDasharray: "4,4", strokeWidth: 1}),
+    Plot.dot(dataWithRank, {
+      x: "team",
+      y: "off_rating",
+      dx: d => (d.minRank - 5) * 3,
+      r: 4,
+      fill: d => d.team === "BOS" ? "#007A33" : d.off_rating < 110 ? "#c00" : d.off_rating < 115 ? "#888" : "#069",
+      fillOpacity: 0.8,
+      title: d => `${d.player} (#${d.minRank + 1} in min)\n${d.off_rating} off_rtg`
+    })
+  ]
+});
+document.getElementById("plot5").appendChild(plot5);
+
+// 6. Floor vs Ceiling scatter
+const floorCeilingData = Array.from(teamStats.entries()).map(([team, stats]) => ({
+  team,
+  floor: stats.floor,
+  ceiling: stats.ceiling
+}));
+
+const plot6 = Plot.plot({
+  width: 700,
+  height: 500,
+  marginLeft: 50,
+  marginRight: 20,
+  grid: true,
+  x: {
+    label: "Floor (worst player's rating) →",
+    domain: [100, 116]
+  },
+  y: {
+    label: "↑ Ceiling (best player's rating)",
+    domain: [110, 128]
+  },
+  marks: [
+    Plot.ruleX([112], {stroke: "#c00", strokeDasharray: "4,4"}),
+    Plot.dot(floorCeilingData, {
+      x: "floor",
+      y: "ceiling",
+      r: 8,
+      fill: d => d.team === "BOS" ? "#007A33" : "#333",
+      fillOpacity: d => d.team === "BOS" ? 1 : 0.5,
+      stroke: d => d.team === "BOS" ? "#004d20" : null,
+      strokeWidth: 2
+    }),
+    Plot.text(floorCeilingData, {
+      x: "floor",
+      y: "ceiling",
+      text: "team",
+      dx: 12,
+      fontSize: 10,
+      fill: d => d.team === "BOS" ? "#007A33" : "#666"
+    })
+  ]
+});
+document.getElementById("plot6").appendChild(plot6);
+
+// 7. Cumulative minutes curve
+const cumulativeData = [];
+const teamsToShow = ["BOS", "DEN", "OKC", "NYK", "CLE", "DAL", "WAS", "BKN"];
+for (const team of teamsToShow) {
+  const players = data.filter(d => d.team === team).sort((a, b) => a.off_rating - b.off_rating);
+  const totalMin = d3.sum(players, d => d.minutes);
+  let cumSum = 0;
+  // Add starting point
+  cumulativeData.push({team, off_rating: players[0].off_rating - 0.5, cumPct: 0});
+  players.forEach(p => {
+    cumSum += p.minutes;
+    cumulativeData.push({
+      team,
+      off_rating: p.off_rating,
+      cumPct: cumSum / totalMin
+    });
+  });
+}
+
+const plot7 = Plot.plot({
+  width: 800,
+  height: 500,
+  marginLeft: 50,
+  marginRight: 60,
+  grid: true,
+  x: {
+    label: "Offensive Rating →",
+    domain: [100, 128]
+  },
+  y: {
+    label: "↑ Cumulative % of Minutes",
+    percent: true
+  },
+  color: {
+    domain: teamsToShow,
+    range: ["#007A33", "#0E2240", "#007AC1", "#F58426", "#6F263D", "#00538C", "#002B5C", "#000000"],
+    legend: true
+  },
+  marks: [
+    Plot.ruleX([112], {stroke: "#c00", strokeDasharray: "4,4"}),
+    Plot.line(cumulativeData, {
+      x: "off_rating",
+      y: "cumPct",
+      stroke: "team",
+      strokeWidth: d => d.team === "BOS" ? 3 : 1.5
+    }),
+    Plot.text(cumulativeData.filter(d => d.cumPct >= 0.99), {
+      x: "off_rating",
+      y: "cumPct",
+      text: "team",
+      dx: 5,
+      textAnchor: "start",
+      fontSize: 11,
+      fill: d => teamsToShow.includes(d.team) ? ["#007A33", "#0E2240", "#007AC1", "#F58426", "#6F263D", "#00538C", "#002B5C", "#000000"][teamsToShow.indexOf(d.team)] : "#666"
+    })
+  ]
+});
+document.getElementById("plot7").appendChild(plot7);
+
+</script>
+
+</body>
+</html>

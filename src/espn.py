@@ -11,7 +11,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 
-CURRENT_SEASON = 2025
+CURRENT_SEASON = 2026
 
 
 def get_s3_client():
@@ -312,19 +312,20 @@ def main(opts: Options):
 
     # the data on the site appears to go back to the 2018-2019 season
     for season in range(
-        2018 if opts.every_season else CURRENT_SEASON, CURRENT_SEASON + 1
+        2019 if opts.every_season else CURRENT_SEASON, CURRENT_SEASON + 1
     ):
         output_dir = opts.espndir / str(season)
         os.makedirs(output_dir, exist_ok=True)
 
         # - I verified that preseason games don't yield results
         # - I don't think any season started before 10-15 in this sample
+        # - season is end year, so season-1 is the start year
         #
-        # Change the start date for 2020 season (COVID delayed)
-        if season == 2020:
-            dates = daterange(f"{season}-12-20", f"{season+1}-07-31")
+        # Change the start date for 2021 season (COVID delayed)
+        if season == 2021:
+            dates = daterange(f"{season-1}-12-20", f"{season}-07-31")
         else:
-            dates = daterange(f"{season}-10-15", f"{season+1}-06-30")
+            dates = daterange(f"{season-1}-10-15", f"{season}-06-30")
 
         print(f"Downloading data for {len(dates)} days...")
 
@@ -338,7 +339,8 @@ def main(opts: Options):
                 continue
 
             print(f"Fetching data for {season} {date}...")
-            data = fetch_espn_data(s3, season, date)
+            # ESPN's S3 bucket uses start year, so pass season-1
+            data = fetch_espn_data(s3, season - 1, date)
 
             if data:
                 with open(outfile, "w") as f:

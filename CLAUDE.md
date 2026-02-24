@@ -100,7 +100,7 @@ SELECT team,
        AVG("3pt_oNetPts") as avg_3pt_net,
        AVG(turnover_oNetPts) as avg_tov_net
 FROM 'data/espn/four_factors.parquet'
-WHERE season = 2024
+WHERE season = 2025
 GROUP BY team
 ORDER BY avg_3pt_net DESC;
 ```
@@ -120,8 +120,7 @@ duckdb -c "SELECT player_name, pts_pergame FROM 'data/players_2025.parquet' ORDE
 ```
 
 ## Season Naming Convention
-- **Main data (`data/`)**: Year = end of season (2025 = 2024-25 season)
-- **ESPN data (`data/espn/`)**: Year = start of season (2024 = 2024-25 season)
+- Year = end of season (2025 = 2024-25 season)
 
 ## Source Code
 The `src/` directory contains the data update scripts. See the Makefile for usage.

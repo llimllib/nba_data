@@ -4,11 +4,11 @@ This document describes all data files in the `data/` directory.
 
 ## Season Naming Convention
 
-**Important**: In the main `data/` directory, season years represent the **end** of the season (e.g., `2025` = 2024-25 season). However, in `data/espn/`, the season represents the **start** of the season (e.g., `2018` = 2018-19 season).
+Season years represent the **end** of the season (e.g., `2025` = 2024-25 season).
 
 Data coverage:
-- Main data: 2009-10 season through current
-- ESPN data: 2018-19 season through current
+- Main data: 2009-10 season (2010) through current
+- ESPN data: 2018-19 season (2019) through current
 
 ---
 
@@ -205,7 +205,7 @@ Data freshness information.
 
 ## ESPN Data (`data/espn/`)
 
-Data from [espnanalytics.com](https://espnanalytics.com/). **Note**: Season naming uses the **start** year (2018 = 2018-19).
+Data from [espnanalytics.com](https://espnanalytics.com/).
 
 ### `four_factors.parquet`
 Four factors analysis per team per game.
