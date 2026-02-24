@@ -25,6 +25,8 @@ Data collected from [espnanalytics.com](https://espnanalytics.com/). Covers the 
 
 **note**: in this directory, the season name represents the _first_ year of the season, not the last. Apologies for the inconsistency
 
+**note update**: as of feb 24 2026, this is no longer true. If you're using this data, you will need to update your usages. I apologize for the churn and regret the initial error I made
+
 - **`four_factors.parquet`**: four factors data per game
 - **`player_box.parquet`**: player box score data per game
 - **`player_details.parquet`**: more detailed player box scores
