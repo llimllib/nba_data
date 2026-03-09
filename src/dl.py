@@ -263,9 +263,13 @@ def download_gamelogs(
         for measure in [None, "Advanced"]:
             gamelogs = get_team_gamelogs(season, most_recent, measure)
             logs.append(gamelogs)
-            for _, game_id in gamelogs["GAME_ID"].items():
-                assert isinstance(game_id, str), game_id
-                playerlogs = pd.concat([playerlogs, get_box_score(game_id)])
+
+        # get_box_score returns all players from both teams, so we only need to
+        # call it once per game_id. The gamelogs have one row per team, so we
+        # deduplicate with unique().
+        for game_id in logs[0]["GAME_ID"].unique():
+            assert isinstance(game_id, str), game_id
+            playerlogs = pd.concat([playerlogs, get_box_score(game_id)])
 
         # join games by game_id and team_id, which should serve as unique keys
         games = join(logs, on=["GAME_ID", "TEAM_ID"])
