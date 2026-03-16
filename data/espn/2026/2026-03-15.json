@@ -35151,8 +35151,8 @@
       "displayName": "Kobe Brown",
       "actionType": "dunk",
       "oNetPts": 0,
-      "dNetPts": 0.1053,
-      "tNetPts": 0.1053
+      "dNetPts": -0.0907,
+      "tNetPts": -0.0907
     },
     {
       "gmID": "0022500979",
@@ -35235,8 +35235,8 @@
       "displayName": "Kobe Brown",
       "actionType": "layup",
       "oNetPts": 0.8142,
-      "dNetPts": -0.067,
-      "tNetPts": 0.7472
+      "dNetPts": 0.1289,
+      "tNetPts": 0.9432
     },
     {
       "gmID": "0022500979",
@@ -38520,9 +38520,9 @@
       "plyrID": 203507,
       "displayName": "Giannis Antetokounmpo",
       "actionType": "dunk",
-      "oNetPts": 1.2125,
+      "oNetPts": 2.1193,
       "dNetPts": -0.1752,
-      "tNetPts": 1.0373
+      "tNetPts": 1.9441
     },
     {
       "gmID": "0022500979",
@@ -38616,9 +38616,9 @@
       "plyrID": 203507,
       "displayName": "Giannis Antetokounmpo",
       "actionType": "layup",
-      "oNetPts": 0.6604,
+      "oNetPts": -0.2464,
       "dNetPts": -0.1804,
-      "tNetPts": 0.4799
+      "tNetPts": -0.4269
     },
     {
       "gmID": "0022500979",
