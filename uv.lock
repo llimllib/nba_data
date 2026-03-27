@@ -262,16 +262,16 @@ wheels = [
 
 [[package]]
 name = "nba-api"
-version = "1.11.3"
+version = "1.11.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "numpy" },
     { name = "pandas" },
     { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/81/0e/fad600ae85fb86620ccc2a2e668a869ca674e4f01d7d8bf9f39642dd090c/nba_api-1.11.3.tar.gz", hash = "sha256:24e98a91561a6a2b6380ae811b3962bdb9574eb91f52c3873c38709160551c09", size = 175251, upload-time = "2025-11-14T13:29:59.413Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/0d/f8/761434ce98e39d6bdd1b98611102fdc054920e330a5b5194464cb340adf8/nba_api-1.11.4.tar.gz", hash = "sha256:1dccd70b78f36f64260e1f353c4a02c1644147c4a2a5ce42fbd9f637d70bad3e", size = 177323, upload-time = "2026-02-20T07:02:39.61Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/40/68/799e2885c6444a18e0f905bdf22986b3d258aea2e22802f86f3688268e8a/nba_api-1.11.3-py3-none-any.whl", hash = "sha256:3a77ec8474446a4289b449c147dd64f9150c07890b8200a25b7da057d738f184", size = 318992, upload-time = "2025-11-14T13:29:58.194Z" },
+    { url = "https://files.pythonhosted.org/packages/6b/c2/17c805220de846ea9280f62a003c0cdebddf1de3d387614162891502a3a6/nba_api-1.11.4-py3-none-any.whl", hash = "sha256:f489b2a1d67ee4298f5173775b335d0e43e63455ed157a5612b542094b9f1963", size = 322583, upload-time = "2026-02-20T07:02:36.578Z" },
 ]
 
 [[package]]
@@ -291,7 +291,7 @@ dependencies = [
 requires-dist = [
     { name = "boto3", specifier = ">=1.38.18" },
     { name = "fastparquet", specifier = ">=2024.5.0" },
-    { name = "nba-api", specifier = ">=1.10.0" },
+    { name = "nba-api", specifier = ">=1.11.4" },
     { name = "pandas", specifier = ">=2.2.3" },
     { name = "pyarrow", specifier = ">=17.0.0" },
     { name = "pytest", specifier = ">=8.3.4" },
