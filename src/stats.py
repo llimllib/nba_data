@@ -15,6 +15,7 @@ from nba_api.stats.endpoints import (
     LeagueDashTeamStats,
     TeamGameLogs,
 )
+from nba_api.library.http import NBAResponse
 from nba_api.stats.library.parameters import LeagueIDNullable, SeasonTypeAllStar
 from requests.exceptions import ReadTimeout, ConnectionError
 
@@ -53,13 +54,21 @@ class RetryLimitExceeded(Exception):
 
 def retry(f: Callable[..., G], **kwargs) -> G:
     """
-    Retry a function call with backoff and prints out the exceptions raised
-    unless they are a timeout.
+    Retry a function call with backoff.
+
+    Constructs the nba_api endpoint object with get_request=False, then calls
+    get_request() separately so we have access to the raw HTTP response for
+    debugging failures
     """
     i = 0
     while 1:
+        obj = None
         try:
-            return f(**kwargs)
+            obj = f(**kwargs, get_request=False)
+            get_request = getattr(obj, "get_request", None)
+            if get_request is not None:
+                get_request()
+            return obj  # type: ignore[return-value]
         except Exception as exc:
             if i > 11:
                 raise RetryLimitExceeded(f.__name__, i, kwargs, exc)
@@ -79,8 +88,23 @@ def retry(f: Callable[..., G], **kwargs) -> G:
                 ),
             ):
                 print(traceback.format_exc())
+            # If the object was constructed and the HTTP request completed
+            # but parsing failed, log the raw response for debugging. This is
+            # happening in CI and I don't know why
+            nba_response = getattr(obj, "nba_response", None)
+            if nba_response is not None:
+                _log_nba_response(nba_response)
             sleep(timeout)
     raise Exception("this should never happen")
+
+
+def _log_nba_response(nba_response: NBAResponse) -> None:
+    """Log the raw HTTP response from an nba_api request for debugging."""
+    try:
+        print(f"[DEBUG] response status_code={nba_response._status_code}")
+        print(f"[DEBUG] response body={nba_response.get_response()[:2000]}")
+    except Exception as debug_exc:
+        print(f"[DEBUG] failed to log raw response: {debug_exc}")
 
 
 # get_box_score will return a combined traditional + advanced box score for a
