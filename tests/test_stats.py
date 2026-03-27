@@ -24,7 +24,7 @@ class TestStatsAPI:
         # Execute
         result = get_dash_player_stats("2022-23", "Base", "Totals")
 
-        # Verify
+        # Verify - retry() calls f(..., get_request=False) then obj.get_request()
         mock_league_dash.assert_called_once_with(
             league_id_nullable="00",
             measure_type_detailed_defense="Base",
@@ -32,7 +32,9 @@ class TestStatsAPI:
             season="2022-23",
             season_type_all_star="Regular Season",
             timeout=30,
+            get_request=False,
         )
+        mock_response.get_request.assert_called_once()
         assert isinstance(result, pd.DataFrame)
         assert list(result["test"]) == [1, 2, 3]
 
@@ -53,7 +55,9 @@ class TestStatsAPI:
             season="2022-23",
             season_type_all_star="Regular Season",
             timeout=30,
+            get_request=False,
         )
+        mock_response.get_request.assert_called_once()
         assert isinstance(result, pd.DataFrame)
         assert list(result["test"]) == [1, 2, 3]
 
@@ -70,28 +74,38 @@ class TestStatsAPI:
 
         # Verify
         mock_bio_stats.assert_called_once_with(
-            league_id="00", season="2022-23", season_type_all_star="Regular Season"
+            league_id="00",
+            season="2022-23",
+            season_type_all_star="Regular Season",
+            get_request=False,
         )
+        mock_response.get_request.assert_called_once()
         assert isinstance(result, pd.DataFrame)
         assert list(result["test"]) == [1, 2, 3]
 
     @patch("src.stats.sleep")
     def test_retry_mechanism(self, mock_sleep):
-        """Test that retry mechanism works correctly"""
-        # Setup
+        """Test that retry mechanism works correctly with two-step request pattern"""
+        # Setup: retry() calls f(..., get_request=False), then obj.get_request()
         mock_func = MagicMock()
         mock_func.__name__ = "mock_function"
-        mock_func.side_effect = [
-            Exception("API error"),
-            Exception("API error"),
-            "success",
-        ]
+
+        # First two calls: construction succeeds but get_request() raises
+        mock_obj_fail1 = MagicMock()
+        mock_obj_fail1.get_request.side_effect = Exception("API error")
+        mock_obj_fail1.nba_response = None
+        mock_obj_fail2 = MagicMock()
+        mock_obj_fail2.get_request.side_effect = Exception("API error")
+        mock_obj_fail2.nba_response = None
+        # Third call: succeeds
+        mock_obj_success = MagicMock()
+        mock_func.side_effect = [mock_obj_fail1, mock_obj_fail2, mock_obj_success]
 
         # Execute
-        with patch("src.stats.retry.__defaults__", (mock_func,)):
-            result = retry(mock_func, arg1="test")
+        result = retry(mock_func, arg1="test")
 
         # Verify
         assert mock_func.call_count == 3
         assert mock_sleep.call_count == 2
-        assert result == "success"
+        assert result is mock_obj_success
+        mock_obj_success.get_request.assert_called_once()
