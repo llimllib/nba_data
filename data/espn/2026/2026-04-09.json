@@ -4090,9 +4090,9 @@
       "draftNumber": 21,
       "fromYear": 2020,
       "player_years": 5,
-      "oNetPts": -0.0527,
+      "oNetPts": 0.1673,
       "dNetPts": -3.8259,
-      "tNetPts": -3.8786,
+      "tNetPts": -3.6586,
       "oUsg": 0.2722,
       "dUsg": 0.1595,
       "oPoss": 18.0295,
@@ -4114,14 +4114,14 @@
       "fg3mplyr": 5,
       "fgaplyr": 20,
       "fgmplyr": 9,
-      "ftaplyr": 0,
-      "ftmplyr": 0,
+      "ftaplyr": 1,
+      "ftmplyr": 1,
       "livetov1": 2,
       "luaplyr": 9,
       "lumplyr": 4,
       "ofoulplyr": 0,
       "orebounder": 1,
-      "pts": 23,
+      "pts": 24,
       "rebounder": 3,
       "stlr": 0,
       "tov1": 2,
@@ -4129,9 +4129,9 @@
       "minutes_played": "33:17",
       "played": 1,
       "seconds_played": 1997,
-      "oWPA": 0.0834,
+      "oWPA": 0.083,
       "dWPA": -0.1552,
-      "tWPA": -0.0718
+      "tWPA": -0.0722
     },
     {
       "gmId": "0022501169",
@@ -4149,9 +4149,9 @@
       "draftNumber": 3,
       "fromYear": 2025,
       "player_years": 0,
-      "oNetPts": 0.5151,
+      "oNetPts": 0.2951,
       "dNetPts": -0.5579,
-      "tNetPts": -0.0428,
+      "tNetPts": -0.2628,
       "oUsg": 0.2451,
       "dUsg": 0.1722,
       "oPoss": 21.0744,
@@ -4173,14 +4173,14 @@
       "fg3mplyr": 3,
       "fgaplyr": 17,
       "fgmplyr": 7,
-      "ftaplyr": 7,
-      "ftmplyr": 4,
+      "ftaplyr": 6,
+      "ftmplyr": 3,
       "livetov1": 2,
       "luaplyr": 1,
       "lumplyr": 1,
       "ofoulplyr": 0,
       "orebounder": 3,
-      "pts": 21,
+      "pts": 20,
       "rebounder": 6,
       "stlr": 2,
       "tov1": 2,
@@ -4188,9 +4188,9 @@
       "minutes_played": "40:09",
       "played": 1,
       "seconds_played": 2409,
-      "oWPA": 0.111,
+      "oWPA": 0.1114,
       "dWPA": -0.1483,
-      "tWPA": -0.0373
+      "tWPA": -0.0369
     },
     {
       "gmId": "0022501169",
@@ -42297,9 +42297,9 @@
       "plyrID": 1630178,
       "displayName": "Tyrese Maxey",
       "actionType": "freethrow",
-      "oNetPts": -0.0321,
+      "oNetPts": 0.1879,
       "dNetPts": 1.1297,
-      "tNetPts": 1.0976
+      "tNetPts": 1.3176
     },
     {
       "gmID": "0022501169",
@@ -42451,9 +42451,9 @@
       "plyrID": 1630178,
       "displayName": "Tyrese Maxey",
       "actionType": "fastbreak",
-      "oNetPts": 0.1486,
+      "oNetPts": 0.3686,
       "dNetPts": -0.0362,
-      "tNetPts": 0.1124
+      "tNetPts": 0.3324
     },
     {
       "gmID": "0022501169",
@@ -42475,9 +42475,9 @@
       "plyrID": 1630178,
       "displayName": "Tyrese Maxey",
       "actionType": "total",
-      "oNetPts": -0.0527,
+      "oNetPts": 0.1673,
       "dNetPts": -3.8259,
-      "tNetPts": -3.8786
+      "tNetPts": -3.6586
     },
     {
       "gmID": "0022501169",
@@ -42667,9 +42667,9 @@
       "plyrID": 1642845,
       "displayName": "VJ Edgecombe",
       "actionType": "freethrow",
-      "oNetPts": -2.3671,
+      "oNetPts": -2.5871,
       "dNetPts": 0.6022,
-      "tNetPts": -1.7648
+      "tNetPts": -1.9848
     },
     {
       "gmID": "0022501169",
@@ -42811,9 +42811,9 @@
       "plyrID": 1642845,
       "displayName": "VJ Edgecombe",
       "actionType": "fastbreak",
-      "oNetPts": 0.1933,
+      "oNetPts": -0.0267,
       "dNetPts": -0.6662,
-      "tNetPts": -0.4728
+      "tNetPts": -0.6928
     },
     {
       "gmID": "0022501169",
@@ -42835,9 +42835,9 @@
       "plyrID": 1642845,
       "displayName": "VJ Edgecombe",
       "actionType": "total",
-      "oNetPts": 0.5151,
+      "oNetPts": 0.2951,
       "dNetPts": -0.5579,
-      "tNetPts": -0.0428
+      "tNetPts": -0.2628
     },
     {
       "gmID": "0022501170",
