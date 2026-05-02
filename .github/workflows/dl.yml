@@ -80,6 +80,7 @@ jobs:
 
       # Disable exit node before git operations to use fast GitHub connectivity
       - name: Disable Tailscale exit node
+        if: always()
         run: |
           sudo -E tailscale set --exit-node=
 
