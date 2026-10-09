@@ -109,6 +109,75 @@ season. Lookup tables (`team_seasons`, `players`, `games`) are single files.
 
 ---
 
+## v2 NBA Stats Data (`nba/stats/`)
+
+Built by `pipeline/stats.py` from stats.nba.com. Each run refetches the
+whole current season (14 requests), so stat corrections the NBA makes after
+games are picked up. Raw responses are kept at
+`nba/raw/stats/<season>/<request>.json.gz`.
+
+Columns are the NBA's names, lowercased. Names and abbreviations are dropped
+(use the lookup tables), as are the `*_rank` columns (use `rank() OVER
+(...)`). Counting stats are INTEGER and other numbers DOUBLE, set by column
+name: the NBA sometimes sends counts as floats.
+
+**Known gaps:** the game log endpoints omit some All-Star weekend exhibitions
+(4 games in 2025-26, such as the Rising Stars games), and player game logs
+only include players who played; DNPs aren't listed. Players with no NBA id
+(seen on international teams in preseason exhibitions) are skipped.
+
+### `team_game_logs/<season>.parquet`
+
+One row per team per game, for every game type (preseason through the
+finals). The NBA's traditional and advanced team box scores, joined.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| opp_team_id | VARCHAR | The other team in the game |
+| game_date | DATE | |
+| home | BOOLEAN | NULL for neutral-site games, where the NBA lists both teams as away |
+| win | BOOLEAN | |
+| min, fgm, fga, ..., pts, plus_minus | | Traditional box score |
+| off_rating, def_rating, net_rating, pace, poss, pie, ... | | Advanced box score; `e_` columns are the NBA's estimates |
+
+### `player_game_logs/<season>.parquet`
+
+One row per player per game they played in, with the same traditional and
+advanced columns as the team logs plus usage (`usg_pct`), fantasy points and
+`dd2`/`td3`. `opp_team_id` and `home` come from the team's game log.
+
+### `player_season_stats/<season>.parquet`
+
+One row per player per `season_type` (`regular_season` or `playoffs`):
+season **totals** from the NBA's Base, Defense and Advanced player stats,
+2-point shooting, and bio data. A player traded mid-season has one row;
+`team_id` is their last team.
+
+Per-mode stats are computed from the totals, which reproduces the NBA's
+PerGame, Per36 and Per100Possessions values within their rounding:
+
+| Mode | Formula |
+|------|---------|
+| Per game | `total / gp` |
+| Per 36 minutes | `total / min * 36` |
+| Per 100 possessions | `total / poss * 100` |
+
+For defensive win shares use `def_ws_raw`; `def_ws` is rounded to 2
+decimals, which distorts per-mode values for low-minute players.
+
+| Column | Type | Source |
+|--------|------|--------|
+| gp, w, l, min, pts, ... | | Base |
+| def_rating, def_ws, def_ws_raw, opp_pts_paint, ... | | Defense |
+| off_rating, usg_pct, ts_pct, poss, pie, ... | | Advanced |
+| fg2m, fg2a, fg2_pct, fga_frequency, ... | | 2-point shots; NULL for players with no 2-point attempts |
+| player_last_team_id | VARCHAR | 2-point shots |
+| player_height, player_height_inches, player_weight | VARCHAR, INTEGER, INTEGER | Bio |
+| college, country | VARCHAR | Bio |
+| draft_year, draft_round, draft_number | INTEGER | Bio; NULL if undrafted |
+
+---
+
 ## v2 ESPN Data (`nba/espn/`)
 
 Built by `pipeline/espn.py` from ESPN's net points data

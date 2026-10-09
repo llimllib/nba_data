@@ -23,13 +23,13 @@ usage: python -m pipeline.espn [--out out] [--season 2026 ...] [--no-fetch]
 import argparse
 import gzip
 import json
-import os
 import sys
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, timedelta
 from pathlib import Path
 
 import duckdb
 
+from .output import check_keys, write_atomic, write_parquet
 from .seasons import current_season, season_days, season_window, today_eastern
 from .teams import TEAM_ABBREVS_FILE, UnknownTeamAbbrev, load_team_abbrevs
 
@@ -228,14 +228,6 @@ def raw_path(outdir: Path, season: int, day: date) -> Path:
     return outdir / RAW_DIR / str(season) / f"{day.isoformat()}.json.gz"
 
 
-def write_atomic(path: Path, write) -> None:
-    """call write(tmp_path), then move the result into place"""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f".{path.name}.tmp")
-    write(tmp)
-    os.replace(tmp, path)
-
-
 def fetch_season(s3, outdir: Path, season: int, today: date) -> list[date]:
     """
     Download every day of `season` up to `today` that we don't already have,
@@ -296,7 +288,6 @@ def build_season(
         [[str(f) for f in files]],
     )
 
-    updated = datetime.now(UTC).isoformat()
     for dataset, query in QUERIES.items():
         con.execute(
             f"""
@@ -306,15 +297,10 @@ def build_season(
         )
         check_abbrevs(con, dataset)
         con.execute(f"CREATE OR REPLACE TABLE out AS {query}")
-        check_unique(con, dataset)
+        check_keys(con, "out", KEYS[dataset], f"espn {dataset}")
 
         path = outdir / OUT_DIR / dataset / f"{season}.parquet"
-        write_atomic(
-            path,
-            lambda tmp: con.execute(
-                f"COPY out TO '{tmp}' (FORMAT parquet, KV_METADATA {{updated: '{updated}'}})"
-            ),
-        )
+        write_parquet(con, "out", path)
         print(f"espn: wrote {path}")
     return True
 
@@ -361,20 +347,6 @@ def check_abbrevs(con, dataset: str) -> None:
                 f"espn {dataset}: team_abbrevs.csv disagrees with ESPN's team ids "
                 f"(abbrev, espn team_id, csv team_id): {mismatched}"
             )
-
-
-def check_unique(con, dataset: str) -> None:
-    keys = ", ".join(KEYS[dataset])
-    dupes = con.execute(
-        f"SELECT {keys}, count(*) FROM out GROUP BY ALL HAVING count(*) > 1 LIMIT 5"
-    ).fetchall()
-    if dupes:
-        raise ValueError(f"espn {dataset}: duplicate ({keys}): {dupes}")
-    nulls = con.execute(
-        f"SELECT count(*) FROM out WHERE {' OR '.join(f'{k} IS NULL' for k in KEYS[dataset])}"
-    ).fetchone()[0]
-    if nulls:
-        raise ValueError(f"espn {dataset}: {nulls} rows with a NULL in ({keys})")
 
 
 def main(argv: list[str] | None = None) -> None:
