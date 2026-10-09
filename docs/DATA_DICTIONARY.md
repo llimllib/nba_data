@@ -109,6 +109,104 @@ season. Lookup tables (`team_seasons`, `players`, `games`) are single files.
 
 ---
 
+## v2 ESPN Data (`nba/espn/`)
+
+Built by `pipeline/espn.py` from ESPN's net points data
+([espnanalytics.com](https://espnanalytics.com/)), seasons 2019 on. Every
+table has `season`, `game_id` and `team_id`; player tables also have
+`player_id`. Player and team names come from the lookup tables.
+
+ESPN added fields over time, and its files for seasons 2022-2025 were saved
+before that, so `o_poss`, `o_team_poss`, `o_wpa` and their `d_`/`t_`
+variants, and `pts_allowed_off_live_tov`, are NULL for those seasons.
+
+### Raw: `nba/raw/espn/<season>/<yyyy-mm-dd>.json.gz`
+
+ESPN's file for each game day, with its separate player details file added
+under `player_details`. A saved day is never refetched except for today and
+yesterday, because ESPN's copies of past days can change and lose data.
+
+### `four_factors/<season>.parquet`
+
+One row per team, game and action type. Action types: `2pt`, `3pt`,
+`freethrow`, `rebound`, `turnover`, `period`, `stoppage`, `timeout`,
+`jumpball`, `violation`.
+
+| Column | Type | ESPN field | Description |
+|--------|------|------------|-------------|
+| action_type | VARCHAR | actionType | |
+| o_scoring_poss | DOUBLE | oScPoss | Scoring possessions |
+| o_poss | DOUBLE | oPoss | Possessions |
+| o_pts_produced | DOUBLE | oPtsProd | Points produced |
+| o_net_pts | DOUBLE | oNetPts | Net points |
+
+To get one column per action type, as in v1:
+`PIVOT four_factors ON action_type USING first(o_net_pts) GROUP BY game_id, team_id`
+
+### `player_details/<season>.parquet`
+
+Net points per player, game and action type (`2pt`, `3ptShooting`, `assist`,
+`layup`, `rim`, `total`, ... 31 in all).
+
+| Column | Type | ESPN field |
+|--------|------|------------|
+| action_type | VARCHAR | actionType |
+| o_net_pts / d_net_pts / t_net_pts | DOUBLE | oNetPts / dNetPts / tNetPts |
+
+### `player_box/<season>.parquet` and `team_box/<season>.parquet`
+
+One row per player per game, and one per team per game.
+
+| Column | Type | ESPN field | Description |
+|--------|------|------------|-------------|
+| home | BOOLEAN | hmTm / homeTm | |
+| seconds_played | INTEGER | seconds_played, else minutes_played | ESPN's `mm:ss` truncates; `seconds_played` is exact when present |
+| fgm / fga | INTEGER | fgmplyr / fgaplyr | |
+| fg3m / fg3a | INTEGER | fg3mplyr / fg3aplyr | |
+| ftm / fta | INTEGER | ftmplyr / ftaplyr | |
+| layup_fgm / layup_fga | INTEGER | lumplyr / luaplyr | Layups made / attempted |
+| oreb / dreb / reb | INTEGER | orebounder / drebounder / rebounder | |
+| ast | INTEGER | assister | |
+| ast_fg3 / ast_layup | INTEGER | assister3pt / assisterLU | Assists on 3s / layups |
+| assisted_fgm / assisted_fg3m / assisted_layup_fgm | INTEGER | assistedShooter / assisted3ptShooter / assistedLUShooter | Made shots that were assisted |
+| stl / blk | INTEGER | stlr / blockplyr | |
+| tov / live_tov | INTEGER | tov1 / livetov1 | Turnovers / live-ball turnovers |
+| off_fouls / def_fouls | INTEGER | ofoulplyr / dfoulplyr | |
+| pts | INTEGER | pts | |
+
+`player_box` only:
+
+| Column | Type | ESPN field | Description |
+|--------|------|------------|-------------|
+| starter / played | BOOLEAN | starter / played | |
+| plus_minus | INTEGER | plusMinusPoints | |
+| o_net_pts / d_net_pts / t_net_pts | DOUBLE | oNetPts / dNetPts / tNetPts | Net points |
+| o_usg / d_usg | DOUBLE | oUsg / dUsg | Usage |
+| o_poss / d_poss / t_poss | DOUBLE | oPoss / dPoss / tPoss | Player possessions |
+| o_team_poss / d_team_poss / t_team_poss | DOUBLE | oTmPoss / dTmPoss / tTmPoss | Team possessions while on court |
+| o_wpa / d_wpa / t_wpa | DOUBLE | oWPA / dWPA / tWPA | Win probability added |
+| d_avg_pos | DOUBLE | dAvgPos | |
+
+`team_box` only:
+
+| Column | Type | ESPN field | Description |
+|--------|------|------------|-------------|
+| win | BOOLEAN | win | |
+| poss / opp_poss | DOUBLE | totPoss / oppPoss | |
+| opp_pts | INTEGER | oppPts | |
+| efg_pct / fg2_pct / fg3_pct | DOUBLE | eFG / fg2p / fg3p | |
+| ft_rate | DOUBLE | ftr | |
+| fg2_net_pts / fg3_net_pts | DOUBLE | netPts2s / netPts3s | |
+| shooting_net_pts / turnover_net_pts / rebound_net_pts / freethrow_net_pts | DOUBLE | netPtsShooting / ... | Net points by factor |
+| pts_allowed_off_live_tov | INTEGER | ptsAllwdOffLive | |
+| n_times_pts_allowed_off_live_tov | INTEGER | nTimesPtsAllwd | |
+
+Not kept from ESPN's player rows: names and team abbreviations (use the
+lookup tables), draft fields, and `seasonType` (decoded from `game_id` in
+`games`). They remain in the raw files.
+
+---
+
 ## Main Data Files (`data/`)
 
 ### Team Game Logs
