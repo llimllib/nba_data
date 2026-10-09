@@ -3,6 +3,9 @@
 ## Project Overview
 This repository contains up-to-date NBA data dumps in parquet and JSON formats, covering seasons from 2009-10 to present.
 
+## v2 Transition
+This repo is being migrated to v2: data in object storage, consistent keys, a DuckDB catalog. **Read [docs/v2.md](docs/v2.md) before working on v2** (code in `pipeline/`); it records the decisions and how v1 and v2 coexist. Don't change v1 code in `src/` except to fix breakage.
+
 ## Data Documentation
 See **[docs/DATA_DICTIONARY.md](docs/DATA_DICTIONARY.md)** for complete documentation of all data files, schemas, and column definitions.
 

@@ -56,7 +56,7 @@ Hornets and the Pelicans.
   `team_seasons` is generated from the NBA game logs, so renames, All-Star
   teams and exhibition opponents appear automatically.
 - **Ingesting:** a source that identifies teams only by abbreviation is resolved
-  through `src/team_abbrevs.csv`, a hand-maintained
+  through `pipeline/team_abbrevs.csv`, a hand-maintained
   `(source, abbrev, first_season, last_season) -> team_id` table. An unknown
   `(source, abbrev, season)` fails the run.
 - NBA abbreviations are not unique within a season (in 2026 `MEL` is both
