@@ -53,11 +53,17 @@ Hornets and the Pelicans.
 - **Joining:** a team's city, nickname and abbreviation for a given row come
   from joining `team_seasons` on `(team_id, season)`. A 2013 Charlotte game
   shows "Bobcats" and a 2016 one shows "Hornets" with no special cases.
+  `team_seasons` is generated from the NBA game logs, so renames, All-Star
+  teams and exhibition opponents appear automatically.
 - **Ingesting:** a source that identifies teams only by abbreviation is resolved
-  through a `(source, abbrev, season) -> team_id` lookup built from
-  `team_seasons`. An unknown pair fails the run.
+  through `src/team_abbrevs.csv`, a hand-maintained
+  `(source, abbrev, first_season, last_season) -> team_id` table. An unknown
+  `(source, abbrev, season)` fails the run.
+- NBA abbreviations are not unique within a season (in 2026 `MEL` is both
+  Melbourne United and the All-Star Team Melo), another reason they are never
+  keys.
 - Abbreviations and team names are never stored in data tables. They live only
-  in `team_seasons`.
+  in `team_seasons` and `team_abbrevs.csv`.
 
 ### Columns
 
