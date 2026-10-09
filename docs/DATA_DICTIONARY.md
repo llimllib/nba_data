@@ -12,6 +12,97 @@ Data coverage:
 
 ---
 
+## v2 Schema Conventions
+
+These rules apply to the v2 dataset in the `basketball-data` Space
+(milestone "v2: object storage & a coherent dataset"). The v1 files in `data/`
+described below do not follow them.
+
+### Keys
+
+Every table uses NBA ids as keys, with the same name and type everywhere:
+
+| Column | Type | Example | Notes |
+|--------|------|---------|-------|
+| `game_id` | VARCHAR | `0022500130` | 10 characters, zero-padded; see [NBA Game ID Format](#nba-game-id-format) |
+| `player_id` | VARCHAR | `1629027` | NBA person id |
+| `team_id` | VARCHAR | `1610612737` | NBA team id; see [Teams](#teams) |
+| `season` | INTEGER | `2026` | End year of the season (2026 = 2025-26) |
+
+Ids are identifiers, not numbers, so they are all strings: no arithmetic, no
+loss of leading zeros, no overflow if the NBA issues a larger id. They are
+stored exactly as the NBA publishes them. Sources that return ids as numbers
+are converted directly from integer to string, never through a float (which
+would produce `1629027.0`). `season` stays an INTEGER because it is used in
+arithmetic and ranges.
+
+Columns that refer to another team or player end in `_team_id` or
+`_player_id` and hold the same ids (`opp_team_id`, `home_team_id`,
+`assist_player_id`). The integrity check finds key columns by these names.
+
+Source-specific names for these keys (`gameId`, `gmId`, `personId`, `plyrID`,
+`teamId`, `tmID`, ...) are renamed when the parquet is written.
+
+### Teams
+
+A `team_id` is a franchise as the NBA defines it, not a name. For example,
+`1610612766` covers the 1988-2002 Charlotte Hornets, the Charlotte Bobcats, and
+the current Charlotte Hornets, while `1610612740` covers the New Orleans
+Hornets and the Pelicans.
+
+- **Joining:** a team's city, nickname and abbreviation for a given row come
+  from joining `team_seasons` on `(team_id, season)`. A 2013 Charlotte game
+  shows "Bobcats" and a 2016 one shows "Hornets" with no special cases.
+- **Ingesting:** a source that identifies teams only by abbreviation is resolved
+  through a `(source, abbrev, season) -> team_id` lookup built from
+  `team_seasons`. An unknown pair fails the run.
+- Abbreviations and team names are never stored in data tables. They live only
+  in `team_seasons`.
+
+### Columns
+
+- Column names are snake_case and never start with a digit (ESPN's
+  `2pt_oNetPts` becomes `fg2_o_net_pts`)
+- Numeric columns are INTEGER, DOUBLE, or BIGINT only when a value needs it.
+  DuckDB-wasm returns BIGINT as a JavaScript BigInt, which Observable Plot
+  can't handle
+- `game_date` is a DATE, the date the NBA lists for the game (US Eastern)
+- Yes/no values are BOOLEAN
+- Missing values are NULL, never `0` or `''`
+
+### Types
+
+Types in this document are DuckDB types, since DuckDB writes the parquet
+files. They map to parquet like this (checked with `parquet_schema()`):
+
+| DuckDB | Parquet physical type | Parquet annotation | pyarrow / polars |
+|--------|-----------------------|--------------------|------------------|
+| VARCHAR | BYTE_ARRAY | UTF8 | string / String |
+| INTEGER | INT32 | INT_32 | int32 / Int32 |
+| BIGINT | INT64 | INT_64 | int64 / Int64 |
+| DOUBLE | DOUBLE | (none) | double / Float64 |
+| BOOLEAN | BOOLEAN | (none) | bool / Boolean |
+| DATE | INT32 | DATE | date32 / Date |
+
+### Where normalization happens
+
+All of the above is applied when parquet files are written, not in the catalog
+views. Reading a parquet file directly gives the same clean data as querying
+through `nba.duckdb`.
+
+### Layout
+
+```
+nba/raw/<source>/<season>/...           raw source responses, gzipped
+nba/<source>/<dataset>/<season>.parquet one file per season
+nba/nba.duckdb                          catalog of views
+```
+
+Finished seasons are never rewritten; each run rewrites only the current
+season. Lookup tables (`team_seasons`, `players`, `games`) are single files.
+
+---
+
 ## Main Data Files (`data/`)
 
 ### Team Game Logs
