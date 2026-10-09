@@ -1,0 +1,21 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: ["main"]
+    # the update workflow commits data every 4 hours; don't test those
+    paths-ignore: ["data/**"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      # installs python, uv, ruff and ty from mise.toml
+      - uses: jdx/mise-action@v5
+
+      - name: Test
+        run: mise run test

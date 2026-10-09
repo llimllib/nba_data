@@ -1,0 +1,9 @@
+[tools]
+python = "latest"
+ruff = "latest"
+ty = "latest"
+uv = "latest"
+
+[tasks.test]
+description = "Run the test suite"
+run = "uv run pytest -q --no-header tests"
