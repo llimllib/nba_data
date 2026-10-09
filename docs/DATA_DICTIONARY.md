@@ -435,3 +435,20 @@ Game IDs follow this pattern: `00X YY ZZ GGGG`
 
 - `YY` = Season year (24 = 2024-25)
 - `ZZ` + `GGGG` = Game-specific identifier
+
+For playoff and play-in games, the last three digits encode the bracket:
+
+```
+004 YY 00 R S G    playoffs:  R = round (1-4), S = series within the round,
+                              G = game within the series (1-7)
+005 YY 00 R S 1    play-in:   R = round (1-2), S = game within the round
+```
+
+So `0042500407` is game 7 of the 2025-26 Finals, and `0052500211` is the
+second game of the 2025-26 play-in's second round. Verified against the
+2025-26 postseason: round 1 has 8 series, round 2 has 4, round 3 has 2, the
+Finals 1.
+
+In v2, these fields are decoded once into the `games` table (`game_type`,
+`playoff_round`, `series_number`, `series_game`); other tables join `games` on
+`game_id` rather than parsing the id.
