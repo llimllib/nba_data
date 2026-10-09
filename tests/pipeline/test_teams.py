@@ -1,6 +1,6 @@
 import pytest
 
-from src.teams import UnknownTeamAbbrev, load_team_abbrevs, team_id_for
+from pipeline.teams import UnknownTeamAbbrev, load_team_abbrevs, team_id_for
 
 HEADER = "source,abbrev,team_id,first_season,last_season\n"
 
