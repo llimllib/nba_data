@@ -1,6 +1,7 @@
 """
 Season helpers. A season is named by its end year: 2026 = 2025-26
 """
+
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 

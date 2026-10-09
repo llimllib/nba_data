@@ -38,7 +38,7 @@ def test_season_ranges(tmp_path):
     rows = load_team_abbrevs(
         write_csv(
             tmp_path,
-            "bbref,CHA,1610612766,2005,2014\n" "bbref,CHO,1610612766,2015,\n",
+            "bbref,CHA,1610612766,2005,2014\nbbref,CHO,1610612766,2015,\n",
         )
     )
     assert team_id_for(rows, "bbref", "CHA", 2014) == "1610612766"
@@ -53,9 +53,7 @@ def test_season_ranges(tmp_path):
 def test_abbrev_can_move_between_teams(tmp_path):
     # a source may reuse an abbreviation for another team, as long as the
     # ranges don't overlap
-    rows = load_team_abbrevs(
-        write_csv(tmp_path, "x,AAA,1,2010,2012\n" "x,AAA,2,2013,\n")
-    )
+    rows = load_team_abbrevs(write_csv(tmp_path, "x,AAA,1,2010,2012\nx,AAA,2,2013,\n"))
     assert team_id_for(rows, "x", "AAA", 2012) == "1"
     assert team_id_for(rows, "x", "AAA", 2013) == "2"
 
@@ -73,10 +71,10 @@ def test_unknown_source_and_abbrev():
 @pytest.mark.parametrize(
     "body",
     [
-        "x,AAA,1,2010,\n" "x,AAA,2,2020,\n",  # open range overlaps a later one
-        "x,AAA,1,2010,2015\n" "x,AAA,2,2015,2020\n",  # share one season
-        "x,AAA,1,2010,2020\n" "x,AAA,2,2012,2013\n",  # one inside the other
-        "x,AAA,1,2010,2015\n" "x,AAA,1,2014,\n",  # duplicate rows, even for one team
+        "x,AAA,1,2010,\nx,AAA,2,2020,\n",  # open range overlaps a later one
+        "x,AAA,1,2010,2015\nx,AAA,2,2015,2020\n",  # share one season
+        "x,AAA,1,2010,2020\nx,AAA,2,2012,2013\n",  # one inside the other
+        "x,AAA,1,2010,2015\nx,AAA,1,2014,\n",  # duplicate rows, even for one team
     ],
 )
 def test_overlapping_ranges_rejected(tmp_path, body):
