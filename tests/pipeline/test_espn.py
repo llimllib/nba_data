@@ -1,11 +1,11 @@
-from datetime import date
 import gzip
 import io
 import json
+from datetime import date
 
-from botocore.exceptions import ClientError
 import duckdb
 import pytest
+from botocore.exceptions import ClientError
 
 from pipeline import espn
 from pipeline.teams import UnknownTeamAbbrev
@@ -43,13 +43,25 @@ def day(players, four_factor_abbrevs=("BRK", "NOR"), game=GAME):
         ],
         "player_box": players,
         "team_box": [
-            {"gameId": game, "tmID": int(t), "homeTm": h, "win": h, "assisterLu": 4,
-             "minutes_played": "240:00"}
+            {
+                "gameId": game,
+                "tmID": int(t),
+                "homeTm": h,
+                "win": h,
+                "assisterLu": 4,
+                "minutes_played": "240:00",
+            }
             for t, h in ((BKN, 0), (NOP, 1))
         ],
         "player_details": [
-            {"gmID": game, "plyrID": p["plyrID"], "teamId": p.get("teamId"),
-             "deanAbbrev": p["tmName"], "actionType": "total", "tNetPts": 0.5}
+            {
+                "gmID": game,
+                "plyrID": p["plyrID"],
+                "teamId": p.get("teamId"),
+                "deanAbbrev": p["tmName"],
+                "actionType": "total",
+                "tNetPts": 0.5,
+            }
             for p in players
         ],
     }
@@ -70,7 +82,9 @@ def read(outdir, dataset, season):
 
 def test_build_resolves_abbreviations(tmp_path):
     # a 2023-style file: no teamId on players, so team ids come from the lookup
-    write_raw(tmp_path, 2023, "2023-01-05", day([player(1, "BRK"), player(2, "NOR", home=1)]))
+    write_raw(
+        tmp_path, 2023, "2023-01-05", day([player(1, "BRK"), player(2, "NOR", home=1)])
+    )
     assert espn.build_season(tmp_path, 2023)
 
     rows = read(tmp_path, "player_box", 2023).fetchall()
@@ -116,18 +130,26 @@ def test_output_types(tmp_path):
 def test_seconds_played(tmp_path):
     # prefer ESPN's seconds_played; fall back to parsing minutes_played
     write_raw(
-        tmp_path, 2026, "2025-11-05",
+        tmp_path,
+        2026,
+        "2025-11-05",
         day([player(1, "BRK", BKN, seconds_played=1902), player(2, "NOR", NOP)]),
     )
     espn.build_season(tmp_path, 2026)
-    secs = dict(read(tmp_path, "player_box", 2026).select("player_id, seconds_played").fetchall())
+    secs = dict(
+        read(tmp_path, "player_box", 2026)
+        .select("player_id, seconds_played")
+        .fetchall()
+    )
     assert secs == {"1": 1902, "2": 31 * 60 + 41}
     team_secs = read(tmp_path, "team_box", 2026).select("seconds_played").fetchall()
     assert team_secs == [(240 * 60,), (240 * 60,)]
 
 
 def test_unknown_abbreviation_fails(tmp_path):
-    write_raw(tmp_path, 2026, "2025-11-05", day([player(1, "BRK", BKN)], ("BRK", "XXX")))
+    write_raw(
+        tmp_path, 2026, "2025-11-05", day([player(1, "BRK", BKN)], ("BRK", "XXX"))
+    )
     with pytest.raises(UnknownTeamAbbrev, match="XXX"):
         espn.build_season(tmp_path, 2026)
 
@@ -167,7 +189,9 @@ def test_no_raw_files(tmp_path):
 def test_rebuild_overwrites(tmp_path):
     write_raw(tmp_path, 2026, "2025-11-05", day([player(1, "BRK", BKN)]))
     espn.build_season(tmp_path, 2026)
-    write_raw(tmp_path, 2026, "2025-11-06", day([player(2, "BRK", BKN)], game="0022500200"))
+    write_raw(
+        tmp_path, 2026, "2025-11-06", day([player(2, "BRK", BKN)], game="0022500200")
+    )
     espn.build_season(tmp_path, 2026)
     assert read(tmp_path, "player_box", 2026).count("*").fetchone() == (2,)
 
@@ -191,7 +215,11 @@ class FakeS3:
         if day_str not in self.days:
             # ESPN's bucket doesn't allow listing, so missing files are denied
             raise client_error("AccessDenied")
-        body = [] if name.endswith("_player.json") else {"four_factors": [], "day": day_str}
+        body = (
+            []
+            if name.endswith("_player.json")
+            else {"four_factors": [], "day": day_str}
+        )
         return {"Body": io.BytesIO(json.dumps(body).encode())}
 
 
@@ -205,7 +233,11 @@ def test_fetch_season(tmp_path):
 
     path = espn.raw_path(tmp_path, 2026, date(2025, 10, 21))
     with gzip.open(path, "rt") as f:
-        assert json.load(f) == {"four_factors": [], "day": "2025-10-21", "player_details": []}
+        assert json.load(f) == {
+            "four_factors": [],
+            "day": "2025-10-21",
+            "player_details": [],
+        }
 
     # a later run only refetches days it doesn't have, plus today and yesterday
     s3 = FakeS3({"2025-10-21", "2025-10-24", "2025-10-25"})

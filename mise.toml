@@ -7,3 +7,12 @@ uv = "latest"
 [tasks.test]
 description = "Run the test suite"
 run = "uv run pytest -q --no-header tests"
+
+# v1 code in src/ is frozen (see docs/v2.md), so only lint v2
+[tasks.lint]
+description = "Check formatting, lints and types"
+run = [
+  "ruff format --check pipeline tests/pipeline",
+  "ruff check pipeline tests/pipeline",
+  "ty check pipeline tests/pipeline",
+]

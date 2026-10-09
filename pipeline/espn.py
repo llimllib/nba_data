@@ -19,13 +19,14 @@ basketball-data bucket; see docs/v2.md.
 
 usage: python -m pipeline.espn [--out out] [--season 2026 ...] [--no-fetch]
 """
+
 import argparse
-from datetime import date, datetime, timedelta, UTC
 import gzip
 import json
 import os
-from pathlib import Path
 import sys
+from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 
 import duckdb
 
@@ -251,7 +252,7 @@ def fetch_season(s3, outdir: Path, season: int, today: date) -> list[date]:
         if data is None:
             continue
 
-        def write(tmp):
+        def write(tmp, data=data):
             with gzip.open(tmp, "wt") as f:
                 json.dump(data, f, separators=(",", ":"))
 

@@ -8,6 +8,7 @@ abbreviation is still in use.
 
 see "v2 Schema Conventions" in docs/DATA_DICTIONARY.md
 """
+
 import csv
 from dataclasses import dataclass
 from pathlib import Path
@@ -52,7 +53,9 @@ def load_team_abbrevs(path: Path = TEAM_ABBREVS_FILE) -> list[TeamAbbrev]:
             if not (row.source and row.abbrev):
                 raise ValueError(f"{path}:{i}: source and abbrev are required")
             if not row.team_id.isdigit():
-                raise ValueError(f"{path}:{i}: team_id {row.team_id!r} is not an NBA id")
+                raise ValueError(
+                    f"{path}:{i}: team_id {row.team_id!r} is not an NBA id"
+                )
             if row.last_season is not None and row.last_season < row.first_season:
                 raise ValueError(f"{path}:{i}: last_season is before first_season")
             rows.append(row)
@@ -73,9 +76,7 @@ def load_team_abbrevs(path: Path = TEAM_ABBREVS_FILE) -> list[TeamAbbrev]:
     return rows
 
 
-def team_id_for(
-    rows: list[TeamAbbrev], source: str, abbrev: str, season: int
-) -> str:
+def team_id_for(rows: list[TeamAbbrev], source: str, abbrev: str, season: int) -> str:
     """
     Return the team_id that `source` meant by `abbrev` in `season`. Raises
     UnknownTeamAbbrev if there isn't one
