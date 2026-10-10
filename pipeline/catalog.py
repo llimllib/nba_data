@@ -19,6 +19,9 @@ uploaded: the files are listed from the bucket and the views read them
 through the CDN. Without it, the views read the files in --out directly, and
 the catalog goes to <out>/nba.local.duckdb so it's never uploaded.
 
+Before the catalog is written, pipeline.integrity checks every key against
+the lookup tables; a bad key fails the build and keeps the previous catalog.
+
 usage: python -m pipeline.catalog [--out out] [--bucket basketball-data]
 """
 
@@ -31,6 +34,7 @@ from pathlib import Path
 
 import duckdb
 
+from . import integrity
 from .output import write_atomic
 
 URL = "https://basketball-data.sfo3.cdn.digitaloceanspaces.com"
@@ -138,6 +142,7 @@ def build(path: Path, files: list[File], location: str) -> None:
             con.execute(f"ATTACH {quote(str(tmp))} AS catalog (BLOCK_SIZE 16384)")
             con.execute("USE catalog")
             create(con, datasets, location.rstrip("/"))
+            integrity.check(con, list(datasets))
 
     write_atomic(path, write)
     print(f"catalog: wrote {path} ({len(datasets)} datasets)")

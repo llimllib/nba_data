@@ -135,6 +135,13 @@ ORDER BY ppg DESC LIMIT 10;
 The views read files with `union_by_name`, so a column added in a later
 season is NULL in earlier ones.
 
+**Integrity:** the catalog is only published if every key matches the lookup
+tables. Every non-NULL `team_id`/`*_team_id` is in `team_seasons`, every
+`player_id`/`*_player_id` in `player_seasons`, and every `game_id` in `games`,
+all for the row's season. Each `games.game_id`'s season digits also match its
+`season`. So joining any table to a lookup on `(season, <key>)` never drops
+rows.
+
 ---
 
 ## v2 NBA Stats Data (`nba/stats/`)
