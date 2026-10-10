@@ -1,6 +1,12 @@
 # NBA Data Dictionary
 
-This document describes all data files in the `data/` directory.
+This document describes both versions of the data:
+
+- **v2** (the "v2" sections below): one parquet file per dataset per season
+  at `https://basketball-data.billmill.org/nba/`, queried through the
+  [catalog](#v2-catalog-nbanbaduckdb). Start there.
+- **v1**: the files in this repo's `data/` directory. Still updated, but
+  frozen in format and removed at cutover.
 
 ## Season Naming Convention
 
