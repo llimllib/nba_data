@@ -3,11 +3,11 @@ Lookup tables built from a season's raw stats.nba.com responses, which carry
 the names and abbreviations the other tables leave out:
 
     team_seasons    team_id -> abbreviation and name that season
-    player_seasons  player_id -> name that season
+    player_seasons  player_id -> name that season, and whether they played
     games           game_id -> date, teams, and what the game id encodes
 
 Called from pipeline.stats.build_season, which has loaded the raw responses
-(tgl_base, pgl_base, ps_*_base) and built team_game_logs.
+(tgl_base, pgl_base, ps_*_base, rosters) and built team_game_logs.
 """
 
 import duckdb
@@ -69,18 +69,25 @@ def build_team_seasons(con: duckdb.DuckDBPyConnection, season: int) -> None:
 
 
 def build_player_seasons(con: duckdb.DuckDBPyConnection, season: int) -> None:
-    # season stats rows have no date, so they sort before every game
+    # Everyone who played, and everyone on a team's roster, who may not have
+    # (injured, say). Season stats and roster rows have no date, so they
+    # sort before every game
     con.execute(
         f"""
         CREATE OR REPLACE TABLE player_seasons AS
-        SELECT {season}::INTEGER AS season, player_id::VARCHAR AS player_id,
-            arg_max(player_name, game_date) AS name
+        SELECT {season}::INTEGER AS season, player_id,
+            arg_max(player_name, game_date) AS name,
+            bool_or(played) AS played
         FROM (
-            SELECT player_id, player_name, game_date FROM pgl_base
+            SELECT player_id::VARCHAR AS player_id, player_name, game_date::VARCHAR AS game_date,
+                true AS played
+            FROM pgl_base
             UNION ALL
-            SELECT player_id, player_name, '' FROM ps_regular_season_base
+            SELECT player_id::VARCHAR, player_name, '', true FROM ps_regular_season_base
             UNION ALL
-            SELECT player_id, player_name, '' FROM ps_playoffs_base
+            SELECT player_id::VARCHAR, player_name, '', true FROM ps_playoffs_base
+            UNION ALL
+            SELECT player_id, player_name, '', false FROM rosters
         )
         WHERE player_id IS NOT NULL
         GROUP BY player_id

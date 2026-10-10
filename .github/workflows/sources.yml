@@ -58,8 +58,8 @@ jobs:
         env:
           FAIL_SOURCE: ${{ inputs.fail_source }}
 
-      # only the site's current season is public, so this writes whichever
-      # season the site is on
+      # season and predictive EPM. Only the site's current season is public,
+      # so this writes whichever season the site is on
       - name: dunksandthrees EPM
         id: dunksandthrees
         continue-on-error: true

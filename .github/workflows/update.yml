@@ -35,6 +35,17 @@ jobs:
       - name: Current season
         run: echo "SEASON=$(uv run python -c 'from pipeline.seasons import current_season, today_eastern; print(current_season(today_eastern()))')" >> "$GITHUB_ENV"
 
+      # pipeline.stats refetches the team rosters (30 requests) only when the
+      # saved ones are a day old, so start from the bucket's. sync, unlike cp,
+      # succeeds when there are none yet
+      - name: Download this season's rosters
+        run: aws s3 sync "s3://$BUCKET/nba/raw/stats/$SEASON/" "out/nba/raw/stats/$SEASON/" --exclude '*' --include team_rosters.json.gz --no-progress
+        env: &spaces
+          AWS_ACCESS_KEY_ID: ${{ secrets.DO_SPACES_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.DO_SPACES_SECRET }}
+          AWS_ENDPOINT_URL: https://sfo3.digitaloceanspaces.com
+          AWS_DEFAULT_REGION: us-east-1
+
       # nba.com doesn't let me use a github actions IP, so route through tailscale
       # https://til.simonwillison.net/tailscale/tailscale-github-actions
       - name: Setup Tailscale
@@ -70,11 +81,7 @@ jobs:
       # pipeline uses boto3 too, and AWS_ENDPOINT_URL would redirect it
       - name: Download this season's ESPN files
         run: aws s3 sync "s3://$BUCKET/nba/raw/espn/$SEASON/" "out/nba/raw/espn/$SEASON/" --no-progress
-        env: &spaces
-          AWS_ACCESS_KEY_ID: ${{ secrets.DO_SPACES_ACCESS_KEY }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.DO_SPACES_SECRET }}
-          AWS_ENDPOINT_URL: https://sfo3.digitaloceanspaces.com
-          AWS_DEFAULT_REGION: us-east-1
+        env: *spaces
 
       - name: Fetch ESPN data
         run: uv run python -m pipeline.espn --out out

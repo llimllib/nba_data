@@ -156,8 +156,8 @@ ORDER BY ppg DESC LIMIT 10;
 | `team_game_logs`, `player_game_logs`, `player_season_stats`, `team_seasons`, `player_seasons`, `games` | view | Every season of each `nba/stats/` dataset |
 | `four_factors`, `player_box`, `team_box`, `player_details` | view | Every season of each `nba/espn/` dataset |
 | `bbref_team_stats` | view | Every season of basketball-reference's team stats (`nba/bbref/`) |
-| `epm` | view | dunksandthrees' season EPM, from 2026 (`nba/dunksandthrees/`) |
-| `players` | table | One row per `player_id`: `name` (the latest one known), `first_season`, `last_season`. A table, so joining it reads no parquet files |
+| `epm`, `epm_predictive` | view | dunksandthrees' season and predictive EPM, from 2026 (`nba/dunksandthrees/`) |
+| `players` | table | One row per `player_id`: `name` (the latest one known), `first_season`, `last_season` (seasons on a roster count, even without games). A table, so joining it reads no parquet files |
 | `player_season_stats_per_game`, `player_season_stats_per_36`, `player_season_stats_per_100` | view | `player_season_stats` with counting stats scaled; see below |
 | `metadata` | table | Per dataset: `source`, `first_season`, `last_season`, `seasons`, and `updated`, when its newest file was uploaded |
 
@@ -204,7 +204,9 @@ rows.
 Built by `pipeline/stats.py` from stats.nba.com. Each run refetches the
 whole current season (14 requests), so stat corrections the NBA makes after
 games are picked up. Raw responses are kept at
-`nba/raw/stats/<season>/<request>.json.gz`.
+`nba/raw/stats/<season>/<request>.json.gz`. Team rosters (30 requests, for
+`player_seasons`) are refetched once a day, into
+`nba/raw/stats/<season>/team_rosters.json.gz`.
 
 Columns are the NBA's names, lowercased. Names and abbreviations are dropped
 (use the lookup tables), as are the `*_rank` columns (use `rank() OVER
@@ -290,10 +292,21 @@ season, including All-Star teams and international preseason opponents.
 | full_name | VARCHAR | e.g. "Charlotte Bobcats", "LA Clippers" |
 | is_nba | BOOLEAN | One of the 30 franchises. False for All-Star teams (Team LeBron, Rising Stars) and international preseason opponents (Melbourne United, Real Madrid) |
 
-**`player_seasons/season=<season>/data.parquet`**: one row per player who played or has
-season stats, with `name` as of their latest game that season. Players on
-international preseason opponents have a NULL `name`; the NBA doesn't send
-one.
+**`player_seasons/season=<season>/data.parquet`**: one row per player who played
+(including preseason), has season stats, or is on a team's roster, with
+`name` as of their latest game that season (the roster's name for players
+who didn't play). Players on international preseason opponents have a NULL
+`name`; the NBA doesn't send one.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| season, player_id | | Key |
+| name | VARCHAR | |
+| played | BOOLEAN | False for rostered players with no games that season (injured, say) |
+
+Rosters are each team's latest, so a player who left a team without
+playing for it isn't listed. For the current season the rosters are
+refreshed daily; finished seasons have their final rosters.
 
 **`games/season=<season>/data.parquet`**: one row per game in `team_game_logs`.
 
@@ -487,6 +500,34 @@ names and `team_seasons` for abbreviations.
 Not kept: names and abbreviations (use the lookup tables), and the site's
 z-scores, ranks and percentiles for each stat (`*_attr`), which are a query
 away.
+
+### `epm_predictive/season=<season>/data.parquet`
+
+The site's predictive EPM, from
+[dunksandthrees.com/epm](https://dunksandthrees.com/epm): one row per
+player, its prediction as of `as_of_date`. It is recomputed daily and the
+file holds the latest prediction; every day's raw page is kept at
+`nba/raw/dunksandthrees/<season>/epm_predictive/<date>.html.gz`. Players
+in that season's `player_seasons` are kept, which includes injured players
+on a roster who haven't played; the few who left a team without playing
+are dropped. Every stat is a prediction.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| season, player_id | | Key |
+| as_of_date | DATE | The date of the prediction |
+| team_id | VARCHAR | |
+| age, rookie_year, height_inches, weight | INTEGER | |
+| position | VARCHAR | `G`, `F`, `C`, `F-C`, ... |
+| o_epm, d_epm, epm | DOUBLE | Predicted offensive, defensive and total EPM, points per 100 possessions |
+| epm_change | DOUBLE | Change in `epm` from the previous prediction (NULL so far) |
+| start_pct | DOUBLE | Predicted fraction of games started |
+| min_per_48, poss_per_48 | DOUBLE | Predicted minutes and possessions per 48 minutes |
+| usg_pct, ts_pct, efg_pct, fg_pct_rim, fg_pct_mid, fg2_pct, fg3_pct, ft_pct | DOUBLE | Fractions |
+| pts_per_100, fga_rim_per_100, fga_mid_per_100, fg2a_per_100, fg3a_per_100, fta_per_100, ast_per_100, tov_per_100, oreb_per_100, dreb_per_100, stl_per_100, blk_per_100 | DOUBLE | Per 100 possessions |
+
+Not kept: names, abbreviations, the last game date (the same as
+`as_of_date`), and the site's ranks and z-scores (`*_rk`, `*_z`).
 
 ---
 
