@@ -157,6 +157,21 @@ can. If a column is ever added in a later season, that dataset's view reads
 with `union_by_name` instead, which makes the column NULL in earlier seasons
 but opens every file.
 
+**In the browser (DuckDB-wasm):** use DuckDB-wasm 1.32 or later and switch
+to the httpfs extension before attaching:
+
+```sql
+SET builtin_httpfs = false;
+LOAD httpfs;
+ATTACH 'https://basketball-data.billmill.org/nba/nba.duckdb' AS nba;
+```
+
+DuckDB-wasm's built-in HTTP backend sends a request to every season's file
+before each query and downloads whole files instead of the parts it needs
+([duckdb/duckdb-wasm#2228](https://github.com/duckdb/duckdb-wasm/issues/2228)).
+With httpfs, a one-season query takes about 1.7s cold, against 4-8s
+without. Native DuckDB (CLI, Python) needs none of this.
+
 **Precision:** the per-mode views return full-precision values
 (`13.20481004041412`). Round when displaying, and when writing results to a
 file (e.g. a data loader), round to the precision you need and keep only the
