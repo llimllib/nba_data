@@ -13,6 +13,7 @@ v2 commands (tools come from `mise.toml`):
 - `uv run python -m pipeline.catalog --out out` builds `out/nba.local.duckdb` over the local files; `--bucket basketball-data` lists the bucket instead and writes `out/nba/nba.duckdb` (the parquet must already be uploaded); `--check` only runs the integrity check on `out/`
 - `out/` (gitignored) is laid out like the `basketball-data` bucket
 - `uv run python -m pipeline.bbref --out out --season 2026` builds `bbref_team_stats` (`--no-fetch` to rebuild from saved pages)
+- `uv run python -m pipeline.espn_net_pts --out out [--season 2026 ...]` builds `net_pts_season` from ESPN's season net points files (current season by default; `--no-fetch` uses the saved files)
 - `uv run python -m pipeline.ctg --out out [--season 2026 ...]` builds `ctg_team_summary` from Cleaning the Glass's league summary (past seasons fetched once, the current one every run; `--no-fetch` rebuilds every saved season)
 - `uv run python -m pipeline.dunksandthrees --out out` builds `epm` and `epm_predictive` for the season dunksandthrees is showing (only the current season is public; `--no-fetch` rebuilds every saved season)
 - `uv run python -m pipeline.player_ids --out out [--fetch]` maps new basketball-reference players to NBA ids in `pipeline/player_ids.csv`, from the bbref season pages saved in `out/nba/raw/bbref/`. basketball-reference bans clients that go over ~20 requests a minute: always fetch through `pipeline.bbref.Fetcher`, never in a loop of your own

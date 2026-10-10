@@ -1,8 +1,10 @@
 """
 Map other sources' player ids to NBA player ids.
 
-Only basketball-reference needs this so far: EPM and ESPN already use NBA
-ids. The mapping lives in player_ids.csv, one row per (source, source_id):
+This module matches basketball-reference players. ESPN's season net points
+files use ESPN ids too, but pipeline.espn_net_pts matches those by name as
+it builds, using only the hand-made espn rows here. The mapping lives in
+player_ids.csv, one row per (source, source_id):
 
     source,source_id,player_id,method
     bbref,jamesle01,2544,name_team
