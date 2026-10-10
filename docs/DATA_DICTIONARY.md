@@ -156,6 +156,7 @@ ORDER BY ppg DESC LIMIT 10;
 | `team_game_logs`, `player_game_logs`, `player_season_stats`, `team_seasons`, `player_seasons`, `games` | view | Every season of each `nba/stats/` dataset |
 | `four_factors`, `player_box`, `team_box`, `player_details` | view | Every season of each `nba/espn/` dataset |
 | `bbref_team_stats` | view | Every season of basketball-reference's team stats (`nba/bbref/`) |
+| `epm` | view | dunksandthrees' season EPM, from 2026 (`nba/dunksandthrees/`) |
 | `players` | table | One row per `player_id`: `name` (the latest one known), `first_season`, `last_season`. A table, so joining it reads no parquet files |
 | `player_season_stats_per_game`, `player_season_stats_per_36`, `player_season_stats_per_100` | view | `player_season_stats` with counting stats scaled; see below |
 | `metadata` | table | Per dataset: `source`, `first_season`, `last_season`, `seasons`, and `updated`, when its newest file was uploaded |
@@ -447,6 +448,45 @@ Per game is `total / g`. Per 100 possessions is `total / poss * 100` with
 (509 of 510 team-seasons exactly on games, points, field goals, assists and
 wins); rebounds and turnovers differ slightly because the NBA and bbref
 count team rebounds and team turnovers differently.
+
+---
+
+## v2 dunksandthrees Data (`nba/dunksandthrees/`)
+
+Built by `pipeline/dunksandthrees.py` from the public season EPM tables at
+[dunksandthrees.com/epm/actual](https://dunksandthrees.com/epm/actual)
+(regular season, and `?seasontype=4` for the playoffs). Only the site's
+current season is public, so there is no backfill: the data starts with
+2026, and a season's file keeps the values from the last day the site
+showed that season. EPM is recomputed daily, so the current season's file is
+a snapshot; `metadata.updated` says when it was fetched. Raw pages are kept
+at `nba/raw/dunksandthrees/<season>/epm_<season_type>.html.gz`.
+
+### `epm/season=<season>/data.parquet`
+
+One row per player per season type, for players who played (the site also
+lists rostered players with no games, which are dropped). Join `players` for
+names and `team_seasons` for abbreviations.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| season, season_type, player_id | | Key; `season_type` is `regular_season` or `playoffs` |
+| team_id | VARCHAR | The player's latest team that season |
+| age, rookie_year | INTEGER | |
+| position | VARCHAR | `PG`, `SG`, `SF`, `PF`, `C` |
+| height_inches, weight | INTEGER | |
+| gp, gs | INTEGER | Games played and started |
+| roster_games | INTEGER | Games the player was on a roster for |
+| min, min_per_game | DOUBLE | |
+| o_epm, d_epm, epm | DOUBLE | Offensive, defensive and total EPM, points per 100 possessions. NULL for players with too few minutes |
+| ewins | DOUBLE | Estimated wins added |
+| usg_pct, ts_pct, efg_pct, fg_pct_rim, fg_pct_mid, fg2_pct, fg3_pct, ft_pct | DOUBLE | Fractions (0.561) |
+| oreb_pct, dreb_pct, ast_pct, tov_pct, stl_pct, blk_pct | DOUBLE | Fractions |
+| fga_rim_per_75, fga_mid_per_75, fg3a_per_75, fta_per_75, fga_per_75 | DOUBLE | Attempts per 75 possessions |
+
+Not kept: names and abbreviations (use the lookup tables), and the site's
+z-scores, ranks and percentiles for each stat (`*_attr`), which are a query
+away.
 
 ---
 
