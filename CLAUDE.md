@@ -6,6 +6,14 @@ This repository contains up-to-date NBA data dumps in parquet and JSON formats, 
 ## v2 Transition
 This repo is being migrated to v2: data in object storage, consistent keys, a DuckDB catalog. **Read [docs/v2.md](docs/v2.md) before working on v2** (code in `pipeline/`); it records the decisions and how v1 and v2 coexist. Don't change v1 code in `src/` except to fix breakage.
 
+v2 commands (tools come from `mise.toml`):
+- `mise run test` / `mise run lint` (ruff format, ruff check, ty; v2 code only). CI runs both; keep them passing
+- `uv run python -m pipeline.stats --out out --season 2026` fetches from stats.nba.com (works directly from the home network; CI needs the Tailscale exit node)
+- `uv run python -m pipeline.espn --out out --season 2026`; add `--no-fetch` to either to rebuild parquet from raw files only
+- `out/` (gitignored) is laid out like the `basketball-data` bucket
+
+Track v2 work in the GitHub milestone "v2: object storage & a coherent dataset"; record decisions in docs/v2.md and comment on the issue when the plan changes.
+
 ## Data Documentation
 See **[docs/DATA_DICTIONARY.md](docs/DATA_DICTIONARY.md)** for complete documentation of all data files, schemas, and column definitions.
 
