@@ -1,0 +1,164 @@
+name: Update other sources (v2)
+
+# The sources other than stats.nba.com and ESPN (see docs/v2.md). They
+# change at most daily, and basketball-reference blocks frequent scrapers,
+# so they run once a day rather than with update.yml.
+#
+# Each source is its own step with continue-on-error, so a markup change on
+# one site doesn't stop the others. A source that fails writes nothing (its
+# parser validates before writing), so the bucket keeps its last good file.
+# Failures are reported per source in an issue titled "<source> scraper
+# failed", separate from update.yml's.
+#
+# To add a source: add a step with an id, and add the id to SOURCES below.
+
+on:
+  workflow_dispatch:
+    inputs:
+      fail_source:
+        description: "Make this source's step fail, to test the failure issue (e.g. bbref)"
+        required: false
+        default: ""
+  schedule:
+    # 11:17 UTC: after the night's games are final, and off the hour, when
+    # GitHub delays and drops scheduled runs the most
+    - cron: "17 11 * * *"
+
+# shared with update.yml so the two never rebuild the catalog at once
+concurrency:
+  group: update-v2
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  BUCKET: basketball-data
+  UV_HTTP_TIMEOUT: 600
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      # installs python, uv, ruff and ty from mise.toml
+      - uses: jdx/mise-action@v5
+
+      # bbref's past seasons are never refetched; only the current season's
+      # league page is, once a day
+      - name: basketball-reference
+        id: bbref
+        continue-on-error: true
+        run: |
+          if [ "$FAIL_SOURCE" = bbref ]; then echo "failing on purpose (fail_source)"; exit 1; fi
+          uv run python -m pipeline.bbref --out out
+        env:
+          FAIL_SOURCE: ${{ inputs.fail_source }}
+
+      # check whatever the sources wrote before anything is published
+      - name: Integrity check
+        run: uv run python -m pipeline.catalog --out out --check
+
+      - name: Upload
+        run: aws s3 sync out/ "s3://$BUCKET/" --acl public-read --no-progress --exclude '*.local.duckdb' --exclude '.*' --exclude '*/.*'
+        env: &spaces
+          AWS_ACCESS_KEY_ID: ${{ secrets.DO_SPACES_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.DO_SPACES_SECRET }}
+          AWS_ENDPOINT_URL: https://sfo3.digitaloceanspaces.com
+          AWS_DEFAULT_REGION: us-east-1
+
+      # the catalog build reads the files through the CDN, so it must see
+      # the ones just uploaded
+      - name: Purge the CDN
+        run: &purge |
+          curl -sf -X DELETE \
+            -H "Authorization: Bearer $DO_CDN_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"files": ["nba/*"]}' \
+            "https://api.digitalocean.com/v2/cdn/endpoints/$DO_CDN_ENDPOINT_ID/cache"
+        env: &cdn
+          DO_CDN_API_KEY: ${{ secrets.DO_CDN_API_KEY }}
+          DO_CDN_ENDPOINT_ID: ${{ secrets.DO_CDN_ENDPOINT_ID }}
+
+      - name: Build and upload the catalog
+        run: |
+          uv run python -m pipeline.catalog --out out --bucket "$BUCKET"
+          aws s3 cp out/nba/nba.duckdb "s3://$BUCKET/nba/nba.duckdb" --acl public-read --no-progress
+        env: *spaces
+
+      - name: Purge the CDN again, for the catalog
+        run: *purge
+        env: *cdn
+
+      # one issue per source: comment on its open issue, or file one. Then
+      # fail the run, so it shows red in Actions too
+      - name: Report failed sources
+        if: always()
+        uses: actions/github-script@v9.0.0
+        env:
+          SOURCES: |
+            {"basketball-reference": "${{ steps.bbref.outcome }}"}
+        with:
+          script: |
+            const outcomes = JSON.parse(process.env.SOURCES);
+            const failed = Object.keys(outcomes).filter(s => outcomes[s] === 'failure');
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const open = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              creator: 'github-actions[bot]',
+            });
+            for (const source of failed) {
+              const title = `${source} scraper failed`;
+              const body = `The ${source} step failed in ${runUrl}. Nothing was written for it, ` +
+                `so the bucket still has its last good data. The step's log has the parser's ` +
+                `error; the raw page is kept under \`nba/raw/\` (if it was fetched).`;
+              const existing = open.find(i => i.title === title);
+              if (existing) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner, repo: context.repo.repo,
+                  issue_number: existing.number, body,
+                });
+              } else {
+                await github.rest.issues.create({
+                  owner: context.repo.owner, repo: context.repo.repo, title, body,
+                });
+              }
+            }
+            if (failed.length) core.setFailed(`failed sources: ${failed.join(', ')}`);
+
+      # anything else failing (upload, catalog) is a pipeline problem, not a
+      # source's: the same notifier as update.yml
+      - name: Notify on failure
+        if: failure() && steps.bbref.outcome != 'failure'
+        uses: actions/github-script@v9.0.0
+        with:
+          script: |
+            const issueTitle = 'Data update (v2) workflow failed';
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              creator: 'github-actions[bot]'
+            });
+            const existingIssue = issues.data.find(issue => issue.title === issueTitle);
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            if (existingIssue) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existingIssue.number,
+                body: `Another failure detected in workflow run (sources.yml): ${runUrl}`
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: issueTitle,
+                body: `Workflow run failed (sources.yml): ${runUrl}\n\nPlease check the workflow logs for details.`
+              });
+            }

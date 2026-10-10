@@ -1,3 +1,5 @@
+import gzip
+
 import duckdb
 import pytest
 
@@ -105,4 +107,24 @@ def test_build_team_stats(tmp_path):
 def test_bad_page_writes_nothing(tmp_path):
     with pytest.raises(ValueError):
         bbref.build_team_stats(tmp_path, league_page(drop={"pts"}), SEASON)
+    assert not (tmp_path / bbref.OUT_DIR).exists()
+
+
+def test_games_played():
+    assert bbref.games_played(league_page()) == 30 * 82
+    # before opening night: every team listed with no games
+    preseason = league_page().replace('data-stat="g" >82<', 'data-stat="g" >0<')
+    assert bbref.games_played(preseason) == 0
+    assert bbref.games_played("<html></html>") == 0
+
+
+def test_current_season_before_opening_night_is_skipped(tmp_path, monkeypatch, capsys):
+    preseason = league_page().replace('data-stat="g" >82<', 'data-stat="g" >0<')
+    raw = bbref.season_page_path(tmp_path, SEASON, "league")
+    raw.parent.mkdir(parents=True)
+    with gzip.open(raw, "wt") as f:
+        f.write(preseason)
+    monkeypatch.setattr(bbref, "current_season", lambda today: SEASON)
+    bbref.main(["--out", str(tmp_path), "--no-fetch"])
+    assert "no games in 2026 yet" in capsys.readouterr().out
     assert not (tmp_path / bbref.OUT_DIR).exists()
