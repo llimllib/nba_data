@@ -6,6 +6,7 @@ import pytest
 from nba_api.stats.endpoints import LeagueDashPlayerStats
 
 from pipeline import stats
+from pipeline.output import dataset_path
 
 BOS = 1610612738
 NYK = 1610612752
@@ -182,16 +183,16 @@ def write_raw(outdir, season=2026, empty=False, **overrides):
 
 
 def read(outdir, dataset, season=2026):
-    path = outdir / stats.OUT_DIR / dataset / f"{season}.parquet"
-    rel = duckdb.sql(f"SELECT * FROM '{path}'")
+    path = dataset_path(outdir / stats.OUT_DIR, dataset, season)
+    rel = duckdb.sql(f"SELECT * FROM read_parquet('{path}', hive_partitioning = false)")
     return [dict(zip(rel.columns, row)) for row in rel.fetchall()]
 
 
 def types(outdir, dataset, season=2026):
-    path = outdir / stats.OUT_DIR / dataset / f"{season}.parquet"
+    path = dataset_path(outdir / stats.OUT_DIR, dataset, season)
     return dict(
         duckdb.sql(
-            f"SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM '{path}')"
+            f"SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM read_parquet('{path}', hive_partitioning = false))"
         ).fetchall()
     )
 
@@ -439,8 +440,36 @@ def test_team_seasons(tmp_path):
         "team_id": str(BOS),
         "nba_abbrev": "BOS",
         "full_name": "Boston Celtics",
+        "is_nba": True,
     }
     assert set(rows) == {str(BOS), str(NYK)}
+
+
+def melbourne(game_id):
+    """team logs where Melbourne United plays the Knicks' side of `game_id`"""
+    logs = team_logs()
+    for r in logs:
+        if r[TGL.index("TEAM_ID")] == NYK:
+            r[TGL.index("TEAM_ID")] = 15016
+            r[TGL.index("TEAM_ABBREVIATION")] = "MEL"
+            r[TGL.index("TEAM_NAME")] = "Melbourne United"
+        r[TGL.index("GAME_ID")] = r[TGL.index("GAME_ID")].replace(GAME, game_id)
+    return response(TGL, logs)
+
+
+def test_international_teams_are_not_nba(tmp_path):
+    write_raw(tmp_path, team_game_logs_base=melbourne("0012500001"))
+    stats.build_season(tmp_path, 2026)
+    rows = {r["team_id"]: r for r in read(tmp_path, "team_seasons")}
+    assert rows["15016"]["is_nba"] is False
+    assert rows[str(BOS)]["is_nba"] is True
+
+
+def test_regular_season_team_outside_nba_ids_fails(tmp_path):
+    # a new franchise would get an id outside NBA_TEAM_IDS
+    write_raw(tmp_path, team_game_logs_base=melbourne(GAME))
+    with pytest.raises(ValueError, match="15016"):
+        stats.build_season(tmp_path, 2026)
 
 
 def test_player_seasons(tmp_path):

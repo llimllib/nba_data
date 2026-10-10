@@ -2,6 +2,7 @@ import duckdb
 import pytest
 
 from pipeline import catalog, integrity
+from pipeline.output import dataset_path
 
 BOS = "1610612738"
 NYK = "1610612752"
@@ -10,7 +11,7 @@ CUP_FINAL = "0062500001"
 
 
 def write(outdir, dataset, query, season=2026, source="stats"):
-    path = outdir / "nba" / source / dataset / f"{season}.parquet"
+    path = dataset_path(outdir / "nba" / source, dataset, season)
     path.parent.mkdir(parents=True, exist_ok=True)
     duckdb.sql(f"COPY ({query}) TO '{path}' (FORMAT parquet)")
 
@@ -146,7 +147,7 @@ def test_every_problem_is_reported(out):
 
 
 def test_missing_lookup_fails(out):
-    (out / "nba" / "stats" / "player_seasons" / "2026.parquet").unlink()
+    dataset_path(out / "nba" / "stats", "player_seasons", 2026).unlink()
     with pytest.raises(integrity.IntegrityError, match="no player_seasons"):
         build(out)
 

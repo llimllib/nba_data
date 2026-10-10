@@ -23,6 +23,10 @@ GAME_TYPES = {
     "006": "cup_final",
 }
 
+# The 30 franchises' team ids. team_seasons also has All-Star teams and
+# international preseason opponents, which have other ids
+NBA_TEAM_IDS = range(1610612737, 1610612767)
+
 KEYS = {
     "team_seasons": ["team_id"],
     "player_seasons": ["player_id"],
@@ -38,7 +42,8 @@ def build_team_seasons(con: duckdb.DuckDBPyConnection, season: int) -> None:
         CREATE OR REPLACE TABLE team_seasons AS
         SELECT {season}::INTEGER AS season, team_id::VARCHAR AS team_id,
             arg_max(team_abbreviation, game_date) AS nba_abbrev,
-            arg_max(team_name, game_date) AS full_name
+            arg_max(team_name, game_date) AS full_name,
+            team_id::BIGINT BETWEEN {NBA_TEAM_IDS.start} AND {NBA_TEAM_IDS.stop - 1} AS is_nba
         FROM (
             SELECT team_id, team_abbreviation, team_name, game_date FROM tgl_base
             UNION ALL
@@ -48,6 +53,19 @@ def build_team_seasons(con: duckdb.DuckDBPyConnection, season: int) -> None:
         ORDER BY team_id
         """
     )
+    # only NBA teams play regular-season games, so this catches a new
+    # franchise id
+    outside = con.execute(
+        """
+        SELECT DISTINCT team_id::VARCHAR FROM tgl_base
+        WHERE game_id LIKE '002%'
+            AND team_id::VARCHAR IN (SELECT team_id FROM team_seasons WHERE NOT is_nba)
+        """
+    ).fetchall()
+    if outside:
+        raise ValueError(
+            f"teams in regular-season games but not in NBA_TEAM_IDS: {sorted(outside)}"
+        )
 
 
 def build_player_seasons(con: duckdb.DuckDBPyConnection, season: int) -> None:

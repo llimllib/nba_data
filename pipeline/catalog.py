@@ -1,16 +1,23 @@
 """
-Build nba/nba.duckdb, a catalog of views over the per-season parquet files.
+Build nba/nba.duckdb, a catalog over the per-season parquet files.
 ATTACH it to query every dataset by name:
 
     ATTACH 'https://basketball-data.billmill.org/nba/nba.duckdb' AS nba;
     SELECT * FROM nba.games LIMIT 5;
 
-It holds no data, only:
+It holds:
 
     <dataset>                   one view per dataset, over every season's file
-    players                     each player's latest name
-    player_season_stats_per_*   per game, per 36 and per 100 possessions
+    player_season_stats_per_*   views: per game, per 36 and per 100 possessions
+    players                     a table: each player's latest name
     metadata                    a table: seasons and update time per dataset
+
+The views read the files with hive partitioning, so a query filtered on
+season only opens that season's files (#55). No view reads another view:
+DuckDB 1.1.1 can't resolve those in an attached database (#57). players is
+a table because it covers every season, so as a view every query that joins
+it would open every file (#56). The file is written with storage version
+v1.0.0, so DuckDB 1.1.1 can open it (#58).
 
 A view lists its files explicitly, since globs don't work over HTTPS, so the
 catalog is rebuilt every run to pick up new seasons. DuckDB reads a view's
@@ -44,8 +51,13 @@ URL = "https://basketball-data.billmill.org"
 CATALOG = Path("nba/nba.duckdb")
 LOCAL_CATALOG = Path("nba.local.duckdb")
 
-# nba/<source>/<dataset>/<season>.parquet; raw files don't match
-KEY = re.compile(r"nba/(?P<source>\w+)/(?P<dataset>\w+)/(?P<season>\d{4})\.parquet")
+# nba/<source>/<dataset>/season=<season>/data.parquet; raw files don't match
+KEY = re.compile(
+    r"nba/(?P<source>\w+)/(?P<dataset>\w+)/season=(?P<season>\d{4})/data\.parquet"
+)
+
+# DuckDB 1.1.1, in Observable Framework's DuckDB-wasm, reads up to v1.0.0
+STORAGE_VERSION = "v1.0.0"
 
 # Season totals that the per-mode views scale. Rates, ratings and gp, w, l,
 # dd2 and td3 stay as they are, as in the NBA's per-mode stats. Verified
@@ -86,7 +98,7 @@ def parse(key: str, modified: datetime) -> File | None:
 
 def list_dir(outdir: Path) -> list[File]:
     files = []
-    for path in sorted((outdir / "nba").glob("*/*/*.parquet")):
+    for path in sorted((outdir / "nba").glob("*/*/season=*/data.parquet")):
         modified = datetime.fromtimestamp(path.stat().st_mtime, UTC)
         if f := parse(path.relative_to(outdir).as_posix(), modified):
             files.append(f)
@@ -142,7 +154,10 @@ def build(path: Path, files: list[File], location: str) -> None:
     def write(tmp: Path) -> None:
         tmp.unlink(missing_ok=True)
         with duckdb.connect() as con:
-            con.execute(f"ATTACH {quote(str(tmp))} AS catalog (BLOCK_SIZE 16384)")
+            con.execute(
+                f"ATTACH {quote(str(tmp))} AS catalog "
+                f"(BLOCK_SIZE 16384, STORAGE_VERSION '{STORAGE_VERSION}')"
+            )
             con.execute("USE catalog")
             create(con, datasets, location.rstrip("/"))
             integrity.check(con, list(datasets))
@@ -167,25 +182,56 @@ def check(files: list[File], location: str) -> None:
     print(f"catalog: integrity check passed ({len(datasets)} datasets)")
 
 
+def same_columns(con: duckdb.DuckDBPyConnection, urls: list[str]) -> bool:
+    """whether every file in `urls` has the same column names and types"""
+    row = con.execute(
+        f"""
+        SELECT count(DISTINCT columns) FROM (
+            SELECT list(name || ' ' || coalesce(type, '') || ' '
+                        || coalesce(logical_type::VARCHAR, '') ORDER BY name) AS columns
+            FROM parquet_schema([{", ".join(quote(u) for u in urls)}])
+            GROUP BY file_name
+        )
+        """
+    ).fetchone()
+    return row is not None and row[0] == 1
+
+
+def reader(con: duckdb.DuckDBPyConnection, dataset: str, urls: list[str]) -> str:
+    """
+    The read_parquet() call for a dataset. union_by_name makes DuckDB open
+    every file to merge their columns, which defeats the season pruning, so
+    it's only used if the seasons' columns differ
+    """
+    options = "hive_partitioning = true, hive_types = {'season': INTEGER}"
+    if not same_columns(con, urls):
+        print(
+            f"catalog: {dataset}'s seasons have different columns; using union_by_name"
+        )
+        options += ", union_by_name = true"
+    return f"read_parquet([{', '.join(quote(u) for u in urls)}], {options})"
+
+
 def create(
     con: duckdb.DuckDBPyConnection, datasets: dict[str, list[File]], location: str
 ) -> None:
-    for dataset, group in datasets.items():
-        urls = ", ".join(quote(f"{location}/{f.key}") for f in group)
-        con.execute(
-            f"CREATE VIEW {dataset} AS "
-            f"SELECT * FROM read_parquet([{urls}], union_by_name = true)"
-        )
+    readers = {
+        dataset: reader(con, dataset, [f"{location}/{f.key}" for f in group])
+        for dataset, group in datasets.items()
+    }
+    for dataset, read in readers.items():
+        con.execute(f"CREATE VIEW {dataset} AS SELECT * FROM {read}")
 
     if "player_seasons" in datasets:
         # arg_max skips NULL names, so a player's name is the latest one known
         con.execute(
-            """
-            CREATE VIEW players AS
+            f"""
+            CREATE TABLE players AS
             SELECT player_id, arg_max(name, season) AS name,
                 min(season) AS first_season, max(season) AS last_season
-            FROM player_seasons
+            FROM {readers["player_seasons"]}
             GROUP BY player_id
+            ORDER BY player_id
             """
         )
 
@@ -202,7 +248,8 @@ def create(
             )
             con.execute(
                 f"CREATE VIEW player_season_stats_{mode} AS "
-                f"SELECT * REPLACE ({', '.join(scaled)}) FROM player_season_stats"
+                f"SELECT * REPLACE ({', '.join(scaled)}) "
+                f"FROM {readers['player_season_stats']}"
             )
 
     con.execute(

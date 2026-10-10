@@ -9,10 +9,10 @@ file) in a public S3 bucket. We keep each day's response, gzipped, at
 
 and build these from them, one file per season:
 
-    nba/espn/four_factors/<season>.parquet
-    nba/espn/player_box/<season>.parquet
-    nba/espn/team_box/<season>.parquet
-    nba/espn/player_details/<season>.parquet
+    nba/espn/four_factors/season=<season>/data.parquet
+    nba/espn/player_box/season=<season>/data.parquet
+    nba/espn/team_box/season=<season>/data.parquet
+    nba/espn/player_details/season=<season>/data.parquet
 
 Everything is relative to an output directory laid out like the
 basketball-data bucket; see docs/v2.md.
@@ -29,7 +29,7 @@ from pathlib import Path
 
 import duckdb
 
-from .output import check_keys, write_atomic, write_parquet
+from .output import check_keys, dataset_path, write_atomic, write_parquet
 from .seasons import current_season, season_days, season_window, today_eastern
 from .teams import TEAM_ABBREVS_FILE, UnknownTeamAbbrev, load_team_abbrevs
 
@@ -299,7 +299,7 @@ def build_season(
         con.execute(f"CREATE OR REPLACE TABLE out AS {query}")
         check_keys(con, "out", KEYS[dataset], f"espn {dataset}")
 
-        path = outdir / OUT_DIR / dataset / f"{season}.parquet"
+        path = dataset_path(outdir / OUT_DIR, dataset, season)
         write_parquet(con, "out", path)
         print(f"espn: wrote {path}")
     return True
