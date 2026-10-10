@@ -50,7 +50,7 @@ A `team_id` is a franchise as the NBA defines it, not a name. For example,
 the current Charlotte Hornets, while `1610612740` covers the New Orleans
 Hornets and the Pelicans.
 
-- **Joining:** a team's city, nickname and abbreviation for a given row come
+- **Joining:** a team's name and abbreviation for a given row come
   from joining `team_seasons` on `(team_id, season)`. A 2013 Charlotte game
   shows "Bobcats" and a 2016 one shows "Hornets" with no special cases.
   `team_seasons` is generated from the NBA game logs, so renames, All-Star
@@ -105,7 +105,9 @@ nba/nba.duckdb                          catalog of views
 ```
 
 Finished seasons are never rewritten; each run rewrites only the current
-season. Lookup tables (`team_seasons`, `players`, `games`) are single files.
+season. That includes the lookup tables (`team_seasons`, `player_seasons`,
+`games`), which are per season like everything else; the catalog combines
+them.
 
 ---
 
@@ -175,6 +177,37 @@ decimals, which distorts per-mode values for low-minute players.
 | player_height, player_height_inches, player_weight | VARCHAR, INTEGER, INTEGER | Bio |
 | college, country | VARCHAR | Bio |
 | draft_year, draft_round, draft_number | INTEGER | Bio; NULL if undrafted |
+
+---
+
+### Lookup tables
+
+Built from the same responses, one file per season under `nba/stats/`.
+
+**`team_seasons/<season>.parquet`**: one row per team that played that
+season, including All-Star teams and international preseason opponents.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| season, team_id | | Key |
+| nba_abbrev | VARCHAR | The NBA's abbreviation that season (NJN, BKN, ...). Not unique within a season |
+| full_name | VARCHAR | e.g. "Charlotte Bobcats", "LA Clippers" |
+
+**`player_seasons/<season>.parquet`**: one row per player who played or has
+season stats, with `name` as of their latest game that season. Players on
+international preseason opponents have a NULL `name`; the NBA doesn't send
+one.
+
+**`games/<season>.parquet`**: one row per game in `team_game_logs`.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| season, game_id | | Key |
+| game_date | DATE | |
+| game_type | VARCHAR | `preseason`, `regular_season`, `all_star`, `playoffs`, `play_in`, `cup_final` |
+| playoff_round, series_number, series_game | INTEGER | Decoded from the game id for playoffs and play-in; NULL otherwise. `series_number` starts at 0 |
+| home_team_id, away_team_id | VARCHAR | NULL for neutral-site games |
+| neutral_site | BOOLEAN | The NBA lists neither team as home: the Cup final and some games played abroad |
 
 ---
 
@@ -607,14 +640,15 @@ For playoff and play-in games, the last three digits encode the bracket:
 
 ```
 004 YY 00 R S G    playoffs:  R = round (1-4), S = series within the round,
-                              G = game within the series (1-7)
-005 YY 00 R S 1    play-in:   R = round (1-2), S = game within the round
+                              numbered from 0, G = game within the series (1-7)
+005 YY 00 R S 1    play-in:   R = round (1-2), S = game within the round,
+                              numbered from 0
 ```
 
 So `0042500407` is game 7 of the 2025-26 Finals, and `0052500211` is the
 second game of the 2025-26 play-in's second round. Verified against the
-2025-26 postseason: round 1 has 8 series, round 2 has 4, round 3 has 2, the
-Finals 1.
+2025-26 postseason: round 1 has series 0-7, round 2 has 0-3, round 3 has
+0-1, and the Finals 0.
 
 In v2, these fields are decoded once into the `games` table (`game_type`,
 `playoff_round`, `series_number`, `series_game`); other tables join `games` on
