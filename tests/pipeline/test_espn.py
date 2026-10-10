@@ -8,6 +8,7 @@ import pytest
 from botocore.exceptions import ClientError
 
 from pipeline import espn
+from pipeline.output import dataset_path
 from pipeline.teams import UnknownTeamAbbrev
 
 BKN = "1610612751"
@@ -76,7 +77,7 @@ def write_raw(outdir, season, day_str, data):
 
 def read(outdir, dataset, season):
     return duckdb.sql(
-        f"SELECT * FROM '{outdir / espn.OUT_DIR / dataset / f'{season}.parquet'}'"
+        f"SELECT * FROM read_parquet('{dataset_path(outdir / espn.OUT_DIR, dataset, season)}', hive_partitioning = false)"
     )
 
 
@@ -109,7 +110,7 @@ def test_output_types(tmp_path):
         types = dict(
             duckdb.sql(
                 f"SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM "
-                f"'{tmp_path / espn.OUT_DIR / dataset / '2026.parquet'}')"
+                f"read_parquet('{dataset_path(tmp_path / espn.OUT_DIR, dataset, 2026)}', hive_partitioning = false))"
             ).fetchall()
         )
         assert types["season"] == "INTEGER"
@@ -120,7 +121,7 @@ def test_output_types(tmp_path):
     pb = dict(
         duckdb.sql(
             f"SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM "
-            f"'{tmp_path / espn.OUT_DIR / 'player_box' / '2026.parquet'}')"
+            f"read_parquet('{dataset_path(tmp_path / espn.OUT_DIR, 'player_box', 2026)}', hive_partitioning = false))"
         ).fetchall()
     )
     assert pb["player_id"] == "VARCHAR"

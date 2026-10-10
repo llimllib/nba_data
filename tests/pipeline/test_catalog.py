@@ -1,15 +1,17 @@
+import re
 from datetime import UTC, datetime
 
 import duckdb
 import pytest
 
 from pipeline import catalog
+from pipeline.output import dataset_path
 
 T0 = datetime(2026, 1, 1, tzinfo=UTC)
 
 
 def write(outdir, dataset, season, query, source="stats"):
-    path = outdir / "nba" / source / dataset / f"{season}.parquet"
+    path = dataset_path(outdir / "nba" / source, dataset, season)
     path.parent.mkdir(parents=True, exist_ok=True)
     duckdb.sql(f"COPY ({query}) TO '{path}' (FORMAT parquet)")
 
@@ -43,13 +45,13 @@ def build(outdir):
 
 
 def test_parse():
-    f = catalog.parse("nba/espn/team_box/2026.parquet", T0)
+    f = catalog.parse("nba/espn/team_box/season=2026/data.parquet", T0)
     assert f == catalog.File(
-        "nba/espn/team_box/2026.parquet", "espn", "team_box", 2026, T0
+        "nba/espn/team_box/season=2026/data.parquet", "espn", "team_box", 2026, T0
     )
     assert catalog.parse("nba/raw/stats/2026/team_game_logs_base.json.gz", T0) is None
     assert catalog.parse("nba/nba.duckdb", T0) is None
-    assert catalog.parse("nba/stats/games/.2026.parquet.tmp", T0) is None
+    assert catalog.parse("nba/stats/games/season=2026/.data.parquet.tmp", T0) is None
 
 
 def test_dataset_views_union_seasons(tmp_path):
@@ -165,8 +167,12 @@ def test_raw_files_are_ignored(tmp_path):
 
 def test_dataset_in_two_sources_fails():
     files = [
-        catalog.File("nba/stats/games/2026.parquet", "stats", "games", 2026, T0),
-        catalog.File("nba/espn/games/2026.parquet", "espn", "games", 2026, T0),
+        catalog.File(
+            "nba/stats/games/season=2026/data.parquet", "stats", "games", 2026, T0
+        ),
+        catalog.File(
+            "nba/espn/games/season=2026/data.parquet", "espn", "games", 2026, T0
+        ),
     ]
     with pytest.raises(ValueError, match="games is in both"):
         catalog.by_dataset(files)
@@ -197,16 +203,95 @@ def test_list_bucket():
             {
                 "Contents": [
                     {"Key": "nba/raw/espn/2026/2025-10-21.json.gz", "LastModified": T0},
-                    {"Key": "nba/espn/team_box/2026.parquet", "LastModified": T0},
+                    {
+                        "Key": "nba/espn/team_box/season=2026/data.parquet",
+                        "LastModified": T0,
+                    },
                 ]
             },
-            {"Contents": [{"Key": "nba/stats/games/2011.parquet", "LastModified": T0}]},
+            {
+                "Contents": [
+                    {
+                        "Key": "nba/stats/games/season=2011/data.parquet",
+                        "LastModified": T0,
+                    }
+                ]
+            },
             {},
         ]
     )
     files = catalog.list_bucket("basketball-data", s3)
     assert [f.key for f in files] == [
-        "nba/espn/team_box/2026.parquet",
-        "nba/stats/games/2011.parquet",
+        "nba/espn/team_box/season=2026/data.parquet",
+        "nba/stats/games/season=2011/data.parquet",
     ]
     assert s3.calls == [{"Bucket": "basketball-data", "Prefix": "nba/"}]
+
+
+def test_season_filters_skip_other_seasons_files(tmp_path):
+    for season in (2024, 2025, 2026):
+        write(
+            tmp_path,
+            "games",
+            season,
+            f"SELECT {season} AS season, '002{season - 2001}00001' AS game_id",
+        )
+    con = build(tmp_path)
+    # the first file is opened for the schema; with 2025's file broken, a 2026
+    # query only works if 2025's is never opened
+    dataset_path(tmp_path / "nba" / "stats", "games", 2025).write_bytes(b"junk")
+    assert con.sql("SELECT game_id FROM nba.games WHERE season = 2026").fetchall() == [
+        ("0022500001",)
+    ]
+    with pytest.raises(duckdb.Error):
+        con.sql("SELECT count(*) FROM nba.games").fetchall()
+
+
+def test_season_is_integer(tmp_path):
+    write(tmp_path, "games", 2026, "SELECT 2026::INTEGER AS season")
+    con = build(tmp_path)
+    assert con.sql("SELECT typeof(season) FROM nba.games").fetchone() == ("INTEGER",)
+
+
+def test_players_is_a_table(tmp_path):
+    write(
+        tmp_path,
+        "player_seasons",
+        2026,
+        "SELECT 2026 AS season, '1' AS player_id, 'A' AS name",
+    )
+    con = build(tmp_path)
+    # it's stored in the catalog, so it reads no files
+    dataset_path(tmp_path / "nba" / "stats", "player_seasons", 2026).unlink()
+    assert con.sql("FROM nba.players").fetchall() == [("1", "A", 2026, 2026)]
+
+
+def test_views_dont_reference_other_views(tmp_path):
+    write_season_stats(tmp_path, 10, 720, 1000, 200)
+    con = build(tmp_path)
+    names = [
+        r[0]
+        for r in con.sql(
+            "SELECT table_name FROM information_schema.tables WHERE table_catalog = 'nba'"
+        ).fetchall()
+    ]
+    for view, sql in con.sql(
+        "SELECT view_name, sql FROM duckdb_views() WHERE database_name = 'nba'"
+    ).fetchall():
+        for name in names:
+            assert not re.search(rf"\b(FROM|JOIN)\s+\"?{name}\b", sql, re.IGNORECASE), (
+                view,
+                name,
+            )
+    # so a client that doesn't USE the catalog can read every view
+    for view in names:
+        con.sql(f"SELECT count(*) FROM nba.{view}").fetchall()
+
+
+def test_storage_version_is_pinned(tmp_path):
+    write(tmp_path, "games", 2026, "SELECT 2026 AS season")
+    con = build(tmp_path)
+    tags = con.sql(
+        "SELECT tags FROM duckdb_databases() WHERE database_name = 'nba'"
+    ).fetchone()
+    assert tags and tags[0]["storage_version"].startswith(catalog.STORAGE_VERSION)

@@ -11,6 +11,15 @@ from pathlib import Path
 import duckdb
 
 
+def dataset_path(source_dir: Path, dataset: str, season: int) -> Path:
+    """
+    Where a season of a dataset goes: <source_dir>/<dataset>/season=<season>/data.parquet.
+    The season is in the path so that readers using hive partitioning only
+    open the files a season filter needs
+    """
+    return source_dir / dataset / f"season={season}" / "data.parquet"
+
+
 def write_atomic(path: Path, write: Callable[[Path], object]) -> None:
     """
     call write(tmp_path), then move the result into place. If write fails,

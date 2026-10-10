@@ -47,7 +47,8 @@ needs are downloaded.
   `players` and `team_seasons`
 - **Files:** each dataset is one parquet file per season, readable without
   the catalog, e.g.
-  `https://basketball-data.billmill.org/nba/stats/games/2026.parquet`
+  `https://basketball-data.billmill.org/nba/stats/games/season=2026/data.parquet`
+  (DuckDB reads `season` from the path as a BIGINT; see the data dictionary)
 - **Docs:** every table and column is in
   [docs/DATA_DICTIONARY.md](docs/DATA_DICTIONARY.md) (the "v2" sections);
   the plan is in [docs/v2.md](docs/v2.md)

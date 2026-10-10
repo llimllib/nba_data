@@ -109,10 +109,18 @@ through `nba.duckdb`.
 ### Layout
 
 ```
-nba/raw/<source>/<season>/...           raw source responses, gzipped
-nba/<source>/<dataset>/<season>.parquet one file per season
-nba/nba.duckdb                          catalog of views
+nba/raw/<source>/<season>/...                        raw responses, gzipped
+nba/<source>/<dataset>/season=<season>/data.parquet  one file per season
+nba/nba.duckdb                                       the catalog
 ```
+
+The season is in the path (Hive partitioning) so that a query filtered on
+`season` only opens that season's files. One side effect: DuckDB reads
+`season=2026` from the path even for a single file, and types it BIGINT,
+replacing the file's own INTEGER `season`. To keep it an INTEGER when
+reading files directly, pass `hive_types = {'season': INTEGER}` (or
+`hive_partitioning = false`) to `read_parquet`. The catalog's views do this
+already.
 
 Finished seasons are never rewritten; each run rewrites only the current
 season. That includes the lookup tables (`team_seasons`, `player_seasons`,
@@ -138,12 +146,23 @@ ORDER BY ppg DESC LIMIT 10;
 |------|------|-------------|
 | `team_game_logs`, `player_game_logs`, `player_season_stats`, `team_seasons`, `player_seasons`, `games` | view | Every season of each `nba/stats/` dataset |
 | `four_factors`, `player_box`, `team_box`, `player_details` | view | Every season of each `nba/espn/` dataset |
-| `players` | view | One row per `player_id`: `name` (the latest one known), `first_season`, `last_season` |
+| `players` | table | One row per `player_id`: `name` (the latest one known), `first_season`, `last_season`. A table, so joining it reads no parquet files |
 | `player_season_stats_per_game`, `player_season_stats_per_36`, `player_season_stats_per_100` | view | `player_season_stats` with counting stats scaled; see below |
 | `metadata` | table | Per dataset: `source`, `first_season`, `last_season`, `seasons`, and `updated`, when its newest file was uploaded |
 
-The views read files with `union_by_name`, so a column added in a later
-season is NULL in earlier ones.
+Views read their files with hive partitioning, so filtering on `season`
+only downloads the files for those seasons; other filters (`player_id`,
+`game_id`) still read every season's file. Filter on `season` whenever you
+can. If a column is ever added in a later season, that dataset's view reads
+with `union_by_name` instead, which makes the column NULL in earlier seasons
+but opens every file.
+
+**Precision:** the per-mode views return full-precision values
+(`13.20481004041412`). Round when displaying, and when writing results to a
+file (e.g. a data loader), round to the precision you need and keep only the
+columns you use: full-precision doubles compress badly. nba0bservable's
+player stats loader went from 5.8MB to 1.85MB by rounding to one decimal and
+writing zstd.
 
 **Integrity:** the catalog is only published if every key matches the lookup
 tables. Every non-NULL `team_id`/`*_team_id` is in `team_seasons`, every
@@ -171,7 +190,7 @@ name: the NBA sometimes sends counts as floats.
 only include players who played; DNPs aren't listed. Players with no NBA id
 (seen on international teams in preseason exhibitions) are skipped.
 
-### `team_game_logs/<season>.parquet`
+### `team_game_logs/season=<season>/data.parquet`
 
 One row per team per game, for every game type (preseason through the
 finals). The NBA's traditional and advanced team box scores, joined.
@@ -186,13 +205,13 @@ finals). The NBA's traditional and advanced team box scores, joined.
 | plus_minus | INTEGER | Points minus the opponent's points. Computed, not the NBA's value, which is wrong in 9 preseason games (once 4.4) |
 | off_rating, def_rating, net_rating, pace, poss, pie, ... | | Advanced box score; `e_` columns are the NBA's estimates |
 
-### `player_game_logs/<season>.parquet`
+### `player_game_logs/season=<season>/data.parquet`
 
 One row per player per game they played in, with the same traditional and
 advanced columns as the team logs plus usage (`usg_pct`), fantasy points and
 `dd2`/`td3`. `opp_team_id` and `home` come from the team's game log.
 
-### `player_season_stats/<season>.parquet`
+### `player_season_stats/season=<season>/data.parquet`
 
 One row per player per `season_type` (`regular_season` or `playoffs`):
 season **totals** from the NBA's Base, Defense and Advanced player stats,
@@ -235,7 +254,7 @@ views compute `def_ws` from `def_ws_raw` when it's present.
 
 Built from the same responses, one file per season under `nba/stats/`.
 
-**`team_seasons/<season>.parquet`**: one row per team that played that
+**`team_seasons/season=<season>/data.parquet`**: one row per team that played that
 season, including All-Star teams and international preseason opponents.
 
 | Column | Type | Description |
@@ -243,13 +262,14 @@ season, including All-Star teams and international preseason opponents.
 | season, team_id | | Key |
 | nba_abbrev | VARCHAR | The NBA's abbreviation that season (NJN, BKN, ...). Not unique within a season |
 | full_name | VARCHAR | e.g. "Charlotte Bobcats", "LA Clippers" |
+| is_nba | BOOLEAN | One of the 30 franchises. False for All-Star teams (Team LeBron, Rising Stars) and international preseason opponents (Melbourne United, Real Madrid) |
 
-**`player_seasons/<season>.parquet`**: one row per player who played or has
+**`player_seasons/season=<season>/data.parquet`**: one row per player who played or has
 season stats, with `name` as of their latest game that season. Players on
 international preseason opponents have a NULL `name`; the NBA doesn't send
 one.
 
-**`games/<season>.parquet`**: one row per game in `team_game_logs`.
+**`games/season=<season>/data.parquet`**: one row per game in `team_game_logs`.
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -279,7 +299,7 @@ ESPN's file for each game day, with its separate player details file added
 under `player_details`. A saved day is never refetched except for today and
 yesterday, because ESPN's copies of past days can change and lose data.
 
-### `four_factors/<season>.parquet`
+### `four_factors/season=<season>/data.parquet`
 
 One row per team, game and action type. Action types: `2pt`, `3pt`,
 `freethrow`, `rebound`, `turnover`, `period`, `stoppage`, `timeout`,
@@ -296,7 +316,7 @@ One row per team, game and action type. Action types: `2pt`, `3pt`,
 To get one column per action type, as in v1:
 `PIVOT four_factors ON action_type USING first(o_net_pts) GROUP BY game_id, team_id`
 
-### `player_details/<season>.parquet`
+### `player_details/season=<season>/data.parquet`
 
 Net points per player, game and action type (`2pt`, `3ptShooting`, `assist`,
 `layup`, `rim`, `total`, ... 31 in all).
@@ -306,7 +326,7 @@ Net points per player, game and action type (`2pt`, `3ptShooting`, `assist`,
 | action_type | VARCHAR | actionType |
 | o_net_pts / d_net_pts / t_net_pts | DOUBLE | oNetPts / dNetPts / tNetPts |
 
-### `player_box/<season>.parquet` and `team_box/<season>.parquet`
+### `player_box/season=<season>/data.parquet` and `team_box/season=<season>/data.parquet`
 
 One row per player per game, and one per team per game.
 

@@ -10,10 +10,10 @@ response is kept, gzipped, at
 
 and these are built from them, one file per season:
 
-    nba/stats/team_game_logs/<season>.parquet
-    nba/stats/player_game_logs/<season>.parquet
-    nba/stats/player_season_stats/<season>.parquet
-    nba/stats/{team_seasons,player_seasons,games}/<season>.parquet  (lookups)
+    nba/stats/team_game_logs/season=<season>/data.parquet
+    nba/stats/player_game_logs/season=<season>/data.parquet
+    nba/stats/player_season_stats/season=<season>/data.parquet
+    nba/stats/{team_seasons,player_seasons,games}/season=<season>/data.parquet  (lookups)
 
 Season stats are totals only; per-game, per-36 and per-100 values are
 computed from them in the catalog. Everything is relative to an output
@@ -41,7 +41,7 @@ from nba_api.stats.endpoints import (
 )
 
 from . import lookups
-from .output import check_keys, write_atomic, write_parquet
+from .output import check_keys, dataset_path, write_atomic, write_parquet
 from .seasons import current_season, today_eastern
 
 RAW_DIR = Path("nba/raw/stats")
@@ -410,7 +410,7 @@ def build_season(outdir: Path, season: int) -> bool:
         if not count(con, dataset):
             print(f"stats: no {dataset} for {season} yet")
             continue
-        path = outdir / OUT_DIR / dataset / f"{season}.parquet"
+        path = dataset_path(outdir / OUT_DIR, dataset, season)
         write_parquet(con, dataset, path)
         print(f"stats: wrote {path}")
     return True
