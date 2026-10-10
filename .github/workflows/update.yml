@@ -7,7 +7,7 @@ name: Update data (v2)
 on:
   workflow_dispatch:
   schedule:
-    - cron: "30 */4 * * *"
+    - cron: "43 */4 * * *"
 
 concurrency:
   group: update-v2
