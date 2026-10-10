@@ -13,6 +13,7 @@ and these are built from them, one file per season:
     nba/stats/team_game_logs/<season>.parquet
     nba/stats/player_game_logs/<season>.parquet
     nba/stats/player_season_stats/<season>.parquet
+    nba/stats/{team_seasons,player_seasons,games}/<season>.parquet  (lookups)
 
 Season stats are totals only; per-game, per-36 and per-100 values are
 computed from them in the catalog. Everything is relative to an output
@@ -39,6 +40,7 @@ from nba_api.stats.endpoints import (
     TeamGameLogs,
 )
 
+from . import lookups
 from .output import check_keys, write_atomic, write_parquet
 from .seasons import current_season, today_eastern
 
@@ -385,14 +387,17 @@ def build_season(outdir: Path, season: int) -> bool:
         )
         load_raw(con, raw_path(outdir, season, name), table)
 
+    # the lookups read team_game_logs, so they're built after it
     builders = {
         "team_game_logs": build_team_game_logs,
         "player_game_logs": build_player_game_logs,
         "player_season_stats": build_player_season_stats,
+        **lookups.BUILDERS,
     }
     for dataset, build in builders.items():
         build(con, season)
-        check_keys(con, dataset, KEYS[dataset], f"stats {dataset}")
+        keys = KEYS.get(dataset) or lookups.KEYS[dataset]
+        check_keys(con, dataset, keys, f"stats {dataset}")
         if not count(con, dataset):
             print(f"stats: no {dataset} for {season} yet")
             continue

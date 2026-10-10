@@ -85,16 +85,31 @@ def team_logs():
     ]
 
 
-PGL = ["SEASON_YEAR", "PLAYER_ID", "PLAYER_NAME", "TEAM_ID", "GAME_ID"]
-PGL += ["GAME_DATE", "MATCHUP", "WL", "MIN", "PTS", "MIN_SEC"]
+PGL = ["SEASON_YEAR", "PLAYER_ID", "PLAYER_NAME", "TEAM_ID", "TEAM_ABBREVIATION"]
+PGL += ["TEAM_NAME", "GAME_ID", "GAME_DATE", "MATCHUP", "WL", "MIN", "PTS", "MIN_SEC"]
+
+
+def player_log(player_id, name, team_id, game_id, date, matchup, wl, pts):
+    team = {BOS: ("BOS", "Boston Celtics"), NYK: ("NYK", "New York Knicks")}
+    abbrev, team_name = team.get(team_id, ("MLN", "Milano"))
+    return ["2025-26", player_id, name, team_id, abbrev, team_name, game_id] + [
+        date,
+        matchup,
+        wl,
+        30.0,
+        pts,
+        "30:00",
+    ]
 
 
 def player_logs():
     date = "2025-10-21T00:00:00"
+    later = "2025-12-16T00:00:00"
     return [
-        ["2025-26", 1, "A", BOS, GAME, date, "BOS vs. NYK", "W", 30.5, 20, "30:30"],
-        ["2025-26", 2, "B", NYK, GAME, date, "NYK @ BOS", "L", 20.0, 8, "20:00"],
-        ["2025-26", 2, "B", NYK, CUP_FINAL, date, "NYK @ BOS", "W", 25.0, 12, "25:00"],
+        player_log(1, "A", BOS, GAME, date, "BOS vs. NYK", "W", 20),
+        player_log(2, "B", NYK, GAME, date, "NYK @ BOS", "L", 8),
+        # player 2 changed their name
+        player_log(2, "B2", NYK, CUP_FINAL, later, "NYK @ BOS", "W", 12),
     ]
 
 
@@ -148,7 +163,7 @@ def write_raw(outdir, season=2026, empty=False, **overrides):
         "player_game_logs_base": response(PGL, player_logs()),
         "player_game_logs_advanced": response(
             ["PLAYER_ID", "GAME_ID", "USG_PCT"],
-            [[r[1], r[4], 0.25] for r in player_logs()],
+            [[r[1], r[PGL.index("GAME_ID")], 0.25] for r in player_logs()],
         ),
     }
     for name, players in (("regular_season", (1, 2)), ("playoffs", (1,))):
@@ -390,26 +405,89 @@ def test_fetch_season(tmp_path):
 
 def test_unidentified_players(tmp_path):
     date = "2025-10-03T00:00:00"
-    preseason = [
-        "2025-26",
-        None,
-        None,
-        94,
-        "0012500001",
-        date,
-        "MLN vs. NYK",
-        "L",
-        30.0,
-        5,
-        "30:00",
-    ]
+    preseason = player_log(None, None, 94, "0012500001", date, "MLN vs. NYK", "L", 5)
     write_raw(
         tmp_path, player_game_logs_base=response(PGL, player_logs() + [preseason])
     )
     stats.build_season(tmp_path, 2026)
     assert len(read(tmp_path, "player_game_logs")) == 3
 
-    regular = [*preseason[:4], "0022500099", *preseason[5:]]
+    regular = player_log(None, None, 94, "0022500099", date, "MLN vs. NYK", "L", 5)
     write_raw(tmp_path, player_game_logs_base=response(PGL, player_logs() + [regular]))
     with pytest.raises(ValueError, match="NULL"):
+        stats.build_season(tmp_path, 2026)
+
+
+def test_team_seasons(tmp_path):
+    write_raw(tmp_path)
+    stats.build_season(tmp_path, 2026)
+    rows = {r["team_id"]: r for r in read(tmp_path, "team_seasons")}
+    assert rows[str(BOS)] == {
+        "season": 2026,
+        "team_id": str(BOS),
+        "nba_abbrev": "BOS",
+        "full_name": "Boston Celtics",
+    }
+    assert set(rows) == {str(BOS), str(NYK)}
+
+
+def test_player_seasons(tmp_path):
+    write_raw(tmp_path)
+    stats.build_season(tmp_path, 2026)
+    names = {r["player_id"]: r["name"] for r in read(tmp_path, "player_seasons")}
+    # the name from their latest game
+    assert names == {"1": "A", "2": "B2"}
+
+
+def test_player_seasons_includes_players_without_games(tmp_path):
+    base = season_stats((1, 2, 3))["base"]
+    write_raw(tmp_path, player_stats_regular_season_base=base)
+    stats.build_season(tmp_path, 2026)
+    names = {r["player_id"]: r["name"] for r in read(tmp_path, "player_seasons")}
+    assert names["3"] == "A"
+
+
+def test_games(tmp_path):
+    write_raw(tmp_path)
+    stats.build_season(tmp_path, 2026)
+    games = {r["game_id"]: r for r in read(tmp_path, "games")}
+    g = games[GAME]
+    assert g["game_type"] == "regular_season"
+    assert g["home_team_id"] == str(BOS)
+    assert g["away_team_id"] == str(NYK)
+    assert g["neutral_site"] is False
+    assert g["playoff_round"] is None
+    cup = games[CUP_FINAL]
+    assert cup["game_type"] == "cup_final"
+    assert cup["neutral_site"] is True
+    assert cup["home_team_id"] is None
+    assert cup["away_team_id"] is None
+
+
+def with_game_id(game_id):
+    """the first game's team logs, under another game id"""
+    return response(TGL, [[*r[:4], game_id, *r[5:]] for r in team_logs()[:2]])
+
+
+@pytest.mark.parametrize(
+    ("game_id", "game_type", "bracket"),
+    [
+        ("0042500407", "playoffs", (4, 0, 7)),
+        ("0042500153", "playoffs", (1, 5, 3)),
+        ("0052500211", "play_in", (2, 1, 1)),
+        ("0012500010", "preseason", (None, None, None)),
+        ("0032500003", "all_star", (None, None, None)),
+    ],
+)
+def test_game_id_decoding(tmp_path, game_id, game_type, bracket):
+    write_raw(tmp_path, team_game_logs_base=with_game_id(game_id))
+    stats.build_season(tmp_path, 2026)
+    (g,) = read(tmp_path, "games")
+    assert g["game_type"] == game_type
+    assert (g["playoff_round"], g["series_number"], g["series_game"]) == bracket
+
+
+def test_unknown_game_type_fails(tmp_path):
+    write_raw(tmp_path, team_game_logs_base=with_game_id("0092500001"))
+    with pytest.raises(ValueError, match="009"):
         stats.build_season(tmp_path, 2026)
