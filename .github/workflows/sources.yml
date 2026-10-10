@@ -80,6 +80,16 @@ jobs:
         env:
           FAIL_SOURCE: ${{ inputs.fail_source }}
 
+      # ESPN's net points season totals (2 files); the current season only
+      - name: ESPN net points totals
+        id: espn_net_pts
+        continue-on-error: true
+        run: |
+          if [ "$FAIL_SOURCE" = espn_net_pts ]; then echo "failing on purpose (fail_source)"; exit 1; fi
+          uv run python -m pipeline.espn_net_pts --out out
+        env:
+          FAIL_SOURCE: ${{ inputs.fail_source }}
+
       # check whatever the sources wrote before anything is published. out/
       # has no lookup tables, so they're read from the bucket
       - name: Integrity check
@@ -132,7 +142,8 @@ jobs:
           SOURCES: |
             {"basketball-reference": "${{ steps.bbref.outcome }}",
              "dunksandthrees": "${{ steps.dunksandthrees.outcome }}",
-             "cleaningtheglass": "${{ steps.ctg.outcome }}"}
+             "cleaningtheglass": "${{ steps.ctg.outcome }}",
+             "espn-net-points": "${{ steps.espn_net_pts.outcome }}"}
         with:
           script: |
             const outcomes = JSON.parse(process.env.SOURCES);
