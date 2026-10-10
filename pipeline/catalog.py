@@ -31,8 +31,10 @@ the lookup tables; a bad key fails the build and keeps the previous catalog.
 
 With --check, only the integrity check runs, on the files in --out. The
 update workflow runs it before uploading, so bad keys are never published.
+Add --remote-lookups to read the lookup tables from --url when --out
+doesn't have them, as in a run of the other sources.
 
-usage: python -m pipeline.catalog [--out out] [--bucket basketball-data | --check]
+usage: python -m pipeline.catalog [--out out] [--bucket basketball-data | --check [--remote-lookups]]
 """
 
 import argparse
@@ -166,11 +168,17 @@ def build(path: Path, files: list[File], location: str) -> None:
     print(f"catalog: wrote {path} ({len(datasets)} datasets)")
 
 
-def check(files: list[File], location: str) -> None:
+# the lookup tables, all built by pipeline.stats
+LOOKUP_SOURCE = "stats"
+
+
+def check(files: list[File], location: str, lookups_url: str | None = None) -> None:
     """
     Run the integrity check on `files` without writing a catalog. Keys are
     checked within a season, so a run's own files (the current season) can
-    be checked before they're uploaded
+    be checked before they're uploaded. With `lookups_url`, lookup tables
+    that aren't in `files` are read from there, for the seasons in `files`:
+    a run of the other sources has only its own files
     """
     datasets = by_dataset(files)
     if not datasets:
@@ -178,7 +186,24 @@ def check(files: list[File], location: str) -> None:
         return
     with duckdb.connect() as con:
         create(con, datasets, location.rstrip("/"))
-        integrity.check(con, list(datasets))
+        tables = list(datasets)
+        if lookups_url:
+            seasons = sorted({f.season for f in files})
+            needed = {
+                lookup
+                for dataset in datasets
+                for lookup in integrity.key_columns(con, dataset).values()
+            }
+            for lookup in sorted(needed - set(datasets)):
+                urls = [
+                    f"{lookups_url.rstrip('/')}/nba/{LOOKUP_SOURCE}/{lookup}/season={s}/data.parquet"
+                    for s in seasons
+                ]
+                con.execute(
+                    f"CREATE VIEW {lookup} AS SELECT * FROM {reader(con, lookup, urls)}"
+                )
+                tables.append(lookup)
+        integrity.check(con, tables)
     print(f"catalog: integrity check passed ({len(datasets)} datasets)")
 
 
@@ -290,10 +315,19 @@ def main(argv: list[str] | None = None) -> None:
         action="store_true",
         help="only run the integrity check on the files in --out; write nothing",
     )
+    parser.add_argument(
+        "--remote-lookups",
+        action="store_true",
+        help="with --check, read lookup tables missing from --out from --url",
+    )
     args = parser.parse_args(argv)
 
     if args.check:
-        check(list_dir(args.out), str(args.out.resolve()))
+        check(
+            list_dir(args.out),
+            str(args.out.resolve()),
+            args.url if args.remote_lookups else None,
+        )
     elif args.bucket:
         build(args.out / CATALOG, list_bucket(args.bucket), args.url)
     else:

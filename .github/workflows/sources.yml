@@ -58,10 +58,22 @@ jobs:
         env:
           FAIL_SOURCE: ${{ inputs.fail_source }}
 
-      # check whatever the sources wrote before anything is published
+      # only the site's current season is public, so this writes whichever
+      # season the site is on
+      - name: dunksandthrees EPM
+        id: dunksandthrees
+        continue-on-error: true
+        run: |
+          if [ "$FAIL_SOURCE" = dunksandthrees ]; then echo "failing on purpose (fail_source)"; exit 1; fi
+          uv run python -m pipeline.dunksandthrees --out out
+        env:
+          FAIL_SOURCE: ${{ inputs.fail_source }}
+
+      # check whatever the sources wrote before anything is published. out/
+      # has no lookup tables, so they're read from the bucket
       - name: Integrity check
         id: check
-        run: uv run python -m pipeline.catalog --out out --check
+        run: uv run python -m pipeline.catalog --out out --check --remote-lookups
 
       # if every source failed before writing anything, out/ doesn't exist
       - name: Upload
@@ -107,7 +119,8 @@ jobs:
         uses: actions/github-script@v9.0.0
         env:
           SOURCES: |
-            {"basketball-reference": "${{ steps.bbref.outcome }}"}
+            {"basketball-reference": "${{ steps.bbref.outcome }}",
+             "dunksandthrees": "${{ steps.dunksandthrees.outcome }}"}
         with:
           script: |
             const outcomes = JSON.parse(process.env.SOURCES);

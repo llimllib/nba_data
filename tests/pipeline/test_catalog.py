@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 import duckdb
 import pytest
 
-from pipeline import catalog
+from pipeline import catalog, integrity
 from pipeline.output import dataset_path
 
 T0 = datetime(2026, 1, 1, tzinfo=UTC)
@@ -181,6 +181,39 @@ def test_dataset_in_two_sources_fails():
 def test_no_files_fails(tmp_path):
     with pytest.raises(ValueError, match="no parquet files"):
         build(tmp_path)
+
+
+def source_run(tmp_path, player_id):
+    """
+    a run of the other sources: `out` has only a source's file, and the
+    bucket (`bucket`, read as a URL prefix) has the lookups
+    """
+    out, bucket = tmp_path / "out", tmp_path / "bucket"
+    write(
+        out,
+        "epm",
+        2026,
+        f"SELECT 2026 AS season, '{player_id}' AS player_id, '10' AS team_id",
+        source="dunksandthrees",
+    )
+    write(bucket, "player_seasons", 2026, "SELECT 2026 AS season, '1' AS player_id")
+    write(bucket, "team_seasons", 2026, "SELECT 2026 AS season, '10' AS team_id")
+    # a season the run doesn't touch, whose lookups aren't read
+    write(bucket, "player_seasons", 2025, "SELECT 'bad' AS season")
+    return out, bucket
+
+
+def test_check_reads_missing_lookups_from_the_bucket(tmp_path):
+    out, bucket = source_run(tmp_path, "1")
+    with pytest.raises(integrity.IntegrityError, match="no player_seasons"):
+        catalog.check(catalog.list_dir(out), str(out))
+    catalog.check(catalog.list_dir(out), str(out), str(bucket))
+
+
+def test_check_with_remote_lookups_finds_bad_keys(tmp_path):
+    out, bucket = source_run(tmp_path, "2")
+    with pytest.raises(integrity.IntegrityError, match=r"epm.player_id"):
+        catalog.check(catalog.list_dir(out), str(out), str(bucket))
 
 
 class FakeS3:
