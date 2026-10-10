@@ -22,7 +22,10 @@ the catalog goes to <out>/nba.local.duckdb so it's never uploaded.
 Before the catalog is written, pipeline.integrity checks every key against
 the lookup tables; a bad key fails the build and keeps the previous catalog.
 
-usage: python -m pipeline.catalog [--out out] [--bucket basketball-data]
+With --check, only the integrity check runs, on the files in --out. The
+update workflow runs it before uploading, so bad keys are never published.
+
+usage: python -m pipeline.catalog [--out out] [--bucket basketball-data | --check]
 """
 
 import argparse
@@ -148,6 +151,22 @@ def build(path: Path, files: list[File], location: str) -> None:
     print(f"catalog: wrote {path} ({len(datasets)} datasets)")
 
 
+def check(files: list[File], location: str) -> None:
+    """
+    Run the integrity check on `files` without writing a catalog. Keys are
+    checked within a season, so a run's own files (the current season) can
+    be checked before they're uploaded
+    """
+    datasets = by_dataset(files)
+    if not datasets:
+        print("catalog: no parquet files to check")
+        return
+    with duckdb.connect() as con:
+        create(con, datasets, location.rstrip("/"))
+        integrity.check(con, list(datasets))
+    print(f"catalog: integrity check passed ({len(datasets)} datasets)")
+
+
 def create(
     con: duckdb.DuckDBPyConnection, datasets: dict[str, list[File]], location: str
 ) -> None:
@@ -219,9 +238,16 @@ def main(argv: list[str] | None = None) -> None:
         help="list this bucket's files, read them from --url, and write <out>/nba/nba.duckdb",
     )
     parser.add_argument("--url", default=URL, help=f"bucket URL (default: {URL})")
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="only run the integrity check on the files in --out; write nothing",
+    )
     args = parser.parse_args(argv)
 
-    if args.bucket:
+    if args.check:
+        check(list_dir(args.out), str(args.out.resolve()))
+    elif args.bucket:
         build(args.out / CATALOG, list_bucket(args.bucket), args.url)
     else:
         build(args.out / LOCAL_CATALOG, list_dir(args.out), str(args.out.resolve()))
