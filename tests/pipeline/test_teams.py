@@ -33,6 +33,27 @@ def test_espn_abbrevs_that_differ_from_nba(abbrev, team_id):
     assert team_id_for(load_team_abbrevs(), "espn", abbrev, 2026) == team_id
 
 
+def test_bbref_has_30_teams_every_season():
+    rows = [r for r in load_team_abbrevs() if r.source == "bbref"]
+    for season in range(2010, 2027):
+        assert len({r.team_id for r in rows if r.covers(season)}) == 30, season
+
+
+@pytest.mark.parametrize(
+    "abbrev,season,team_id",
+    [
+        ("NJN", 2012, "1610612751"),
+        ("BRK", 2013, "1610612751"),
+        ("CHA", 2014, "1610612766"),
+        ("CHO", 2015, "1610612766"),
+        ("NOH", 2013, "1610612740"),
+        ("NOP", 2014, "1610612740"),
+    ],
+)
+def test_bbref_renamed_franchises(abbrev, season, team_id):
+    assert team_id_for(load_team_abbrevs(), "bbref", abbrev, season) == team_id
+
+
 def test_season_ranges(tmp_path):
     # basketball-reference splits Charlotte by name; both map to one team_id
     rows = load_team_abbrevs(
@@ -63,7 +84,7 @@ def test_unknown_source_and_abbrev():
     with pytest.raises(UnknownTeamAbbrev):
         team_id_for(rows, "espn", "XXX", 2026)
     with pytest.raises(UnknownTeamAbbrev):
-        team_id_for(rows, "bbref", "BRK", 2026)
+        team_id_for(rows, "nosuch", "BRK", 2026)
     with pytest.raises(UnknownTeamAbbrev):
         team_id_for(rows, "espn", "BRK", 2018)
 
