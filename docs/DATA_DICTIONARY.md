@@ -111,6 +111,32 @@ them.
 
 ---
 
+## v2 Catalog (`nba/nba.duckdb`)
+
+A small DuckDB database of views over every season's parquet files, rebuilt
+every run by `pipeline/catalog.py`, so new seasons appear automatically:
+
+```sql
+ATTACH 'https://basketball-data.sfo3.cdn.digitaloceanspaces.com/nba/nba.duckdb' AS nba;
+SELECT p.name, round(s.pts, 1) AS ppg
+FROM nba.player_season_stats_per_game s JOIN nba.players p USING (player_id)
+WHERE s.season = 2026 AND s.season_type = 'regular_season' AND s.gp >= 50
+ORDER BY ppg DESC LIMIT 10;
+```
+
+| Name | Type | Description |
+|------|------|-------------|
+| `team_game_logs`, `player_game_logs`, `player_season_stats`, `team_seasons`, `player_seasons`, `games` | view | Every season of each `nba/stats/` dataset |
+| `four_factors`, `player_box`, `team_box`, `player_details` | view | Every season of each `nba/espn/` dataset |
+| `players` | view | One row per `player_id`: `name` (the latest one known), `first_season`, `last_season` |
+| `player_season_stats_per_game`, `player_season_stats_per_36`, `player_season_stats_per_100` | view | `player_season_stats` with counting stats scaled; see below |
+| `metadata` | table | Per dataset: `source`, `first_season`, `last_season`, `seasons`, and `updated`, when its newest file was uploaded |
+
+The views read files with `union_by_name`, so a column added in a later
+season is NULL in earlier ones.
+
+---
+
 ## v2 NBA Stats Data (`nba/stats/`)
 
 Built by `pipeline/stats.py` from stats.nba.com. Each run refetches the
@@ -156,7 +182,13 @@ season **totals** from the NBA's Base, Defense and Advanced player stats,
 `team_id` is their last team.
 
 Per-mode stats are computed from the totals, which reproduces the NBA's
-PerGame, Per36 and Per100Possessions values within their rounding:
+PerGame, Per36 and Per100Possessions values within their rounding. The
+catalog's `player_season_stats_per_game`, `_per_36` and `_per_100` views do
+this: they have the same columns as `player_season_stats`, with the counting
+stats (`pts`, `fgm`, `reb`, `def_ws`, ...) scaled. Rates, ratings, `gp`, `w`,
+`l`, `dd2`, `td3` and `poss` aren't scaled, and `min` is only scaled per game
+(the NBA's per-36 and per-100 modes keep total minutes). A zero denominator
+gives NULL. Formulas:
 
 | Mode | Formula |
 |------|---------|
@@ -165,7 +197,8 @@ PerGame, Per36 and Per100Possessions values within their rounding:
 | Per 100 possessions | `total / poss * 100` |
 
 For defensive win shares use `def_ws_raw`; `def_ws` is rounded to 2
-decimals, which distorts per-mode values for low-minute players.
+decimals, which distorts per-mode values for low-minute players. The per-mode
+views compute `def_ws` from `def_ws_raw` when it's present.
 
 | Column | Type | Source |
 |--------|------|--------|
