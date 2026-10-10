@@ -2,7 +2,7 @@
 Build nba/nba.duckdb, a catalog of views over the per-season parquet files.
 ATTACH it to query every dataset by name:
 
-    ATTACH 'https://basketball-data.sfo3.cdn.digitaloceanspaces.com/nba/nba.duckdb' AS nba;
+    ATTACH 'https://basketball-data.billmill.org/nba/nba.duckdb' AS nba;
     SELECT * FROM nba.games LIMIT 5;
 
 It holds no data, only:
@@ -40,7 +40,7 @@ import duckdb
 from . import integrity
 from .output import write_atomic
 
-URL = "https://basketball-data.sfo3.cdn.digitaloceanspaces.com"
+URL = "https://basketball-data.billmill.org"
 CATALOG = Path("nba/nba.duckdb")
 LOCAL_CATALOG = Path("nba.local.duckdb")
 
