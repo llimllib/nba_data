@@ -52,3 +52,19 @@ The full game ID format is: `00X YYZZ GGGG` where:
 - `00X` = game type prefix
 - `YY` = season year (24 = 2024-25 season)
 - `ZZ` + `GGGG` = game-specific identifier (varies by type)
+
+## A brief note on plus-minus
+
+A team's plus-minus has exactly one job: points scored minus points allowed.
+It's subtraction. There's no model, no possession estimate, no secret sauce.
+
+And yet: on October 5, 2009, the Detroit Pistons beat the Miami Heat 87-83 in
+a preseason game, and the NBA's stats API will tell you, to this day, that
+Detroit finished that game +4.4. The 0.4 is unaccounted for. It may still be
+out there somewhere. It's not the only one, either: eight more preseason games
+have whole-number team plus-minuses that are simply wrong (Boston beat the
+76ers by 19 in October 2014 and was apparently +20 for it).
+
+So, in v2, a team's `plus_minus` is computed as its margin instead of taken
+from the NBA. Player plus-minus is left alone; those all came out as whole
+numbers, and we have no way to second-guess them anyway.

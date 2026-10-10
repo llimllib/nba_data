@@ -280,6 +280,15 @@ def build_team_game_logs(con: duckdb.DuckDBPyConnection, season: int) -> None:
     rest = normalized(
         con, "tgl", {"game_id", "team_id", "game_date", "matchup", "wl"}, alias="t"
     )
+    # A team's plus-minus is its margin, but the NBA's is occasionally off in
+    # preseason games (4.4 in a game won by 4), so compute it
+    rest = [
+        "(t.pts - (SELECT any_value(o.pts) FROM tgl o "
+        "WHERE o.game_id = t.game_id AND o.team_id <> t.team_id))::INTEGER AS plus_minus"
+        if e.endswith(" AS plus_minus")
+        else e
+        for e in rest
+    ]
     # matchup is "BOS vs. NYK" for the home team and "NYK @ BOS" for the away
     # team. Neutral-site games (the Cup final) can list both teams as away,
     # so home is NULL unless exactly one team in the game is home

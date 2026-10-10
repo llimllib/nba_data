@@ -313,6 +313,18 @@ def test_fractional_count_fails(tmp_path):
         stats.build_season(tmp_path, 2026)
 
 
+def test_team_plus_minus_is_the_margin(tmp_path):
+    # the NBA sent 4.4 for a 4-point win (2010 preseason)
+    headers = [*TGL, "PLUS_MINUS"]
+    logs = [[*r, 4.4] for r in team_logs()]
+    write_raw(tmp_path, team_game_logs_base=response(headers, logs))
+    assert stats.build_season(tmp_path, 2026)
+    rows = {(r["game_id"], r["team_id"]): r for r in read(tmp_path, "team_game_logs")}
+    assert rows[(GAME, str(BOS))]["plus_minus"] == 10
+    assert rows[(GAME, str(NYK))]["plus_minus"] == -10
+    assert types(tmp_path, "team_game_logs")["plus_minus"] == "INTEGER"
+
+
 def test_before_the_season(tmp_path):
     # no games yet: nothing is written
     write_raw(tmp_path, empty=True)
