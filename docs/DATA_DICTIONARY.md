@@ -121,7 +121,7 @@ A small DuckDB database of views over every season's parquet files, rebuilt
 every run by `pipeline/catalog.py`, so new seasons appear automatically:
 
 ```sql
-ATTACH 'https://basketball-data.sfo3.cdn.digitaloceanspaces.com/nba/nba.duckdb' AS nba;
+ATTACH 'https://basketball-data.billmill.org/nba/nba.duckdb' AS nba;
 SELECT p.name, round(s.pts, 1) AS ppg
 FROM nba.player_season_stats_per_game s JOIN nba.players p USING (player_id)
 WHERE s.season = 2026 AND s.season_type = 'regular_season' AND s.gp >= 50
