@@ -12,10 +12,17 @@ import duckdb
 
 
 def write_atomic(path: Path, write: Callable[[Path], object]) -> None:
-    """call write(tmp_path), then move the result into place"""
+    """
+    call write(tmp_path), then move the result into place. If write fails,
+    the temporary file is removed so it can't be uploaded
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f".{path.name}.tmp")
-    write(tmp)
+    try:
+        write(tmp)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
     os.replace(tmp, path)
 
 

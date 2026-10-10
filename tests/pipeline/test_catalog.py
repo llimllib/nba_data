@@ -14,14 +14,24 @@ def write(outdir, dataset, season, query, source="stats"):
     duckdb.sql(f"COPY ({query}) TO '{path}' (FORMAT parquet)")
 
 
-def season_stats(season, gp, min, poss, value, def_ws_raw="NULL"):
-    """a player_season_stats row with every per-mode total set to `value`"""
+def write_season_stats(outdir, gp, min, poss, value, def_ws_raw="NULL"):
+    """
+    a 2026 player_season_stats row with every per-mode total set to `value`,
+    and its player
+    """
     totals = ", ".join(f"{value} AS {c}" for c in catalog.PER_MODE if c != "def_ws_raw")
-    return f"""
-        SELECT {season} AS season, 'regular_season' AS season_type, '1' AS player_id,
+    query = f"""
+        SELECT 2026 AS season, 'regular_season' AS season_type, '1' AS player_id,
             {gp} AS gp, {min}::DOUBLE AS min, {poss} AS poss, 0.5 AS ts_pct,
             {totals}, 0.25 AS def_ws, {def_ws_raw}::DOUBLE AS def_ws_raw
     """
+    write(outdir, "player_season_stats", 2026, query)
+    write(
+        outdir,
+        "player_seasons",
+        2026,
+        "SELECT 2026 AS season, '1' AS player_id, 'A' AS name",
+    )
 
 
 def build(outdir):
@@ -92,7 +102,7 @@ def test_players_have_their_latest_name(tmp_path):
 
 
 def test_per_mode_stats(tmp_path):
-    write(tmp_path, "player_season_stats", 2026, season_stats(2026, 10, 720, 1000, 200))
+    write_season_stats(tmp_path, 10, 720, 1000, 200)
     con = build(tmp_path)
     row = "SELECT pts, fg2m, min, gp, ts_pct, def_ws FROM nba.player_season_stats_{}"
     assert con.sql(row.format("per_game")).fetchone() == (20, 20, 72, 10, 0.5, 0.025)
@@ -102,12 +112,7 @@ def test_per_mode_stats(tmp_path):
 
 
 def test_per_mode_def_ws_uses_unrounded_value(tmp_path):
-    write(
-        tmp_path,
-        "player_season_stats",
-        2026,
-        season_stats(2026, 10, 720, 1000, 200, def_ws_raw=0.254),
-    )
+    write_season_stats(tmp_path, 10, 720, 1000, 200, def_ws_raw=0.254)
     con = build(tmp_path)
     row = con.sql(
         "SELECT def_ws, def_ws_raw FROM nba.player_season_stats_per_game"
@@ -116,7 +121,7 @@ def test_per_mode_def_ws_uses_unrounded_value(tmp_path):
 
 
 def test_per_mode_with_no_minutes(tmp_path):
-    write(tmp_path, "player_season_stats", 2026, season_stats(2026, 1, 0, 0, 0))
+    write_season_stats(tmp_path, 1, 0, 0, 0)
     con = build(tmp_path)
     assert con.sql("SELECT pts FROM nba.player_season_stats_per_36").fetchone() == (
         None,
