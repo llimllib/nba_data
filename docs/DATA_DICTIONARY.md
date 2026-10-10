@@ -90,6 +90,10 @@ files. They map to parquet like this (checked with `parquet_schema()`):
 | BOOLEAN | BOOLEAN | (none) | bool / Boolean |
 | DATE | INT32 | DATE | date32 / Date |
 
+Files are compressed with zstd. DuckDB (including DuckDB-wasm), pyarrow,
+polars and pandas read it; some lightweight JavaScript readers need an add-on
+(hyparquet needs `hyparquet-compressors`).
+
 ### Where normalization happens
 
 All of the above is applied when parquet files are written, not in the catalog
