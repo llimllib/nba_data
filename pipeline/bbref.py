@@ -467,8 +467,19 @@ def build_team_stats(outdir: Path, html: str, season: int) -> Path:
     return path
 
 
-def main(argv: list[str] | None = None) -> None:
+def games_played(html: str) -> int:
+    """
+    Games in the league page's totals table. Before opening night bbref
+    lists every team with g = 0 and leaves the other tables empty
+    """
+    return sum(
+        int(r.get("g") or 0)
+        for r in parse_table(html, "totals-team")
+        if TEAM_HREF.search(r.get("team_href", ""))
+    )
 
+
+def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         description="basketball-reference team season stats"
     )
@@ -488,8 +499,8 @@ def main(argv: list[str] | None = None) -> None:
         html = league_page(fetcher, args.out, season, refresh=season == current)
         if html is None:
             raise SystemExit(f"bbref: no saved league page for {season}")
-        if season == current and "totals-team" not in html:
-            print(f"bbref: no team stats for {season} yet")
+        if season == current and not games_played(html):
+            print(f"bbref: no games in {season} yet")
             continue
         build_team_stats(args.out, html, season)
 
