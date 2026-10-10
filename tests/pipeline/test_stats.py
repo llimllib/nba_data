@@ -1,5 +1,6 @@
 import gzip
 import json
+from datetime import UTC, datetime, timedelta
 
 import duckdb
 import pytest
@@ -532,3 +533,97 @@ def test_unknown_game_type_fails(tmp_path):
     write_raw(tmp_path, team_game_logs_base=with_game_id("0092500001"))
     with pytest.raises(ValueError, match="009"):
         stats.build_season(tmp_path, 2026)
+
+
+def write_rosters(outdir, rosters, season=2026, fetched="2026-01-01T00:00:00+00:00"):
+    """rosters: team_id -> [(player_id, name)]"""
+    stats.write_raw(
+        stats.raw_path(outdir, season, stats.ROSTERS),
+        {
+            "fetched": fetched,
+            "rosters": {
+                str(team): response(
+                    ["TeamID", "PLAYER", "PLAYER_ID"],
+                    [[team, name, pid] for pid, name in players],
+                )
+                for team, players in rosters.items()
+            },
+        },
+    )
+
+
+def test_player_seasons_includes_rostered_players(tmp_path):
+    write_raw(tmp_path)
+    # player 1 played; 9 is on the roster but hasn't
+    write_rosters(tmp_path, {BOS: [(1, "Roster A"), (9, "Injured")]})
+    stats.build_season(tmp_path, 2026)
+    rows = {r["player_id"]: r for r in read(tmp_path, "player_seasons")}
+    assert rows["9"] == {
+        "season": 2026,
+        "player_id": "9",
+        "name": "Injured",
+        "played": False,
+    }
+    # a name from a game wins over the roster's
+    assert rows["1"]["name"] == "A"
+    assert rows["1"]["played"] is True
+    assert rows["2"]["played"] is True
+
+
+def test_player_seasons_without_rosters(tmp_path):
+    write_raw(tmp_path)
+    stats.build_season(tmp_path, 2026)
+    assert all(r["played"] for r in read(tmp_path, "player_seasons"))
+
+
+def test_roster_without_player_ids_fails(tmp_path):
+    write_raw(tmp_path)
+    stats.write_raw(
+        stats.raw_path(tmp_path, 2026, stats.ROSTERS),
+        {
+            "fetched": "2026-01-01T00:00:00+00:00",
+            "rosters": {"1": response(["PLAYER"], [])},
+        },
+    )
+    with pytest.raises(ValueError, match="PLAYER_ID"):
+        stats.build_season(tmp_path, 2026)
+
+
+def test_fetch_rosters(tmp_path):
+    calls, sleeps = [], []
+    clock = [datetime(2026, 1, 1, tzinfo=UTC)]
+
+    def fake_fetch(endpoint, kwargs):
+        calls.append(kwargs)
+        return response(["PLAYER", "PLAYER_ID"], [["X", int(kwargs["team_id"])]])
+
+    def fetch_rosters(**kw):
+        stats.fetch_rosters(
+            tmp_path,
+            2026,
+            fetch=fake_fetch,
+            sleep=sleeps.append,
+            now=lambda: clock[0],
+            **kw,
+        )
+
+    fetch_rosters()
+    assert len(calls) == 30
+    assert calls[0] == {
+        "team_id": "1610612737",
+        "season": "2025-26",
+        "league_id_nullable": "00",
+    }
+    assert len(sleeps) == 29
+    assert stats.rosters_fetched(tmp_path, 2026) == clock[0]
+
+    # recent rosters aren't refetched, unless forced
+    clock[0] += stats.ROSTER_MAX_AGE - timedelta(minutes=1)
+    fetch_rosters()
+    assert len(calls) == 30
+    fetch_rosters(force=True)
+    assert len(calls) == 60
+
+    clock[0] += stats.ROSTER_MAX_AGE
+    fetch_rosters()
+    assert len(calls) == 90

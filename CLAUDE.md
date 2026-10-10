@@ -8,12 +8,12 @@ This repo is being migrated to v2: data in object storage, consistent keys, a Du
 
 v2 commands (tools come from `mise.toml`):
 - `mise run test` / `mise run lint` (ruff format, ruff check, ty; v2 code only). CI runs both; keep them passing
-- `uv run python -m pipeline.stats --out out --season 2026` fetches from stats.nba.com (works directly from the home network; CI needs the Tailscale exit node)
+- `uv run python -m pipeline.stats --out out --season 2026` fetches from stats.nba.com (works directly from the home network; CI needs the Tailscale exit node). Team rosters (30 requests) are only refetched when the saved ones are over 20 hours old; `--rosters-only` refetches just them and rebuilds
 - `uv run python -m pipeline.espn --out out --season 2026`; add `--no-fetch` to either to rebuild parquet from raw files only
 - `uv run python -m pipeline.catalog --out out` builds `out/nba.local.duckdb` over the local files; `--bucket basketball-data` lists the bucket instead and writes `out/nba/nba.duckdb` (the parquet must already be uploaded); `--check` only runs the integrity check on `out/`
 - `out/` (gitignored) is laid out like the `basketball-data` bucket
 - `uv run python -m pipeline.bbref --out out --season 2026` builds `bbref_team_stats` (`--no-fetch` to rebuild from saved pages)
-- `uv run python -m pipeline.dunksandthrees --out out` builds `epm` for the season dunksandthrees is showing (only the current season is public; `--no-fetch` rebuilds every saved season)
+- `uv run python -m pipeline.dunksandthrees --out out` builds `epm` and `epm_predictive` for the season dunksandthrees is showing (only the current season is public; `--no-fetch` rebuilds every saved season)
 - `uv run python -m pipeline.player_ids --out out [--fetch]` maps new basketball-reference players to NBA ids in `pipeline/player_ids.csv`, from the bbref season pages saved in `out/nba/raw/bbref/`. basketball-reference bans clients that go over ~20 requests a minute: always fetch through `pipeline.bbref.Fetcher`, never in a loop of your own
 - The live v2 data: `ATTACH 'https://basketball-data.billmill.org/nba/nba.duckdb' AS nba` (examples in the README). Prefer it to `data/` for analysis; it has every season, consistent keys and no stale stats
 - The bucket is written by `.github/workflows/update.yml` every 4 hours (NBA, ESPN) and `sources.yml` daily (bbref; add new scraped sources there, as their own `continue-on-error` step listed in `SOURCES`); uploading by hand needs Spaces credentials (`AWS_ENDPOINT_URL=https://sfo3.digitaloceanspaces.com`)

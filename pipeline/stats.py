@@ -8,6 +8,15 @@ response is kept, gzipped, at
 
     nba/raw/stats/<season>/<request>.json.gz
 
+Team rosters add rostered players who haven't played (injured, say) to
+player_seasons. They take 30 requests, one per team, and change slowly, so
+they're refetched only when the saved ones are more than ROSTER_MAX_AGE
+old, all in one file with the time they were fetched:
+
+    nba/raw/stats/<season>/team_rosters.json.gz
+
+They're optional: a season without them has only the players who played.
+
 and these are built from them, one file per season:
 
     nba/stats/team_game_logs/season=<season>/data.parquet
@@ -19,7 +28,7 @@ Season stats are totals only; per-game, per-36 and per-100 values are
 computed from them in the catalog. Everything is relative to an output
 directory laid out like the basketball-data bucket; see docs/v2.md.
 
-usage: python -m pipeline.stats [--out out] [--season 2026 ...] [--no-fetch]
+usage: python -m pipeline.stats [--out out] [--season 2026 ...] [--no-fetch | --rosters-only]
 """
 
 import argparse
@@ -28,11 +37,13 @@ import json
 import time
 import traceback
 from collections.abc import Callable, Collection
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import duckdb
 import pyarrow as pa
 from nba_api.stats.endpoints import (
+    CommonTeamRoster,
     LeagueDashPlayerBioStats,
     LeagueDashPlayerPtShot,
     LeagueDashPlayerStats,
@@ -53,6 +64,12 @@ TIMEOUT = 60
 RETRY_DELAYS = [1, 2, 5, 10, 20, 30, 60, 60, 60]
 
 SEASON_TYPES = {"regular_season": "Regular Season", "playoffs": "Playoffs"}
+
+ROSTERS = "team_rosters"
+# the update runs every 4 hours, so this refetches rosters once a day
+ROSTER_MAX_AGE = timedelta(hours=20)
+# between roster requests, to go easy on stats.nba.com
+ROSTER_DELAY = 1
 
 # Columns we don't keep. Names and abbreviations come from the lookup tables;
 # ranks are a query away and would be wrong for per-mode stats
@@ -141,18 +158,97 @@ def fetch(endpoint: Callable, kwargs: dict, sleep=time.sleep) -> dict:
     raise AssertionError("unreachable")
 
 
+def write_raw(path: Path, data: dict) -> None:
+    def write(tmp):
+        with gzip.open(tmp, "wt") as f:
+            json.dump(data, f, separators=(",", ":"))
+
+    write_atomic(path, write)
+
+
+def read_raw(path: Path) -> dict:
+    with gzip.open(path, "rt") as f:
+        return json.load(f)
+
+
 def fetch_season(
     outdir: Path, season: int, fetch: Callable[[Callable, dict], dict] = fetch
 ) -> None:
     for name, (endpoint, kwargs) in requests(season).items():
-        data = fetch(endpoint, kwargs)
-
-        def write(tmp, data=data):
-            with gzip.open(tmp, "wt") as f:
-                json.dump(data, f, separators=(",", ":"))
-
-        write_atomic(raw_path(outdir, season, name), write)
+        write_raw(raw_path(outdir, season, name), fetch(endpoint, kwargs))
         print(f"stats: fetched {name}")
+
+
+def rosters_fetched(outdir: Path, season: int) -> datetime | None:
+    """when the saved rosters were fetched, or None if there are none"""
+    path = raw_path(outdir, season, ROSTERS)
+    if not path.is_file():
+        return None
+    return datetime.fromisoformat(read_raw(path)["fetched"])
+
+
+def fetch_rosters(
+    outdir: Path,
+    season: int,
+    fetch: Callable[[Callable, dict], dict] = fetch,
+    sleep=time.sleep,
+    now: Callable[[], datetime] = lambda: datetime.now(UTC),
+    force: bool = False,
+) -> None:
+    """fetch every team's roster, unless the saved ones are recent enough"""
+    fetched = rosters_fetched(outdir, season)
+    if fetched and not force and now() - fetched < ROSTER_MAX_AGE:
+        print(f"stats: rosters for {season} are from {fetched.isoformat()}")
+        return
+    rosters = {}
+    for i, team_id in enumerate(lookups.NBA_TEAM_IDS):
+        if i:
+            sleep(ROSTER_DELAY)
+        rosters[str(team_id)] = fetch(
+            CommonTeamRoster,
+            {
+                "team_id": str(team_id),
+                "season": season_string(season),
+                "league_id_nullable": "00",
+            },
+        )
+    write_raw(
+        raw_path(outdir, season, ROSTERS),
+        {"fetched": now().isoformat(), "rosters": rosters},
+    )
+    print(f"stats: fetched {ROSTERS}")
+
+
+def load_rosters(con: duckdb.DuckDBPyConnection, outdir: Path, season: int) -> None:
+    """
+    Load the saved rosters into `rosters` (player_id, player_name), empty
+    if there are none
+    """
+    path = raw_path(outdir, season, ROSTERS)
+    players: list[tuple[str, str]] = []
+    if path.is_file():
+        for team_id, data in read_raw(path)["rosters"].items():
+            rs = result_set(data)
+            missing = {"PLAYER_ID", "PLAYER"} - set(rs["headers"])
+            if missing:
+                raise ValueError(f"stats: team {team_id}'s roster has no {missing}")
+            pid, name = rs["headers"].index("PLAYER_ID"), rs["headers"].index("PLAYER")
+            players += [(str(row[pid]), row[name]) for row in rs["rowSet"]]
+    else:
+        print(
+            f"stats: no rosters for {season}; player_seasons has only players who played"
+        )
+    con.register(
+        "arrow",
+        pa.table(
+            {
+                "player_id": pa.array([p[0] for p in players], pa.string()),
+                "player_name": pa.array([p[1] for p in players], pa.string()),
+            }
+        ),
+    )
+    con.execute("CREATE OR REPLACE TABLE rosters AS SELECT * FROM arrow")
+    con.unregister("arrow")
 
 
 def result_set(data: dict) -> dict:
@@ -395,6 +491,7 @@ def build_season(outdir: Path, season: int) -> bool:
             .replace("player_stats_", "ps_")
         )
         load_raw(con, raw_path(outdir, season, name), table)
+    load_rosters(con, outdir, season)
 
     # the lookups read team_game_logs, so they're built after it
     builders = {
@@ -425,14 +522,23 @@ def main(argv: list[str] | None = None) -> None:
         action="append",
         help="season(s) to update, as the end year (default: current season)",
     )
-    parser.add_argument(
+    fetching = parser.add_mutually_exclusive_group()
+    fetching.add_argument(
         "--no-fetch", action="store_true", help="only rebuild parquet from raw files"
+    )
+    fetching.add_argument(
+        "--rosters-only",
+        action="store_true",
+        help="fetch only the rosters, then rebuild from raw files (to backfill them)",
     )
     args = parser.parse_args(argv)
 
     for season in args.season or [current_season(today_eastern())]:
-        if not args.no_fetch:
+        if args.rosters_only:
+            fetch_rosters(args.out, season, force=True)
+        elif not args.no_fetch:
             fetch_season(args.out, season)
+            fetch_rosters(args.out, season)
         if not build_season(args.out, season):
             raise SystemExit(f"stats: no raw data for season {season}")
 
