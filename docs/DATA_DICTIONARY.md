@@ -156,6 +156,7 @@ ORDER BY ppg DESC LIMIT 10;
 | `team_game_logs`, `player_game_logs`, `player_season_stats`, `team_seasons`, `player_seasons`, `games` | view | Every season of each `nba/stats/` dataset |
 | `four_factors`, `player_box`, `team_box`, `player_details` | view | Every season of each `nba/espn/` dataset |
 | `bbref_team_stats` | view | Every season of basketball-reference's team stats (`nba/bbref/`) |
+| `ctg_team_summary` | view | Every season of Cleaning the Glass's team summary (`nba/ctg/`) |
 | `epm`, `epm_predictive` | view | dunksandthrees' season and predictive EPM, from 2026 (`nba/dunksandthrees/`) |
 | `players` | table | One row per `player_id`: `name` (the latest one known), `first_season`, `last_season` (seasons on a roster count, even without games). A table, so joining it reads no parquet files |
 | `player_season_stats_per_game`, `player_season_stats_per_36`, `player_season_stats_per_100` | view | `player_season_stats` with counting stats scaled; see below |
@@ -461,6 +462,44 @@ Per game is `total / g`. Per 100 possessions is `total / poss * 100` with
 (509 of 510 team-seasons exactly on games, points, field goals, assists and
 wins); rebounds and turnovers differ slightly because the NBA and bbref
 count team rebounds and team turnovers differently.
+
+---
+
+## v2 Cleaning the Glass Data (`nba/ctg/`)
+
+Built by `pipeline/ctg.py` from the public league summary page,
+[cleaningtheglass.com/stats/league/summary](https://cleaningtheglass.com/stats/league/summary),
+seasons 2010 on. Raw pages are kept at
+`nba/raw/ctg/<season>/team_summary_<season_type>/<date fetched>.html.gz`.
+CTG removes garbage time from every number. Teams are mapped from CTG's
+team ids (1-30, kept through renames) in `team_abbrevs.csv`, source `ctg`.
+
+### `ctg_team_summary/season=<season>/data.parquet`
+
+One row per team per season type, from the season's latest page. The
+playoffs include the play-in (and 2020's seeding game), and only teams that
+played. The `_last_2wk` columns cover the two weeks before `as_of_date`, so
+for the current season the file is a daily snapshot; for finished seasons,
+the last two weeks of the season (NULL for teams with no games then: teams
+knocked out of the playoffs, and the 8 teams left out of the 2020 bubble).
+
+| Column | Type | Description |
+|--------|------|-------------|
+| season, season_type, team_id | | Key; `season_type` is `regular_season` or `playoffs` |
+| as_of_date | DATE | When the page was fetched |
+| wins, losses | INTEGER | |
+| win_pct | DOUBLE | Fraction (0.78) |
+| off_rtg, def_rtg | DOUBLE | Points scored and allowed per 100 possessions |
+| point_diff | DOUBLE | `off_rtg - def_rtg` (within 0.1; CTG rounds each) |
+| exp_wins, exp_wins_82 | DOUBLE | Expected wins from point differential, so far and over 82 games |
+| win_diff | DOUBLE | `wins - exp_wins` |
+| spread_diff | DOUBLE | Average margin against the point spread. NULL before 2012 |
+| wins_last_2wk, losses_last_2wk, point_diff_last_2wk, off_rtg_last_2wk, def_rtg_last_2wk, spread_diff_last_2wk | | The same over the last two weeks |
+
+Not kept: team names (use `team_seasons`) and CTG's ranks. Records match
+the NBA's game logs for every regular season and all but four 2017
+playoff team rows: CTG is missing one Boston-Washington and one
+Clippers-Utah first-round game.
 
 ---
 

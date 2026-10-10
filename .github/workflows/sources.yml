@@ -69,6 +69,17 @@ jobs:
         env:
           FAIL_SOURCE: ${{ inputs.fail_source }}
 
+      # the current season's league summary (2 requests); past seasons are
+      # final and never refetched
+      - name: Cleaning the Glass
+        id: ctg
+        continue-on-error: true
+        run: |
+          if [ "$FAIL_SOURCE" = ctg ]; then echo "failing on purpose (fail_source)"; exit 1; fi
+          uv run python -m pipeline.ctg --out out
+        env:
+          FAIL_SOURCE: ${{ inputs.fail_source }}
+
       # check whatever the sources wrote before anything is published. out/
       # has no lookup tables, so they're read from the bucket
       - name: Integrity check
@@ -120,7 +131,8 @@ jobs:
         env:
           SOURCES: |
             {"basketball-reference": "${{ steps.bbref.outcome }}",
-             "dunksandthrees": "${{ steps.dunksandthrees.outcome }}"}
+             "dunksandthrees": "${{ steps.dunksandthrees.outcome }}",
+             "cleaningtheglass": "${{ steps.ctg.outcome }}"}
         with:
           script: |
             const outcomes = JSON.parse(process.env.SOURCES);
