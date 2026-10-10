@@ -155,6 +155,7 @@ ORDER BY ppg DESC LIMIT 10;
 |------|------|-------------|
 | `team_game_logs`, `player_game_logs`, `player_season_stats`, `team_seasons`, `player_seasons`, `games` | view | Every season of each `nba/stats/` dataset |
 | `four_factors`, `player_box`, `team_box`, `player_details` | view | Every season of each `nba/espn/` dataset |
+| `bbref_team_stats` | view | Every season of basketball-reference's team stats (`nba/bbref/`) |
 | `players` | table | One row per `player_id`: `name` (the latest one known), `first_season`, `last_season`. A table, so joining it reads no parquet files |
 | `player_season_stats_per_game`, `player_season_stats_per_36`, `player_season_stats_per_100` | view | `player_season_stats` with counting stats scaled; see below |
 | `metadata` | table | Per dataset: `source`, `first_season`, `last_season`, `seasons`, and `updated`, when its newest file was uploaded |
@@ -401,6 +402,51 @@ One row per player per game, and one per team per game.
 Not kept from ESPN's player rows: names and team abbreviations (use the
 lookup tables), draft fields, and `seasonType` (decoded from `game_id` in
 `games`). They remain in the raw files.
+
+---
+
+## v2 basketball-reference Data (`nba/bbref/`)
+
+Built by `pipeline/bbref.py` from
+[basketball-reference.com](https://www.basketball-reference.com/), seasons
+2010 on. Raw pages are kept at `nba/raw/bbref/<season>/<page>.html.gz` (and
+player pages at `nba/raw/bbref/players/<bbref_id>.html.gz`).
+basketball-reference blocks fast scrapers, so pages are fetched at least 6
+seconds apart, past seasons only once.
+
+### `bbref_team_stats/season=<season>/data.parquet`
+
+One row per team per season (regular season), from the five team tables on
+the season's league page (`NBA_<season>.html`): totals, opponent totals,
+advanced, shooting and opponent shooting. Column names are bbref's
+`data-stat` names, except that counting stats use the NBA's names, as in
+every other table: `fgm`, `fg3m`, `fg2m`, `ftm`, `oreb`, `dreb`, `reb`,
+`min` (bbref's `fg`, `fg3`, `fg2`, `ft`, `orb`, `drb`, `trb`, `mp`).
+Opponent columns start with `opp_`.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| season, team_id | | Key |
+| made_playoffs | BOOLEAN | bbref marks playoff teams with `*` |
+| g, min, fgm, fga, ..., pts | INTEGER (`min` DOUBLE) | Season totals; `min` is team minutes (5 x game minutes) |
+| opp_fgm, ..., opp_pts | INTEGER | Opponents' totals |
+| wins, losses, wins_pyth, losses_pyth | INTEGER | Record and Pythagorean record |
+| mov, sos, srs | DOUBLE | Margin of victory, strength of schedule, simple rating system |
+| off_rtg, def_rtg, net_rtg, pace | DOUBLE | Per 100 possessions; pace is possessions per 48 minutes |
+| ts_pct, efg_pct, ft_rate, fta_per_fga_pct, fg3a_per_fga_pct, opp_efg_pct, opp_ft_rate | DOUBLE | Fractions (0.561) |
+| tov_pct, orb_pct, opp_tov_pct, drb_pct | DOUBLE | **Percentages** (11.2), as bbref shows them |
+| arena_name | VARCHAR | |
+| attendance, attendance_per_g | INTEGER | |
+| avg_dist, pct_fga_00_03, ..., fg_pct_fg3a | DOUBLE | Shot distance and shooting by distance |
+| pct_ast_fg2, pct_ast_fg3, pct_fga_dunk, fg_dunk, pct_fga_layup, fg_layup, pct_fg3a_corner, fg3_pct_corner, fg3a_heave, fg3_heave | | Assisted shots, dunks, layups, corner 3s, heaves (the counts are INTEGER) |
+| opp_avg_dist, ... | DOUBLE | The same shooting columns for opponents |
+
+Per game is `total / g`. Per 100 possessions is `total / poss * 100` with
+`poss = pace * min / 240`; that reproduces bbref's per-100 table within
+0.1, since bbref also rounds pace. Totals agree with the NBA's game logs
+(509 of 510 team-seasons exactly on games, points, field goals, assists and
+wins); rebounds and turnovers differ slightly because the NBA and bbref
+count team rebounds and team turnovers differently.
 
 ---
 
