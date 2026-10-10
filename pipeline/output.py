@@ -27,12 +27,16 @@ def write_atomic(path: Path, write: Callable[[Path], object]) -> None:
 
 
 def write_parquet(con: duckdb.DuckDBPyConnection, table: str, path: Path) -> None:
-    """write `table` to `path`, recording the time in the file's metadata"""
+    """
+    write `table` to `path`, recording the time in the file's metadata.
+    zstd makes files about a third smaller than DuckDB's default, snappy
+    """
     updated = datetime.now(UTC).isoformat()
     write_atomic(
         path,
         lambda tmp: con.execute(
-            f"COPY {table} TO '{tmp}' (FORMAT parquet, KV_METADATA {{updated: '{updated}'}})"
+            f"COPY {table} TO '{tmp}' (FORMAT parquet, COMPRESSION zstd, "
+            f"KV_METADATA {{updated: '{updated}'}})"
         ),
     )
 
