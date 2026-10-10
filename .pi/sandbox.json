@@ -1,0 +1,21 @@
+{
+  "network": {
+    "allowedDomains": [
+      "*.s3.amazonaws.com",
+      "*.barttorvik.com",
+      "barttorvik.com",
+      "*.basketball-reference.com",
+      "basketball-reference.com",
+      "*.billmill.org",
+      "billmill.org",
+      "dunksandthrees.com",
+      "*.sfo3.digitaloceanspaces.com",
+      "*.sfo3.cdn.digitaloceanspaces.com",
+      "sfo3.digitaloceanspaces.com",
+      "*.duckdb.org",
+      "duckdb.org",
+      "*.nba.com",
+      "pypi.org"
+    ]
+  }
+}
