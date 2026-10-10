@@ -60,10 +60,15 @@ jobs:
 
       # check whatever the sources wrote before anything is published
       - name: Integrity check
+        id: check
         run: uv run python -m pipeline.catalog --out out --check
 
+      # if every source failed before writing anything, out/ doesn't exist
       - name: Upload
-        run: aws s3 sync out/ "s3://$BUCKET/" --acl public-read --no-progress --exclude '*.local.duckdb' --exclude '.*' --exclude '*/.*'
+        id: upload
+        run: |
+          mkdir -p out
+          aws s3 sync out/ "s3://$BUCKET/" --acl public-read --no-progress --exclude '*.local.duckdb' --exclude '.*' --exclude '*/.*'
         env: &spaces
           AWS_ACCESS_KEY_ID: ${{ secrets.DO_SPACES_ACCESS_KEY }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.DO_SPACES_SECRET }}
@@ -73,6 +78,7 @@ jobs:
       # the catalog build reads the files through the CDN, so it must see
       # the ones just uploaded
       - name: Purge the CDN
+        id: purge
         run: &purge |
           curl -sf -X DELETE \
             -H "Authorization: Bearer $DO_CDN_API_KEY" \
@@ -84,6 +90,7 @@ jobs:
           DO_CDN_ENDPOINT_ID: ${{ secrets.DO_CDN_ENDPOINT_ID }}
 
       - name: Build and upload the catalog
+        id: catalog
         run: |
           uv run python -m pipeline.catalog --out out --bucket "$BUCKET"
           aws s3 cp out/nba/nba.duckdb "s3://$BUCKET/nba/nba.duckdb" --acl public-read --no-progress
@@ -131,10 +138,13 @@ jobs:
             }
             if (failed.length) core.setFailed(`failed sources: ${failed.join(', ')}`);
 
-      # anything else failing (upload, catalog) is a pipeline problem, not a
-      # source's: the same notifier as update.yml
+      # anything else failing (check, upload, catalog) is a pipeline problem,
+      # not a source's: the same notifier as update.yml, whether or not a
+      # source also failed
       - name: Notify on failure
-        if: failure() && steps.bbref.outcome != 'failure'
+        if: >-
+          always() && (steps.check.outcome == 'failure' || steps.upload.outcome == 'failure'
+          || steps.purge.outcome == 'failure' || steps.catalog.outcome == 'failure')
         uses: actions/github-script@v9.0.0
         with:
           script: |
