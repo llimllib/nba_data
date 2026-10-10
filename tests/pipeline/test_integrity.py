@@ -160,3 +160,15 @@ def test_failure_keeps_the_previous_catalog(out):
         build(out)
     assert path.read_bytes() == before
     assert not (out / f".{path.name}.tmp").exists()
+
+
+def test_check_only(out):
+    catalog.main(["--out", str(out), "--check"])
+    assert not (out / catalog.LOCAL_CATALOG).exists()
+    player_box(out, player_id="2")
+    with pytest.raises(integrity.IntegrityError):
+        catalog.main(["--out", str(out), "--check"])
+
+
+def test_check_with_no_files_passes(tmp_path):
+    catalog.main(["--out", str(tmp_path), "--check"])
