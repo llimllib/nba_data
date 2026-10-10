@@ -12,6 +12,8 @@ v2 commands (tools come from `mise.toml`):
 - `uv run python -m pipeline.espn --out out --season 2026`; add `--no-fetch` to either to rebuild parquet from raw files only
 - `uv run python -m pipeline.catalog --out out` builds `out/nba.local.duckdb` over the local files; `--bucket basketball-data` lists the bucket instead and writes `out/nba/nba.duckdb` (the parquet must already be uploaded); `--check` only runs the integrity check on `out/`
 - `out/` (gitignored) is laid out like the `basketball-data` bucket
+- The live v2 data: `ATTACH 'https://basketball-data.billmill.org/nba/nba.duckdb' AS nba` (examples in the README). Prefer it to `data/` for analysis; it has every season, consistent keys and no stale stats
+- The bucket is written by `.github/workflows/update.yml` every 4 hours; uploading by hand needs Spaces credentials (`AWS_ENDPOINT_URL=https://sfo3.digitaloceanspaces.com`)
 
 Track v2 work in the GitHub milestone "v2: object storage & a coherent dataset"; record decisions in docs/v2.md and comment on the issue when the plan changes.
 
