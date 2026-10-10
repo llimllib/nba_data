@@ -176,7 +176,8 @@ finals). The NBA's traditional and advanced team box scores, joined.
 | game_date | DATE | |
 | home | BOOLEAN | NULL for neutral-site games, where the NBA lists both teams as away |
 | win | BOOLEAN | |
-| min, fgm, fga, ..., pts, plus_minus | | Traditional box score |
+| min, fgm, fga, ..., pts | | Traditional box score |
+| plus_minus | INTEGER | Points minus the opponent's points. Computed, not the NBA's value, which is wrong in 9 preseason games (once 4.4) |
 | off_rating, def_rating, net_rating, pace, poss, pie, ... | | Advanced box score; `e_` columns are the NBA's estimates |
 
 ### `player_game_logs/<season>.parquet`
