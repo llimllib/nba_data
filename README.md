@@ -35,6 +35,8 @@ WHERE b.season = 2026
 GROUP BY ALL ORDER BY net_pts DESC LIMIT 10;
 ```
 
+You can [browse the dataset here](https://duckui.com/?load=https://basketball-data.billmill.org/nba/nba.duckdb&sql=SELECT%20*%20FROM%20nba.player_game_logs%20LIMIT%20100)
+
 That works in the DuckDB CLI or any DuckDB client (in Python:
 `duckdb.connect().sql("ATTACH ...")`). Only the parts of the files a query
 needs are downloaded.
