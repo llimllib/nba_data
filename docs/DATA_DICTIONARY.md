@@ -332,15 +332,19 @@ Built by `pipeline/espn.py` from ESPN's net points data
 table has `season`, `game_id` and `team_id`; player tables also have
 `player_id`. Player and team names come from the lookup tables.
 
-ESPN added fields over time, and its files for seasons 2022-2025 were saved
-before that, so `o_poss`, `o_team_poss`, `o_wpa` and their `d_`/`t_`
-variants, and `pts_allowed_off_live_tov`, are NULL for those seasons.
+ESPN recomputes past seasons from time to time. Seasons 2019-2025 were
+fetched in October 2026, after ESPN's latest recomputation, and match its
+season totals in `net_pts_season` exactly. 2026's days were saved as they
+happened, so some hold values ESPN has since revised
+([#72](https://github.com/llimllib/nba_data/issues/72)).
 
 ### Raw: `nba/raw/espn/<season>/<yyyy-mm-dd>.json.gz`
 
 ESPN's file for each game day, with its separate player details file added
 under `player_details`. A saved day is never refetched except for today and
-yesterday, because ESPN's copies of past days can change and lose data.
+yesterday, because ESPN's copies of past days can change and lose data. To
+refetch a past season, fetch it into an empty `--out` directory and compare
+it with the saved one before replacing it, as #72 did.
 
 ### `four_factors/season=<season>/data.parquet`
 
@@ -428,16 +432,11 @@ built by `pipeline/espn_net_pts.py` from the two files at
 `nfl-player-metrics.s3.amazonaws.com/net-pts/` (totals and per 100). Raw
 files: `nba/raw/espn/net_pts/{totals,per_100}.json.gz`, latest only.
 
-Use this rather than summing `player_box` ([#66](https://github.com/llimllib/nba_data/issues/66)):
-
-- **2019-2021:** identical to `player_box` sums (net points, games, team
-  possessions)
-- **2022-2025:** ESPN has since recomputed these seasons: its totals
-  correlate 0.95 with `player_box` sums, which come from the daily files
-  saved at the time. `player_box` also has no possessions for these
-  seasons, so this is the only per-100 source for them
-- **2026:** mostly identical; some players differ by a few points, from
-  revisions ESPN made after the day was saved
+For 2019-2025 these equal sums of `player_box` exactly (net points, games
+and team possessions; [#66](https://github.com/llimllib/nba_data/issues/66),
+[#72](https://github.com/llimllib/nba_data/issues/72)). For 2026 they
+differ for some players, because ESPN revised days after we saved them;
+the totals here are ESPN's current values.
 
 The current season is rewritten daily; finished seasons hold ESPN's values
 as of their last run (all of 2019-2026 as of October 2026).
