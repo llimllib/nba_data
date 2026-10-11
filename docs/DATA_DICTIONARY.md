@@ -158,7 +158,7 @@ ORDER BY ppg DESC LIMIT 10;
 |------|------|-------------|
 | `team_game_logs`, `player_game_logs`, `player_season_stats`, `team_seasons`, `player_seasons`, `games` | view | Every season of each `nba/stats/` dataset |
 | `four_factors`, `player_box`, `team_box`, `player_details`, `net_pts_season` | view | Every season of each `nba/espn/` dataset |
-| `bbref_team_stats` | view | Every season of basketball-reference's team stats (`nba/bbref/`) |
+| `bbref_team_stats`, `bbref_salaries` | view | Every season of basketball-reference's team stats and player salaries (`nba/bbref/`) |
 | `ctg_team_summary` | view | Every season of Cleaning the Glass's team summary (`nba/ctg/`) |
 | `epm`, `epm_predictive` | view | dunksandthrees' season and predictive EPM, from 2026 (`nba/dunksandthrees/`) |
 | `players` | table | One row per `player_id`: `name` (the latest one known), `first_season`, `last_season` (seasons on a roster count, even without games). A table, so joining it reads no parquet files |
@@ -499,6 +499,28 @@ Per game is `total / g`. Per 100 possessions is `total / poss * 100` with
 (509 of 510 team-seasons exactly on games, points, field goals, assists and
 wins); rebounds and turnovers differ slightly because the NBA and bbref
 count team rebounds and team turnovers differently.
+
+### `bbref_salaries/season=<season>/data.parquet`
+
+One row per player per team per season, from the Salaries table on each
+team's season page (`/teams/<abbrev>/<season>.html`, kept at
+`nba/raw/bbref/<season>/teams/<abbrev>.html.gz`), built by
+`pipeline/bbref_salaries.py`. Every row bbref lists is kept, so a team's
+salaries add up to its payroll, including players it waived and still
+pays. The exception: the rare player bbref has no page for (a draft pick
+who never played, say) has no `bbref_id` and is left out.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| season, team_id, bbref_id | | Key. `bbref_id` is basketball-reference's player id (`tatumja01`) |
+| player_id | VARCHAR | NBA id; NULL for players not in that season's `player_seasons` (mostly waived players who never played for anyone that season) |
+| salary | INTEGER | Dollars that season. NULL for two-way contracts, which bbref lists without a salary |
+
+A player traded mid-season appears only under his last team. A player who
+was waived or bought out appears under both teams: the old team's
+remaining (or stretched) salary and the new team's contract, as with
+Lillard in 2026 (MIL $22.5M, POR $14.1M). Both are real payroll, so team
+sums are right; a player's sum is what he was paid that season.
 
 ---
 

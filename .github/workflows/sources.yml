@@ -58,6 +58,17 @@ jobs:
         env:
           FAIL_SOURCE: ${{ inputs.fail_source }}
 
+      # the current season's 30 team pages (6s apart, so about 3 minutes);
+      # past seasons are never refetched
+      - name: basketball-reference salaries
+        id: bbref_salaries
+        continue-on-error: true
+        run: |
+          if [ "$FAIL_SOURCE" = bbref_salaries ]; then echo "failing on purpose (fail_source)"; exit 1; fi
+          uv run python -m pipeline.bbref_salaries --out out
+        env:
+          FAIL_SOURCE: ${{ inputs.fail_source }}
+
       # season and predictive EPM. Only the site's current season is public,
       # so this writes whichever season the site is on
       - name: dunksandthrees EPM
@@ -141,6 +152,7 @@ jobs:
         env:
           SOURCES: |
             {"basketball-reference": "${{ steps.bbref.outcome }}",
+             "basketball-reference salaries": "${{ steps.bbref_salaries.outcome }}",
              "dunksandthrees": "${{ steps.dunksandthrees.outcome }}",
              "cleaningtheglass": "${{ steps.ctg.outcome }}",
              "espn-net-points": "${{ steps.espn_net_pts.outcome }}"}
