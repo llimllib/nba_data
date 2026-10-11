@@ -14,10 +14,9 @@ per 100 possessions:
     https://nfl-player-metrics.s3.amazonaws.com/net-pts/nba_net_pts_data.json
     https://nfl-player-metrics.s3.amazonaws.com/net-pts/nba_net_pts100_data.json
 
-They mostly equal sums of player_box, but not always: ESPN recomputes past
-seasons (2022-2025 differ substantially from the daily files we saved then),
-and player_box has no possessions for 2022-2025, so it can't give per-100
-values for them (#66). Both files are kept, latest only, at
+For 2019-2025 they equal sums of player_box (#66, #72); the current season
+can differ, since ESPN revises days after we've saved them. Both files are
+kept, latest only, at
 
     nba/raw/espn/net_pts/{totals,per_100}.json.gz
 
