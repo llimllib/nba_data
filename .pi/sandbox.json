@@ -17,6 +17,7 @@
       "sfo3.digitaloceanspaces.com",
       "*.duckdb.org",
       "duckdb.org",
+      "kenpom.com",
       "*.nba.com",
       "pypi.org"
     ]
