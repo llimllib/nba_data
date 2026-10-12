@@ -59,8 +59,10 @@ needs are downloaded.
 
 [Bart Torvik](https://barttorvik.com)'s T-Rank team ratings and four
 factors, 2007-08 on, and the ratings as they were every day of the season,
-2009-10 on, are in a separate catalog, keyed by season and torvik's team
-names:
+2009-10 on, are in a separate catalog with every game and box score since
+2004-05 from ESPN (history via [sportsdataverse](https://github.com/sportsdataverse/sportsdataverse-data)'s
+hoopR data). torvik's tables are keyed by season and torvik's team names,
+ESPN's by ESPN ids, and `team_seasons.torvik_team` joins them:
 
 ```sql
 ATTACH 'https://basketball-data.billmill.org/ncaam/ncaam.duckdb' AS ncaam;
@@ -74,6 +76,13 @@ WHERE r.season = 2026 ORDER BY r.barthag DESC LIMIT 10;
 SELECT date, wins, losses, adj_oe, adj_de, barthag
 FROM ncaam.torvik_ratings_daily
 WHERE season = 2026 AND team = 'Connecticut' ORDER BY date;
+
+-- UConn's 2025-26 games, from ESPN's box scores
+SELECT b.game_date, o.display_name AS opponent, b.pts, b.opp_pts, b.fga, b.tov
+FROM ncaam.team_box b
+JOIN ncaam.team_seasons t USING (season, team_id)
+JOIN ncaam.team_seasons o ON o.season = b.season AND o.team_id = b.opp_team_id
+WHERE b.season = 2026 AND t.torvik_team = 'Connecticut' ORDER BY b.game_date;
 ```
 
 The `data/` directory below is v1. It's still updated, but frozen in

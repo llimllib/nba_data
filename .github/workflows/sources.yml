@@ -101,6 +101,25 @@ jobs:
         env:
           FAIL_SOURCE: ${{ inputs.fail_source }}
 
+      # college games and box scores from ESPN (ncaam/espn/): the current
+      # season's new scoreboards and finished games' summaries, about 30-50
+      # requests a day in season. The season is built from every saved
+      # file, so download them first; sync succeeds when there are none
+      - name: ESPN college basketball
+        id: ncaam_espn
+        continue-on-error: true
+        run: |
+          if [ "$FAIL_SOURCE" = ncaam_espn ]; then echo "failing on purpose (fail_source)"; exit 1; fi
+          SEASON=$(uv run python -c 'from pipeline.seasons import current_season, today_eastern; print(current_season(today_eastern()))')
+          aws s3 sync "s3://$BUCKET/ncaam/raw/espn/$SEASON/" "out/ncaam/raw/espn/$SEASON/" --no-progress
+          uv run python -m pipeline.ncaam_espn --out out
+        env:
+          FAIL_SOURCE: ${{ inputs.fail_source }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.DO_SPACES_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.DO_SPACES_SECRET }}
+          AWS_ENDPOINT_URL: https://sfo3.digitaloceanspaces.com
+          AWS_DEFAULT_REGION: us-east-1
+
       # barttorvik.com returns 403 to GitHub Actions IPs, so torvik goes
       # through the tailscale exit node, as nba.com does in update.yml
       # (https://til.simonwillison.net/tailscale/tailscale-github-actions).
@@ -160,10 +179,14 @@ jobs:
         run: sudo -E tailscale set --exit-node=
 
       # check whatever the sources wrote before anything is published. out/
-      # has no lookup tables, so they're read from the bucket
+      # has no NBA lookup tables, so they're read from the bucket; the
+      # college ones are built by the ESPN college step, along with the
+      # only college files that have keys
       - name: Integrity check
         id: check
-        run: uv run python -m pipeline.catalog --out out --check --remote-lookups
+        run: |
+          uv run python -m pipeline.catalog --out out --check --remote-lookups
+          uv run python -m pipeline.catalog --out out --check --league ncaam
 
       # if every source failed before writing anything, out/ doesn't exist
       - name: Upload
@@ -223,7 +246,8 @@ jobs:
              "dunksandthrees": "${{ steps.dunksandthrees.outcome }}",
              "cleaningtheglass": "${{ steps.ctg.outcome }}",
              "espn-net-points": "${{ steps.espn_net_pts.outcome }}",
-             "barttorvik": "${{ steps.torvik.outcome }}"}
+             "barttorvik": "${{ steps.torvik.outcome }}",
+             "espn-college": "${{ steps.ncaam_espn.outcome }}"}
         with:
           script: |
             const outcomes = JSON.parse(process.env.SOURCES);

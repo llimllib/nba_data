@@ -67,6 +67,7 @@ SDV = "https://github.com/sportsdataverse/sportsdataverse-data/releases/download
 USER_AGENT = "nba_data (https://github.com/llimllib/nba_data)"
 # ESPN doesn't publish a limit; one request a second is gentle for a CDN
 REQUEST_DELAY = 1
+RETRY_DELAY = 10
 RAW_DIR = Path("ncaam/raw/espn")
 OUT_DIR = Path("ncaam/espn")
 TEAMS_CSV = Path(__file__).parent / "ncaam_teams.csv"
@@ -475,7 +476,8 @@ def trim_summary(data: dict) -> dict:
 class Fetcher:
     """
     GETs no faster than one per REQUEST_DELAY seconds, asking for gzip. A
-    404 is None. A dropped connection or truncated response is retried once
+    404 is None. A dropped connection, truncated response or server error
+    (ESPN's CDN sends the odd 504) is retried once, after RETRY_DELAY
     """
 
     def __init__(self, delay: float = REQUEST_DELAY, sleep=time.sleep, clock=time.time):
@@ -488,8 +490,12 @@ class Fetcher:
     def get(self, url: str) -> bytes | None:
         try:
             return self.fetch(url)
-        except urllib.error.HTTPError:
-            raise
+        except urllib.error.HTTPError as e:
+            if e.code < 500:
+                raise
+            print(f"ncaam_espn: HTTP {e.code}; retrying", flush=True)
+            self.sleep(RETRY_DELAY)
+            return self.fetch(url)
         except (
             urllib.error.URLError,
             http.client.IncompleteRead,
