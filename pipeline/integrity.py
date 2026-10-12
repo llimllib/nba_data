@@ -9,8 +9,12 @@ docs/DATA_DICTIONARY.md):
 
 so a key must exist in the same season as the row that refers to it. NULLs
 aren't checked: the pipelines reject NULL keys, and other id columns can be
-NULL (games.home_team_id at a neutral site). The season digits in each
-games.game_id must also match its season.
+NULL (games.home_team_id at a neutral site). In the NBA catalog, the season
+digits in each games.game_id must also match its season.
+
+The college catalog (ncaam/) has lookup tables with the same names, keyed by
+ESPN's ids, so the same check applies to it; ESPN's game ids don't encode
+the season, so that part is NBA only.
 
 Called by pipeline.catalog on the catalog's views before the catalog is
 written, so a bad key fails the run and leaves the previous catalog in place.
@@ -59,8 +63,13 @@ def key_columns(con: duckdb.DuckDBPyConnection, table: str) -> dict[str, str]:
     return cols
 
 
-def problems(con: duckdb.DuckDBPyConnection, tables: list[str]) -> list[str]:
-    """every integrity problem in `tables`, as messages"""
+def problems(
+    con: duckdb.DuckDBPyConnection, tables: list[str], nba_game_ids: bool = True
+) -> list[str]:
+    """
+    every integrity problem in `tables`, as messages. `nba_game_ids` checks
+    that games' ids encode their season, as the NBA's do
+    """
     found = []
     for table in tables:
         cols = key_columns(con, table)
@@ -94,7 +103,7 @@ def problems(con: duckdb.DuckDBPyConnection, tables: list[str]) -> list[str]:
                 )
 
     # game ids encode the year the season starts: 0022500001 is 2025-26
-    if "games" in tables and "game_id" in columns(con, "games"):
+    if nba_game_ids and "games" in tables and "game_id" in columns(con, "games"):
         bad = con.execute(
             f"""
             SELECT season, game_id FROM games
@@ -108,9 +117,11 @@ def problems(con: duckdb.DuckDBPyConnection, tables: list[str]) -> list[str]:
     return found
 
 
-def check(con: duckdb.DuckDBPyConnection, tables: list[str]) -> None:
+def check(
+    con: duckdb.DuckDBPyConnection, tables: list[str], nba_game_ids: bool = True
+) -> None:
     """raise IntegrityError listing every problem in `tables`"""
-    found = problems(con, tables)
+    found = problems(con, tables, nba_game_ids)
     if found:
         raise IntegrityError(
             "integrity check failed:\n" + "\n".join(f"  {p}" for p in found)
