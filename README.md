@@ -55,6 +55,21 @@ needs are downloaded.
   [docs/DATA_DICTIONARY.md](docs/DATA_DICTIONARY.md) (the "v2" sections);
   the plan is in [docs/v2.md](docs/v2.md)
 
+### Men's college basketball
+
+[Bart Torvik](https://barttorvik.com)'s T-Rank team ratings and four
+factors, 2007-08 on, are in a separate catalog, keyed by season and
+torvik's team names:
+
+```sql
+ATTACH 'https://basketball-data.billmill.org/ncaam/ncaam.duckdb' AS ncaam;
+SELECT r.team, r.conf, r.wins, r.losses, round(r.adj_oe, 1) AS adj_oe,
+    round(r.adj_de, 1) AS adj_de, round(f.efg_pct, 3) AS efg_pct
+FROM ncaam.torvik_team_results r
+JOIN ncaam.torvik_four_factors f USING (season, team)
+WHERE r.season = 2026 ORDER BY r.barthag DESC LIMIT 10;
+```
+
 The `data/` directory below is v1. It's still updated, but frozen in
 format, and will be removed once everything has moved to v2.
 

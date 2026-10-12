@@ -101,6 +101,17 @@ jobs:
         env:
           FAIL_SOURCE: ${{ inputs.fail_source }}
 
+      # men's college basketball, under ncaam/ with its own catalog. The
+      # current season's two CSVs; past seasons are never refetched
+      - name: barttorvik
+        id: torvik
+        continue-on-error: true
+        run: |
+          if [ "$FAIL_SOURCE" = torvik ]; then echo "failing on purpose (fail_source)"; exit 1; fi
+          uv run python -m pipeline.torvik --out out
+        env:
+          FAIL_SOURCE: ${{ inputs.fail_source }}
+
       # check whatever the sources wrote before anything is published. out/
       # has no lookup tables, so they're read from the bucket
       - name: Integrity check
@@ -127,7 +138,7 @@ jobs:
           curl -sf -X DELETE \
             -H "Authorization: Bearer $DO_CDN_API_KEY" \
             -H "Content-Type: application/json" \
-            -d '{"files": ["nba/*"]}' \
+            -d '{"files": ["nba/*", "ncaam/*"]}' \
             "https://api.digitalocean.com/v2/cdn/endpoints/$DO_CDN_ENDPOINT_ID/cache"
         env: &cdn
           DO_CDN_API_KEY: ${{ secrets.DO_CDN_API_KEY }}
@@ -140,7 +151,16 @@ jobs:
           aws s3 cp out/nba/nba.duckdb "s3://$BUCKET/nba/nba.duckdb" --acl public-read --no-progress
         env: *spaces
 
-      - name: Purge the CDN again, for the catalog
+      # the college data's catalog, ncaam/ncaam.duckdb; nothing in it has NBA
+      # keys, so there's nothing for the integrity check to check
+      - name: Build and upload the college catalog
+        id: catalog_ncaam
+        run: |
+          uv run python -m pipeline.catalog --out out --bucket "$BUCKET" --league ncaam
+          aws s3 cp out/ncaam/ncaam.duckdb "s3://$BUCKET/ncaam/ncaam.duckdb" --acl public-read --no-progress
+        env: *spaces
+
+      - name: Purge the CDN again, for the catalogs
         run: *purge
         env: *cdn
 
@@ -155,7 +175,8 @@ jobs:
              "basketball-reference salaries": "${{ steps.bbref_salaries.outcome }}",
              "dunksandthrees": "${{ steps.dunksandthrees.outcome }}",
              "cleaningtheglass": "${{ steps.ctg.outcome }}",
-             "espn-net-points": "${{ steps.espn_net_pts.outcome }}"}
+             "espn-net-points": "${{ steps.espn_net_pts.outcome }}",
+             "barttorvik": "${{ steps.torvik.outcome }}"}
         with:
           script: |
             const outcomes = JSON.parse(process.env.SOURCES);
@@ -192,7 +213,8 @@ jobs:
       - name: Notify on failure
         if: >-
           always() && (steps.check.outcome == 'failure' || steps.upload.outcome == 'failure'
-          || steps.purge.outcome == 'failure' || steps.catalog.outcome == 'failure')
+          || steps.purge.outcome == 'failure' || steps.catalog.outcome == 'failure'
+          || steps.catalog_ncaam.outcome == 'failure')
         uses: actions/github-script@v9.0.0
         with:
           script: |
