@@ -3,12 +3,17 @@ Fetch barttorvik.com's season CSVs for men's college basketball, and build
 
     ncaam/torvik/torvik_team_results/season=<season>/data.parquet
     ncaam/torvik/torvik_four_factors/season=<season>/data.parquet
+    ncaam/torvik/torvik_ratings_daily/season=<season>/data.parquet
 
 with one row per Division I team: T-Rank's adjusted efficiencies, records,
 strength of schedule and projections, and the four factors (plus shooting,
-assist and block rates) for and against.
+assist and block rates) for and against. The daily ratings are the team
+results as they were after each day's games, one row per team per day.
 
 usage: python -m pipeline.torvik [--out out] [--season 2026 ...] [--no-fetch]
+
+A past season's backfill is about 166 requests (2 seconds apart) for the
+daily ratings, and 2 for the season's CSVs.
 
 The CSVs are at /<season>_team_results.csv and /<season>_fffinal.csv, named
 by the season's end year like our seasons, from 2008 on. The current
@@ -20,6 +25,25 @@ skipped. Every CSV is kept, gzipped, under the date it was fetched:
 
 and a season is built from its latest files, whose date is `as_of_date`.
 
+The daily ratings come from torvik's time machine, a gzipped JSON snapshot
+of the team results per day at
+/timemachine/team_results/<yyyymmdd>_team_results.json.gz, from 2010 on.
+Each is fetched once, up to yesterday's, and kept as served:
+
+    ncaam/raw/torvik/<season>/daily/<date>.json.gz
+
+A snapshot is published the next afternoon. Days without one (before the
+season, after the title game, gaps) are a 404, recorded in missing.txt in
+that directory once they're a few days old, so they aren't requested again.
+So are the few that are corrupt (gzip that fails its CRC check), unlike a
+response that isn't gzip at all (torvik's bot check), which fails the run.
+Snapshots name teams as they were named then, so they're mapped to the
+current names the CSVs use, from torvik_names.csv. After the title game
+some seasons' snapshots switch to the next season's preseason projections;
+those aren't kept. Every saved day is read to build the season's file, so a
+run needs the
+season's saved snapshots: the workflow downloads them from the bucket first.
+
 Teams have no ids: the key is torvik's team name, which torvik applies to
 every season (a renamed school has its current name throughout). The CSVs'
 headers repeat names ("rank", "Rk") and the four factors' leaves its last
@@ -30,13 +54,15 @@ isn't one of the known ones writes nothing. So does a page that isn't a CSV
 
 import argparse
 import csv
+import functools
 import gzip
 import http.client
 import io
+import json
 import time
 import urllib.error
 import urllib.request
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Protocol
 
@@ -184,6 +210,24 @@ FOUR_FACTORS = [
 
 SPECS = {"team_results": TEAM_RESULTS, "fffinal": FOUR_FACTORS}
 
+# the time machine: a snapshot of the team results for every day of the
+# season, from 2010, as gzipped JSON
+DAILY_DATASET = "torvik_ratings_daily"
+FIRST_DAILY_SEASON = 2010
+# the days that were a 404, one per line, in the season's daily directory
+MISSING = "missing.txt"
+# how old a 404's day must be before it's recorded as missing
+RECHECK_DAYS = 3
+# Snapshots use the names of the time, while the season CSVs use each
+# school's current name for every season: the old name -> the current one
+NAMES_CSV = Path(__file__).parent / "torvik_names.csv"
+
+
+@functools.cache
+def current_names() -> dict[str, str]:
+    with NAMES_CSV.open() as f:
+        return {r["name"]: r["team"] for r in csv.DictReader(f)}
+
 
 def headers(spec: list[tuple]) -> list[str]:
     """the header row a CSV with these columns has"""
@@ -217,6 +261,13 @@ def columns(spec: list[tuple]) -> list[tuple[str, str]]:
     return [("season", "INTEGER"), ("as_of_date", "DATE"), *cols]
 
 
+DAILY_COLUMNS = [
+    ("season", "INTEGER"),
+    ("date", "DATE"),
+    *[c for c in columns(TEAM_RESULTS) if c[0] not in ("season", "as_of_date")],
+]
+
+
 def integer(value: str) -> int:
     """an integer, which torvik sometimes writes as a float ("26.0")"""
     x = float(value)
@@ -239,18 +290,23 @@ def parse(text: str, file: str, season: int) -> list[dict]:
     nothing is saved or written from a changed one
     """
     label = f"torvik {season} {file}"
-    spec = SPECS[file]
     rows = list(csv.reader(io.StringIO(text)))
     if not rows or rows[0] not in KNOWN_HEADERS[file]:
         first = text[:200].strip().replace("\n", " ")
         raise ValueError(f"{label}: unexpected header; the file starts {first!r}")
-    if not MIN_TEAMS <= len(rows) - 1 <= MAX_TEAMS:
+    return parse_rows(rows[1:], file, season, label)
+
+
+def parse_rows(rows: list[list[str]], file: str, season: int, label: str) -> list[dict]:
+    """parse a CSV's rows, after the header, in the columns of SPECS[file]"""
+    spec = SPECS[file]
+    if not MIN_TEAMS <= len(rows) <= MAX_TEAMS:
         raise ValueError(
-            f"{label}: {len(rows) - 1} teams, expected {MIN_TEAMS} to {MAX_TEAMS}"
+            f"{label}: {len(rows)} teams, expected {MIN_TEAMS} to {MAX_TEAMS}"
         )
 
     teams = []
-    for r in rows[1:]:
+    for r in rows:
         if len(r) != len(spec):
             raise ValueError(f"{label}: {len(r)} values for {len(spec)} columns: {r}")
         row: dict = {"season": season}
@@ -289,12 +345,54 @@ def parse(text: str, file: str, season: int) -> list[dict]:
     return teams
 
 
+class CorruptSnapshot(ValueError):
+    """a snapshot that's gzipped but doesn't decompress to JSON"""
+
+
+GZIP_MAGIC = b"\x1f\x8b"
+
+
+def parse_daily(data: bytes, season: int, day: date) -> list[dict]:
+    """
+    One row per team from a time machine snapshot: gzipped JSON, a list of
+    rows with the team results CSV's 45 columns. Raises ValueError if it
+    isn't as expected, so nothing is saved or written from a changed one,
+    and CorruptSnapshot if it's gzip that doesn't decompress to JSON (some
+    of torvik's files are: 2013-03-17's fails its CRC check)
+    """
+    label = f"torvik {season} daily {day}"
+    if not data.startswith(GZIP_MAGIC):
+        first = data[:200].decode("utf-8", "replace").strip().replace("\n", " ")
+        raise ValueError(f"{label}: not gzipped; starts {first!r}")
+    try:
+        rows = json.loads(gzip.decompress(data))
+    except (OSError, EOFError, ValueError) as e:
+        raise CorruptSnapshot(f"{label}: corrupt ({e})") from e
+    if not isinstance(rows, list) or not all(isinstance(r, list) for r in rows):
+        raise ValueError(f"{label}: expected a list of rows")
+    # as the CSV has them: "37-3", 26.0 for 26, no nulls
+    text = [["" if v is None else str(v) for v in r] for r in rows]
+    names = current_names()
+    return [
+        r | {"date": day, "team": names.get(r["team"], r["team"])}
+        for r in parse_rows(text, "team_results", season, label)
+    ]
+
+
 def path(season: int, file: str) -> str:
     return f"/{season}_{file}.csv"
 
 
+def daily_path(day: date) -> str:
+    return f"/timemachine/team_results/{day:%Y%m%d}_team_results.json.gz"
+
+
 class Pages(Protocol):
     def get(self, path: str) -> str | None: ...
+
+
+class Snapshots(Protocol):
+    def get_bytes(self, path: str) -> bytes | None: ...
 
 
 class Fetcher:
@@ -311,6 +409,10 @@ class Fetcher:
         self.last = 0.0
 
     def get(self, path: str) -> str | None:
+        data = self.get_bytes(path)
+        return None if data is None else data.decode("utf-8")
+
+    def get_bytes(self, path: str) -> bytes | None:
         try:
             return self.fetch(path)
         except (http.client.IncompleteRead, urllib.error.URLError) as e:
@@ -319,7 +421,7 @@ class Fetcher:
             print(f"torvik: {e!r}; retrying", flush=True)
             return self.fetch(path)
 
-    def fetch(self, path: str) -> str | None:
+    def fetch(self, path: str) -> bytes | None:
         wait = self.last + self.delay - self.clock()
         if wait > 0:
             self.sleep(wait)
@@ -329,7 +431,7 @@ class Fetcher:
         )
         try:
             with urllib.request.urlopen(req, timeout=60) as res:
-                return res.read().decode("utf-8")
+                return res.read()
         except urllib.error.HTTPError as e:
             if e.code == 404:
                 return None
@@ -414,6 +516,124 @@ def build_season(
     return paths
 
 
+def season_days(season: int) -> list[date]:
+    """
+    The days a season's snapshots might exist for: the season starts in
+    November (November 25 in 2021) and the title game is in early April
+    """
+    start, end = date(season - 1, 11, 1), date(season, 4, 15)
+    return [start + timedelta(days=i) for i in range((end - start).days + 1)]
+
+
+def daily_dir(outdir: Path, season: int) -> Path:
+    return outdir / RAW_DIR / str(season) / "daily"
+
+
+def missing_days(outdir: Path, season: int) -> dict[date, str]:
+    """day -> why it's missing: "404" or "corrupt" """
+    path = daily_dir(outdir, season) / MISSING
+    if not path.exists():
+        return {}
+    days = {}
+    for line in path.read_text().splitlines():
+        day, _, reason = line.partition(" ")
+        days[date.fromisoformat(day)] = reason
+    return days
+
+
+def fetch_days(fetcher: Snapshots, outdir: Path, season: int, today: date) -> int:
+    """
+    Fetch the season's snapshots that aren't saved, up to yesterday, and
+    return how many were saved. Each is saved as torvik serves it, after it
+    parses. A 404 or a corrupt file is recorded in MISSING, so it's never
+    requested again, once the day is RECHECK_DAYS old: a snapshot is
+    published the next afternoon, so a recent day's may just not be there
+    yet (or be partly written)
+    """
+    if season < FIRST_DAILY_SEASON:
+        return 0
+    directory = daily_dir(outdir, season)
+    saved = {
+        date.fromisoformat(p.name.removesuffix(".json.gz"))
+        for p in directory.glob("*.json.gz")
+    }
+    missing = missing_days(outdir, season)
+    count = 0
+    for day in season_days(season):
+        if day >= today:
+            break
+        if day in saved or day in missing:
+            continue
+        data = fetcher.get_bytes(daily_path(day))
+        reason = "404" if data is None else None
+        if data is not None:
+            try:
+                parse_daily(data, season, day)
+            except CorruptSnapshot as e:
+                print(f"torvik: {e}", flush=True)
+                reason = "corrupt"
+        if reason:
+            if (today - day).days >= RECHECK_DAYS:
+                missing[day] = reason
+                write_atomic(
+                    directory / MISSING,
+                    lambda tmp: tmp.write_text(
+                        "".join(f"{d} {r}\n" for d, r in sorted(missing.items()))
+                    ),
+                )
+            continue
+        assert data is not None
+        write_atomic(
+            directory / f"{day}.json.gz", lambda tmp, data=data: tmp.write_bytes(data)
+        )
+        count += 1
+    return count
+
+
+def build_daily(outdir: Path, season: int) -> Path | None:
+    """
+    Write a season's daily ratings from its saved snapshots. Returns the
+    path, or None if there are none
+    """
+    files = sorted(daily_dir(outdir, season).glob("*.json.gz"))
+    rows = []
+    days = 0
+    for f in files:
+        day = date.fromisoformat(f.name.removesuffix(".json.gz"))
+        snapshot = parse_daily(f.read_bytes(), season, day)
+        # after the title game, some seasons' snapshots (2020-2023) are the
+        # next season's preseason projections, with no games played
+        if day.month <= 6 and not any(r["wins"] + r["losses"] for r in snapshot):
+            continue
+        rows += snapshot
+        days += 1
+    if not rows:
+        return None
+
+    # a team the season's CSV doesn't have is a rename to add to NAMES_CSV,
+    # or a team that didn't play (the 2021 Ivy League)
+    final = latest_file(outdir, season, "team_results")
+    if final:
+        known = {r["team"] for r in parse(final[1], "team_results", season)}
+        unknown = sorted({r["team"] for r in rows} - known)
+        if unknown:
+            print(f"torvik: {season} daily teams not in its team results: {unknown}")
+    cols = DAILY_COLUMNS
+    table = pa.table(
+        {name: pa.array([r[name] for r in rows], TYPES[t]) for name, t in cols}
+    )
+    con = duckdb.connect()
+    con.register("arrow", table)
+    con.execute(
+        f"CREATE TABLE {DAILY_DATASET} AS SELECT * FROM arrow ORDER BY date, team"
+    )
+    check_keys(con, DAILY_DATASET, ["date", "team"], f"torvik {season} {DAILY_DATASET}")
+    out = dataset_path(outdir / OUT_DIR, DAILY_DATASET, season)
+    write_parquet(con, DAILY_DATASET, out)
+    print(f"torvik: wrote {out} ({days} days, {len(rows)} rows)")
+    return out
+
+
 def saved_seasons(outdir: Path) -> list[int]:
     return sorted(
         int(p.name)
@@ -449,6 +669,9 @@ def main(argv: list[str] | None = None) -> None:
         if not files:
             raise SystemExit(f"torvik: no saved CSVs for {season}")
         build_season(args.out, season, files)
+        if fetcher:
+            fetch_days(fetcher, args.out, season, today)
+        build_daily(args.out, season)
 
 
 if __name__ == "__main__":

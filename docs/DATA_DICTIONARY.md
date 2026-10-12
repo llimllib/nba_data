@@ -636,8 +636,9 @@ Not kept: names, abbreviations, the last game date (the same as
 ## v2 College Basketball (`ncaam/`)
 
 Men's college basketball, separate from the NBA data: its own prefix, and
-its own catalog, `ncaam/ncaam.duckdb`, with a view per dataset and a
-`metadata` table like `nba.duckdb`'s:
+its own catalog, `ncaam/ncaam.duckdb`, with a view per dataset
+(`torvik_team_results`, `torvik_four_factors`, `torvik_ratings_daily`) and
+a `metadata` table like `nba.duckdb`'s:
 
 ```sql
 ATTACH 'https://basketball-data.billmill.org/ncaam/ncaam.duckdb' AS ncaam;
@@ -648,8 +649,9 @@ The [layout](#layout), types, `snake_case` names, fractions and NULLs follow
 the v2 conventions; seasons are end years (2026 = 2025-26). There are no
 NBA ids. Teams are keyed by **torvik's team name** (`team`), which torvik
 applies to every season (a renamed school has its current name
-throughout), and which is the same in both datasets. A second college
-source would need a team lookup table.
+throughout), and which is the same in every dataset (the daily
+ratings' older names are mapped to it). A second college source would need
+a team lookup table.
 
 ### barttorvik.com (`ncaam/torvik/`)
 
@@ -716,6 +718,55 @@ fractions (0.494; torvik's CSV has percentages).
 nba0bservable's four factors page reads the 2026 CSV directly; from here
 that's `torvik_four_factors WHERE season = 2026`, times 100 for its
 percentages.
+
+#### `torvik_ratings_daily/season=<season>/data.parquet`
+
+The T-Rank ratings as torvik published them after each day's games, from
+its "time machine", seasons 2010 on: one row per team per day, with the
+columns of `torvik_team_results` (and the same NULLs), except `date` in
+place of `as_of_date`.
+
+```sql
+SELECT date, wins, losses, adj_oe, adj_de, barthag
+FROM ncaam.torvik_ratings_daily
+WHERE season = 2026 AND team = 'Connecticut' ORDER BY date;
+```
+
+| Column | Type | Description |
+|--------|------|-------------|
+| season, date, team | | Key. The ratings after `date`'s games (the snapshot dated the night of the title game includes it) |
+| ... | | Every column of `torvik_team_results` but `as_of_date` |
+
+- **Coverage:** every day from the first snapshot to the title game:
+  January 31 on for 2010-2014, early or mid-November for 2015-2020 (2020
+  ends March 30, after the season was cancelled), and November 1, with
+  the preseason projections before the first game, from 2021. 2024 and
+  2025 also run to April 15 with copies of the final ratings. The current
+  season gets each
+  day's snapshot the day after (torvik publishes them the next afternoon).
+  There are no gaps within a season but one: torvik's file for 2013-03-17
+  is corrupt
+- **As published:** these are the ratings torvik showed that day. Torvik
+  has since recomputed past seasons, so for 2010-2019 the last day differs
+  from `torvik_team_results` by about 1 point of adjusted efficiency (barthag
+  correlates at 0.9997+); from 2020 they match. The 2017-2019 snapshots'
+  records leave out games against non-Division I teams, which the season
+  CSVs count (Michigan 2018: 32-8 here, 33-8 there)
+- **Names:** torvik's snapshots use the names of their time ("North
+  Carolina St."). They're mapped to the current names that the other two
+  datasets use (`N.C. State`), from `pipeline/torvik_names.csv`, so `team`
+  joins across datasets and seasons. Every team joins to that season's
+  `torvik_team_results` except ten that didn't play in 2021 (the Ivy
+  League, Bethune-Cookman, Maryland Eastern Shore), which torvik projected
+  in the preseason
+- **Not kept:** after the title game in 2020-2023, torvik's snapshots are
+  the next season's preseason projections (no games played); those days
+  are dropped
+
+Raw snapshots are kept as served, at
+`ncaam/raw/torvik/<season>/daily/<date>.json.gz`; `missing.txt` there lists
+the days torvik has no snapshot for (`404`) or a corrupt one (`corrupt`),
+which are never requested again.
 
 ---
 
