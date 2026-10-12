@@ -168,6 +168,14 @@ def quote(s: str) -> str:
     return "'" + s.replace("'", "''") + "'"
 
 
+def league_of(files: list[File]) -> str:
+    """the league whose files these are: the first part of their keys"""
+    leagues = {f.key.split("/")[0] for f in files}
+    if len(leagues) != 1:
+        raise ValueError(f"catalog: files from more than one league: {sorted(leagues)}")
+    return leagues.pop()
+
+
 def build(path: Path, files: list[File], location: str) -> None:
     """
     Write the catalog to `path`, with views reading each file at
@@ -187,14 +195,16 @@ def build(path: Path, files: list[File], location: str) -> None:
             )
             con.execute("USE catalog")
             create(con, datasets, location.rstrip("/"))
-            integrity.check(con, list(datasets))
+            integrity.check(con, list(datasets), league == "nba")
 
+    league = league_of(files)
     write_atomic(path, write)
     print(f"catalog: wrote {path} ({len(datasets)} datasets)")
 
 
-# the lookup tables, all built by pipeline.stats
-LOOKUP_SOURCE = "stats"
+# each league's lookup tables are built by one source: the NBA's by
+# pipeline.stats, the college ones by pipeline.ncaam_espn
+LOOKUP_SOURCES = {"nba": "stats", "ncaam": "espn"}
 
 
 def check(files: list[File], location: str, lookups_url: str | None = None) -> None:
@@ -209,6 +219,7 @@ def check(files: list[File], location: str, lookups_url: str | None = None) -> N
     if not datasets:
         print("catalog: no parquet files to check")
         return
+    league = league_of(files)
     with duckdb.connect() as con:
         create(con, datasets, location.rstrip("/"))
         tables = list(datasets)
@@ -221,14 +232,14 @@ def check(files: list[File], location: str, lookups_url: str | None = None) -> N
             }
             for lookup in sorted(needed - set(datasets)):
                 urls = [
-                    f"{lookups_url.rstrip('/')}/nba/{LOOKUP_SOURCE}/{lookup}/season={s}/data.parquet"
+                    f"{lookups_url.rstrip('/')}/{league}/{LOOKUP_SOURCES[league]}/{lookup}/season={s}/data.parquet"
                     for s in seasons
                 ]
                 con.execute(
                     f"CREATE VIEW {lookup} AS SELECT * FROM {reader(con, lookup, urls)}"
                 )
                 tables.append(lookup)
-        integrity.check(con, tables)
+        integrity.check(con, tables, league == "nba")
     print(f"catalog: integrity check passed ({len(datasets)} datasets)")
 
 

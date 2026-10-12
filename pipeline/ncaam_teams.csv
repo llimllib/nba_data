@@ -1,0 +1,371 @@
+espn_team_id,torvik_team
+2,Auburn
+5,UAB
+6,South Alabama
+8,Arkansas
+9,Arizona St.
+12,Arizona
+13,Cal Poly
+16,Sacramento St.
+21,San Diego St.
+23,San Jose St.
+24,Stanford
+25,California
+26,UCLA
+27,UC Riverside
+28,UC San Diego
+30,USC
+36,Colorado St.
+38,Colorado
+41,Connecticut
+42,Hartford
+43,Yale
+44,American
+45,George Washington
+46,Georgetown
+47,Howard
+48,Delaware
+50,Florida A&M
+52,Florida St.
+55,Jacksonville St.
+56,Stetson
+57,Florida
+58,South Florida
+59,Georgia Tech
+61,Georgia
+62,Hawaii
+66,Iowa St.
+68,Boise St.
+70,Idaho
+71,Bradley
+77,Northwestern
+79,Southern Illinois
+82,Illinois Chicago
+84,Indiana
+85,IU Indy
+87,Notre Dame
+88,Southern Indiana
+91,Bellarmine
+93,Murray St.
+94,Northern Kentucky
+96,Kentucky
+97,Louisville
+98,Western Kentucky
+99,LSU
+103,Boston College
+104,Boston University
+107,Holy Cross
+108,Harvard
+111,Northeastern
+113,Massachusetts
+116,Mount St. Mary's
+119,Towson
+120,Maryland
+127,Michigan St.
+130,Michigan
+135,Minnesota
+139,Saint Louis
+140,UMKC
+142,Missouri
+145,Mississippi
+147,Montana St.
+149,Montana
+150,Duke
+151,East Carolina
+152,N.C. State
+153,North Carolina
+154,Wake Forest
+155,North Dakota
+156,Creighton
+158,Nebraska
+159,Dartmouth
+160,New Hampshire
+161,Fairleigh Dickinson
+163,Princeton
+164,Rutgers
+166,New Mexico St.
+167,New Mexico
+171,Columbia
+172,Cornell
+179,St. Bonaventure
+183,Syracuse
+189,Bowling Green
+193,Miami OH
+194,Ohio St.
+195,Ohio
+197,Oklahoma St.
+198,Oral Roberts
+201,Oklahoma
+202,Tulsa
+204,Oregon St.
+213,Penn St.
+218,Temple
+219,Penn
+221,Pittsburgh
+222,Villanova
+225,Brown
+227,Rhode Island
+228,Clemson
+231,Furman
+232,Charleston
+233,South Dakota
+235,Memphis
+236,Chattanooga
+238,Vanderbilt
+239,Baylor
+242,Rice
+245,Texas A&M
+248,Houston
+249,North Texas
+250,UT Arlington
+251,Texas
+252,BYU
+253,Southern Utah
+254,Utah
+256,James Madison
+257,Richmond
+258,Virginia
+259,Virginia Tech
+261,Vermont
+264,Washington
+265,Washington St.
+269,Marquette
+270,Milwaukee
+275,Wisconsin
+276,Marshall
+277,West Virginia
+278,Fresno St.
+279,Pacific
+282,Indiana St.
+284,Stonehill
+288,Lipscomb
+290,Georgia Southern
+292,UT Rio Grande Valley
+294,Jacksonville
+295,Old Dominion
+299,Long Beach St.
+300,UC Irvine
+301,San Diego
+302,UC Davis
+304,Idaho St.
+305,DePaul
+309,Louisiana
+311,Maine
+314,Iona
+315,Niagara
+322,Lafayette
+324,Coastal Carolina
+325,Cleveland St.
+326,Texas St.
+328,Utah St.
+331,Eastern Washington
+333,Alabama
+338,Kennesaw St.
+339,Evansville
+344,Mississippi St.
+349,Army
+350,UNC Wilmington
+356,Illinois
+357,Texas A&M Corpus Chris
+399,Albany
+526,Florida Gulf Coast
+2000,Abilene Christian
+2005,Air Force
+2006,Akron
+2010,Alabama A&M
+2011,Alabama St.
+2016,Alcorn St.
+2026,Appalachian St.
+2029,Arkansas Pine Bluff
+2031,Little Rock
+2032,Arkansas St.
+2046,Austin Peay
+2050,Ball St.
+2057,Belmont
+2065,Bethune Cookman
+2066,Binghamton
+2083,Bucknell
+2084,Buffalo
+2086,Butler
+2097,Campbell
+2099,Canisius
+2110,Central Arkansas
+2113,Centenary
+2115,Central Connecticut
+2116,UCF
+2117,Central Michigan
+2127,Charleston Southern
+2130,Chicago St.
+2132,Cincinnati
+2142,Colgate
+2154,Coppin St.
+2166,Davidson
+2168,Dayton
+2169,Delaware St.
+2172,Denver
+2174,Detroit Mercy
+2181,Drake
+2182,Drexel
+2184,Duquesne
+2193,East Tennessee St.
+2197,Eastern Illinois
+2198,Eastern Kentucky
+2199,Eastern Michigan
+2210,Elon
+2217,Fairfield
+2226,Florida Atlantic
+2229,FIU
+2230,Fordham
+2239,Cal St. Fullerton
+2241,Gardner Webb
+2244,George Mason
+2247,Georgia St.
+2250,Gonzaga
+2253,Grand Canyon
+2261,Hampton
+2272,High Point
+2275,Hofstra
+2277,Houston Christian
+2287,Illinois St.
+2294,Iowa
+2296,Jackson St.
+2305,Kansas
+2306,Kansas St.
+2309,Kent St.
+2320,Lamar
+2325,La Salle
+2329,Lehigh
+2330,Le Moyne
+2335,Liberty
+2344,Longwood
+2348,Louisiana Tech
+2349,UMass Lowell
+2350,Loyola Chicago
+2351,Loyola Marymount
+2352,Loyola MD
+2363,Manhattan
+2368,Marist
+2377,McNeese St.
+2378,UMBC
+2379,Maryland Eastern Shore
+2382,Mercer
+2385,Mercyhurst
+2390,Miami FL
+2393,Middle Tennessee
+2400,Mississippi Valley St.
+2405,Monmouth
+2413,Morehead St.
+2415,Morgan St.
+2426,Navy
+2427,UNC Asheville
+2428,North Carolina Central
+2429,Charlotte
+2430,UNC Greensboro
+2433,Louisiana Monroe
+2437,Nebraska Omaha
+2439,UNLV
+2440,Nevada
+2441,New Haven
+2443,New Orleans
+2447,Nicholls St.
+2448,North Carolina A&T
+2449,North Dakota St.
+2450,Norfolk St.
+2453,North Alabama
+2454,North Florida
+2458,Northern Colorado
+2459,Northern Illinois
+2460,Northern Iowa
+2463,Cal St. Northridge
+2464,Northern Arizona
+2466,Northwestern St.
+2473,Oakland
+2483,Oregon
+2492,Pepperdine
+2501,Portland
+2502,Portland St.
+2504,Prairie View A&M
+2506,Presbyterian
+2507,Providence
+2509,Purdue
+2511,Queens
+2514,Quinnipiac
+2515,Radford
+2520,Rider
+2523,Robert Morris
+2529,Sacred Heart
+2534,Sam Houston St.
+2535,Samford
+2539,San Francisco
+2540,UC Santa Barbara
+2541,Santa Clara
+2542,Savannah St.
+2545,Southeastern Louisiana
+2546,Southeast Missouri St.
+2547,Seattle
+2550,Seton Hall
+2561,Siena
+2565,SIU Edwardsville
+2567,SMU
+2569,South Carolina St.
+2571,South Dakota St.
+2572,Southern Miss
+2579,South Carolina
+2582,Southern
+2597,St. Francis NY
+2598,Saint Francis
+2599,St. John's
+2603,Saint Joseph's
+2608,Saint Mary's
+2612,Saint Peter's
+2617,Stephen F. Austin
+2619,Stony Brook
+2623,Missouri St.
+2627,Tarleton St.
+2628,TCU
+2630,Tennessee Martin
+2633,Tennessee
+2634,Tennessee St.
+2635,Tennessee Tech
+2636,UTSA
+2638,UTEP
+2640,Texas Southern
+2641,Texas Tech
+2643,The Citadel
+2649,Toledo
+2653,Troy
+2655,Tulane
+2670,VCU
+2674,Valparaiso
+2678,VMI
+2681,Wagner
+2692,Weber St.
+2698,West Georgia
+2710,Western Illinois
+2711,Western Michigan
+2717,Western Carolina
+2724,Wichita St.
+2729,William & Mary
+2736,Winston Salem St.
+2737,Winthrop
+2739,Green Bay
+2747,Wofford
+2750,Wright St.
+2751,Wyoming
+2752,Xavier
+2754,Youngstown St.
+2755,Grambling St.
+2771,Merrimack
+2803,Bryant
+2815,Lindenwood
+2837,East Texas A&M
+2856,Cal Baptist
+2870,Purdue Fort Wayne
+2885,NJIT
+2900,St. Thomas
+2908,USC Upstate
+2916,Incarnate Word
+2934,Cal St. Bakersfield
+3084,Utah Valley
+3101,Utah Tech
+112358,LIU
