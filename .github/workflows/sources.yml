@@ -101,6 +101,35 @@ jobs:
         env:
           FAIL_SOURCE: ${{ inputs.fail_source }}
 
+      # barttorvik.com returns 403 to GitHub Actions IPs, so torvik goes
+      # through the tailscale exit node, as nba.com does in update.yml
+      # (https://til.simonwillison.net/tailscale/tailscale-github-actions).
+      # If the exit node isn't available, the torvik step fails and is
+      # reported like any other source failure
+      - name: Setup Tailscale
+        id: tailscale
+        continue-on-error: true
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
+          tags: tag:github-actions
+
+      # you can't set the exit-node name at 'up' time, so set it afterwards
+      # https://github.com/tailscale/github-action/issues/123
+      - name: Use the exit node
+        id: exit_node
+        if: steps.tailscale.outcome == 'success'
+        continue-on-error: true
+        run: |
+          timeout 5m sudo -E tailscale set --exit-node=apple-tv --exit-node-allow-lan-access=true
+          online=$(sudo tailscale status --json | jq -r '.ExitNodeStatus.Online // "null"')
+          if [ "$online" != "true" ]; then
+            echo "exit node apple-tv is not online (status: $online)"
+            exit 1
+          fi
+          curl --max-time 10 -sf https://www.google.com > /dev/null
+
       # men's college basketball, under ncaam/ with its own catalog. The
       # current season's two CSVs (past seasons are never refetched), and
       # the daily ratings it doesn't have yet. Those are built from every
@@ -111,15 +140,24 @@ jobs:
         continue-on-error: true
         run: |
           if [ "$FAIL_SOURCE" = torvik ]; then echo "failing on purpose (fail_source)"; exit 1; fi
+          if [ "$EXIT_NODE" != success ]; then echo "no exit node (tailscale: $TAILSCALE, exit node: $EXIT_NODE), and torvik blocks Actions IPs"; exit 1; fi
           SEASON=$(uv run python -c 'from pipeline.seasons import current_season, today_eastern; print(current_season(today_eastern()))')
           aws s3 sync "s3://$BUCKET/ncaam/raw/torvik/$SEASON/daily/" "out/ncaam/raw/torvik/$SEASON/daily/" --no-progress
           uv run python -m pipeline.torvik --out out
         env:
           FAIL_SOURCE: ${{ inputs.fail_source }}
+          TAILSCALE: ${{ steps.tailscale.outcome }}
+          EXIT_NODE: ${{ steps.exit_node.outcome }}
           AWS_ACCESS_KEY_ID: ${{ secrets.DO_SPACES_ACCESS_KEY }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.DO_SPACES_SECRET }}
           AWS_ENDPOINT_URL: https://sfo3.digitaloceanspaces.com
           AWS_DEFAULT_REGION: us-east-1
+
+      # everything after this (the upload, the CDN purge, the catalog)
+      # goes direct again
+      - name: Disable the exit node
+        if: always() && steps.tailscale.outcome == 'success'
+        run: sudo -E tailscale set --exit-node=
 
       # check whatever the sources wrote before anything is published. out/
       # has no lookup tables, so they're read from the bucket
