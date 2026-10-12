@@ -1,5 +1,6 @@
 import gzip
 import http.client
+import io
 import json
 import re
 import urllib.error
@@ -315,8 +316,8 @@ def fetcher_with(monkeypatch, *responses):
     return torvik.Fetcher(delay=0, sleep=lambda s: None, clock=lambda: 0.0)
 
 
-def http_error(code):
-    return urllib.error.HTTPError("u", code, "x", Message(), None)
+def http_error(code, body=b""):
+    return urllib.error.HTTPError("u", code, "x", Message(), io.BytesIO(body))
 
 
 def test_fetcher_retries_a_truncated_response_once(monkeypatch):
@@ -510,3 +511,12 @@ def test_next_seasons_preseason_is_dropped(tmp_path):
         f"SELECT DISTINCT date::VARCHAR FROM read_parquet('{path}') ORDER BY 1"
     ).fetchall()
     assert dates == [("2025-11-01",), ("2026-04-06",)]
+
+
+def test_fetcher_prints_an_errors_body(monkeypatch, capsys):
+    error = http_error(403, b"<title>Verifying Browser...</title>")
+    with pytest.raises(urllib.error.HTTPError):
+        fetcher_with(monkeypatch, error).get("/2027_team_results.csv")
+    assert "HTTP 403 for /2027_team_results.csv: '<title>Verifying Browser" in (
+        capsys.readouterr().out
+    )

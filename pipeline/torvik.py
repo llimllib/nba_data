@@ -435,6 +435,10 @@ class Fetcher:
         except urllib.error.HTTPError as e:
             if e.code == 404:
                 return None
+            # the body says why (a block page, a rate limit), which the
+            # traceback doesn't
+            body = e.read()[:500].decode("utf-8", "replace")
+            print(f"torvik: HTTP {e.code} for {path}: {body!r}", flush=True)
             raise
         finally:
             self.last = self.clock()
