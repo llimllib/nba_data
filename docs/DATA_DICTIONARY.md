@@ -4,7 +4,9 @@ This document describes both versions of the data:
 
 - **v2** (the "v2" sections below): one parquet file per dataset per season
   at `https://basketball-data.billmill.org/nba/`, queried through the
-  [catalog](#v2-catalog-nbanbaduckdb). Start there.
+  [catalog](#v2-catalog-nbanbaduckdb). Start there. Men's college
+  basketball is separate, under `ncaam/` with its own catalog; see
+  [v2 College Basketball](#v2-college-basketball-ncaam).
 - **v1**: the files in this repo's `data/` directory. Still updated, but
   frozen in format and removed at cutover.
 
@@ -26,7 +28,8 @@ described below do not follow them.
 
 ### Keys
 
-Every table uses NBA ids as keys, with the same name and type everywhere:
+Every table uses NBA ids as keys, with the same name and type everywhere
+(except the college data under `ncaam/`, which has no NBA ids):
 
 | Column | Type | Example | Notes |
 |--------|------|---------|-------|
@@ -124,6 +127,8 @@ through `nba.duckdb`.
 nba/raw/<source>/<season>/...                        raw responses, gzipped
 nba/<source>/<dataset>/season=<season>/data.parquet  one file per season
 nba/nba.duckdb                                       the catalog
+ncaam/...                                            college basketball, laid out the same
+ncaam/ncaam.duckdb                                   its catalog
 ```
 
 The season is in the path (Hive partitioning) so that a query filtered on
@@ -625,6 +630,92 @@ are dropped. Every stat is a prediction.
 
 Not kept: names, abbreviations, the last game date (the same as
 `as_of_date`), and the site's ranks and z-scores (`*_rk`, `*_z`).
+
+---
+
+## v2 College Basketball (`ncaam/`)
+
+Men's college basketball, separate from the NBA data: its own prefix, and
+its own catalog, `ncaam/ncaam.duckdb`, with a view per dataset and a
+`metadata` table like `nba.duckdb`'s:
+
+```sql
+ATTACH 'https://basketball-data.billmill.org/ncaam/ncaam.duckdb' AS ncaam;
+SELECT * FROM ncaam.torvik_team_results WHERE season = 2026 ORDER BY barthag DESC;
+```
+
+The [layout](#layout), types, `snake_case` names, fractions and NULLs follow
+the v2 conventions; seasons are end years (2026 = 2025-26). There are no
+NBA ids. Teams are keyed by **torvik's team name** (`team`), which torvik
+applies to every season (a renamed school has its current name
+throughout), and which is the same in both datasets. A second college
+source would need a team lookup table.
+
+### barttorvik.com (`ncaam/torvik/`)
+
+Built by `pipeline/torvik.py` from [Bart Torvik](https://barttorvik.com)'s
+season CSVs, `<season>_team_results.csv` and `<season>_fffinal.csv`,
+2008 on (2007-08; torvik has nothing earlier). The current season is
+refetched daily; its team results are published before the season with
+the preseason projections, its four factors once games start. Raw CSVs are
+kept at `ncaam/raw/torvik/<season>/<team_results|four_factors>/<date
+fetched>.csv.gz`. One row per Division I team (341 in 2008, 365 in 2026);
+records include the postseason (Michigan's 2026 is 37-3). Torvik's ranks
+aren't kept.
+
+#### `torvik_team_results/season=<season>/data.parquet`
+
+T-Rank: efficiencies are points per 100 possessions, adjusted for opponent
+and venue. Torvik writes 0 for values it can't compute yet (before a team
+has games, or conference games, or games against quality opponents); those
+are NULL.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| season, team | | Key |
+| as_of_date | DATE | When the CSV was fetched |
+| conf | VARCHAR | Conference abbreviation (`B10`, `ACC`, ...) |
+| wins, losses, conf_wins, conf_losses | INTEGER | Record, overall and in conference |
+| adj_oe, adj_de | DOUBLE | Adjusted offensive and defensive efficiency |
+| adj_tempo | DOUBLE | Adjusted possessions per 40 minutes |
+| barthag | DOUBLE | Chance of beating an average D1 team on a neutral court |
+| wab | DOUBLE | Wins above bubble |
+| proj_wins, proj_losses, proj_conf_wins, proj_conf_losses | DOUBLE | Projected final record |
+| sos, nc_sos, conf_sos | DOUBLE | Strength of schedule so far (as a barthag), overall, non-conference and conference |
+| proj_sos, proj_nc_sos, proj_conf_sos | DOUBLE | The same over the full schedule |
+| elite_sos, elite_nc_sos | DOUBLE | Torvik's "elite" strength of schedule, overall and non-conference |
+| conf_sos_remain | DOUBLE | Strength of the conference games left. NULL once they're played |
+| opp_oe, opp_de, opp_proj_oe, opp_proj_de | DOUBLE | Opponents' average adjusted efficiencies, so far and over the full schedule |
+| conf_adj_oe, conf_adj_de | DOUBLE | Adjusted efficiencies in conference games |
+| conf_pts, conf_opp_pts | INTEGER | Points scored and allowed in conference games |
+| conf_poss | DOUBLE | Possessions in conference games |
+| conf_oe, conf_de | DOUBLE | Raw efficiency in conference games, per 100 possessions (torvik's are per possession) |
+| conf_win_pct | DOUBLE | Fraction |
+| qual_games | INTEGER | Games against quality opponents |
+| qual_oe, qual_de, qual_barthag | DOUBLE | Adjusted efficiencies and barthag in those games |
+| fun | DOUBLE | Torvik's "FUN" score |
+
+#### `torvik_four_factors/season=<season>/data.parquet`
+
+Raw (unadjusted) rates, for the team and its opponents (`opp_`). All
+fractions (0.494; torvik's CSV has percentages).
+
+| Column | Type | Description |
+|--------|------|-------------|
+| season, team | | Key |
+| as_of_date | DATE | When the CSV was fetched |
+| efg_pct, opp_efg_pct | DOUBLE | Effective field goal percentage |
+| tov_pct, opp_tov_pct | DOUBLE | Turnovers per possession |
+| oreb_pct, opp_oreb_pct | DOUBLE | Offensive rebound rate; `opp_oreb_pct` is torvik's "DR%", the opponents' offensive rebound rate |
+| ft_rate, opp_ft_rate | DOUBLE | FTA / FGA |
+| fg2_pct, opp_fg2_pct, fg3_pct, opp_fg3_pct, ft_pct, opp_ft_pct | DOUBLE | Shooting percentages |
+| fg3a_rate, opp_fg3a_rate | DOUBLE | 3PA / FGA |
+| ast_rate, opp_ast_rate | DOUBLE | Assisted share of made field goals |
+| blk_pct, opp_blk_pct | DOUBLE | Block rate: the team's blocks, and the share of its shots blocked. **Inferred:** these columns have no header in the CSV. The first tracks opponents' 2P% (r = -0.56) and not forced turnovers (0.09), so it's blocks rather than steals |
+
+nba0bservable's four factors page reads the 2026 CSV directly; from here
+that's `torvik_four_factors WHERE season = 2026`, times 100 for its
+percentages.
 
 ---
 

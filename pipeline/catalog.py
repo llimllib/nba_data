@@ -29,12 +29,17 @@ the catalog goes to <out>/nba.local.duckdb so it's never uploaded.
 Before the catalog is written, pipeline.integrity checks every key against
 the lookup tables; a bad key fails the build and keeps the previous catalog.
 
+With --league ncaam, the same is done for the college data under ncaam/,
+writing ncaam/ncaam.duckdb (or <out>/ncaam.local.duckdb). It shares nothing
+with the NBA catalog: none of its tables have NBA keys, and it has no
+players or per-mode views.
+
 With --check, only the integrity check runs, on the files in --out. The
 update workflow runs it before uploading, so bad keys are never published.
 Add --remote-lookups to read the lookup tables from --url when --out
 doesn't have them, as in a run of the other sources.
 
-usage: python -m pipeline.catalog [--out out] [--bucket basketball-data | --check [--remote-lookups]]
+usage: python -m pipeline.catalog [--out out] [--league nba|ncaam] [--bucket basketball-data | --check [--remote-lookups]]
 """
 
 import argparse
@@ -50,13 +55,30 @@ from . import integrity
 from .output import write_atomic
 
 URL = "https://basketball-data.billmill.org"
-CATALOG = Path("nba/nba.duckdb")
-LOCAL_CATALOG = Path("nba.local.duckdb")
+# each league is a top-level prefix in the bucket, with its own catalog
+LEAGUES = ("nba", "ncaam")
 
-# nba/<source>/<dataset>/season=<season>/data.parquet; raw files don't match
-KEY = re.compile(
-    r"nba/(?P<source>\w+)/(?P<dataset>\w+)/season=(?P<season>\d{4})/data\.parquet"
-)
+
+def catalog_path(league: str) -> Path:
+    """the catalog's key in the bucket: nba/nba.duckdb"""
+    return Path(league) / f"{league}.duckdb"
+
+
+def local_catalog_path(league: str) -> Path:
+    """a local catalog, at the top of --out so it's never uploaded"""
+    return Path(f"{league}.local.duckdb")
+
+
+CATALOG = catalog_path("nba")
+LOCAL_CATALOG = local_catalog_path("nba")
+
+
+def key_pattern(league: str) -> re.Pattern:
+    """<league>/<source>/<dataset>/season=<season>/data.parquet; raw files don't match"""
+    return re.compile(
+        rf"{league}/(?P<source>\w+)/(?P<dataset>\w+)/season=(?P<season>\d{{4}})/data\.parquet"
+    )
+
 
 # DuckDB 1.1.1, in Observable Framework's DuckDB-wasm, reads up to v1.0.0
 STORAGE_VERSION = "v1.0.0"
@@ -90,24 +112,27 @@ class File:
     modified: datetime
 
 
-def parse(key: str, modified: datetime) -> File | None:
-    """the File for a bucket key, or None if it isn't a dataset's parquet file"""
-    m = KEY.fullmatch(key)
+def parse(key: str, modified: datetime, league: str = "nba") -> File | None:
+    """
+    the File for a bucket key, or None if it isn't one of `league`'s
+    datasets' parquet files
+    """
+    m = key_pattern(league).fullmatch(key)
     if not m:
         return None
     return File(key, m["source"], m["dataset"], int(m["season"]), modified)
 
 
-def list_dir(outdir: Path) -> list[File]:
+def list_dir(outdir: Path, league: str = "nba") -> list[File]:
     files = []
-    for path in sorted((outdir / "nba").glob("*/*/season=*/data.parquet")):
+    for path in sorted((outdir / league).glob("*/*/season=*/data.parquet")):
         modified = datetime.fromtimestamp(path.stat().st_mtime, UTC)
-        if f := parse(path.relative_to(outdir).as_posix(), modified):
+        if f := parse(path.relative_to(outdir).as_posix(), modified, league):
             files.append(f)
     return files
 
 
-def list_bucket(bucket: str, client=None) -> list[File]:
+def list_bucket(bucket: str, client=None, league: str = "nba") -> list[File]:
     """
     List the bucket's parquet files. Credentials and the endpoint come from
     the usual AWS environment variables (AWS_ENDPOINT_URL for Spaces)
@@ -118,10 +143,10 @@ def list_bucket(bucket: str, client=None) -> list[File]:
         client = boto3.client("s3")
     files = []
     for page in client.get_paginator("list_objects_v2").paginate(
-        Bucket=bucket, Prefix="nba/"
+        Bucket=bucket, Prefix=f"{league}/"
     ):
         for obj in page.get("Contents", []):
-            if f := parse(obj["Key"], obj["LastModified"]):
+            if f := parse(obj["Key"], obj["LastModified"], league):
                 files.append(f)
     return files
 
@@ -307,7 +332,13 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--out", type=Path, default=Path("out"))
     parser.add_argument(
         "--bucket",
-        help="list this bucket's files, read them from --url, and write <out>/nba/nba.duckdb",
+        help="list this bucket's files, read them from --url, and write <out>/<league>/<league>.duckdb",
+    )
+    parser.add_argument(
+        "--league",
+        choices=LEAGUES,
+        default="nba",
+        help="build the catalog of this top-level prefix (default: nba)",
     )
     parser.add_argument("--url", default=URL, help=f"bucket URL (default: {URL})")
     parser.add_argument(
@@ -324,14 +355,22 @@ def main(argv: list[str] | None = None) -> None:
 
     if args.check:
         check(
-            list_dir(args.out),
+            list_dir(args.out, args.league),
             str(args.out.resolve()),
             args.url if args.remote_lookups else None,
         )
     elif args.bucket:
-        build(args.out / CATALOG, list_bucket(args.bucket), args.url)
+        build(
+            args.out / catalog_path(args.league),
+            list_bucket(args.bucket, league=args.league),
+            args.url,
+        )
     else:
-        build(args.out / LOCAL_CATALOG, list_dir(args.out), str(args.out.resolve()))
+        build(
+            args.out / local_catalog_path(args.league),
+            list_dir(args.out, args.league),
+            str(args.out.resolve()),
+        )
 
 
 if __name__ == "__main__":

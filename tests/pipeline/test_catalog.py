@@ -328,3 +328,57 @@ def test_storage_version_is_pinned(tmp_path):
         "SELECT tags FROM duckdb_databases() WHERE database_name = 'nba'"
     ).fetchone()
     assert tags and tags[0]["storage_version"].startswith(catalog.STORAGE_VERSION)
+
+
+def write_ncaam(outdir, dataset, season, query):
+    path = dataset_path(outdir / "ncaam" / "torvik", dataset, season)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    duckdb.sql(f"COPY ({query}) TO '{path}' (FORMAT parquet)")
+
+
+def test_parse_league():
+    key = "ncaam/torvik/torvik_team_results/season=2026/data.parquet"
+    f = catalog.parse(key, T0, "ncaam")
+    assert f and (f.source, f.dataset, f.season) == (
+        "torvik",
+        "torvik_team_results",
+        2026,
+    )
+    assert catalog.parse(key, T0) is None
+    assert (
+        catalog.parse("ncaam/raw/torvik/2026/fffinal/2026-10-11.csv.gz", T0, "ncaam")
+        is None
+    )
+
+
+def test_leagues_have_separate_catalogs(tmp_path):
+    write(tmp_path, "games", 2026, "SELECT 2026 AS season")
+    team = "SELECT {0} AS season, 'Michigan' AS team, 0.98 AS barthag"
+    write_ncaam(tmp_path, "torvik_team_results", 2025, team.format(2025))
+    write_ncaam(tmp_path, "torvik_team_results", 2026, team.format(2026))
+
+    assert [f.dataset for f in catalog.list_dir(tmp_path)] == ["games"]
+    files = catalog.list_dir(tmp_path, "ncaam")
+    assert [f.season for f in files] == [2025, 2026]
+
+    catalog.main(["--out", str(tmp_path), "--league", "ncaam"])
+    path = tmp_path / catalog.local_catalog_path("ncaam")
+    assert path.name == "ncaam.local.duckdb"
+    con = duckdb.connect()
+    con.execute(f"ATTACH '{path}' AS ncaam (READ_ONLY)")
+    assert con.sql("SELECT dataset, seasons FROM ncaam.metadata").fetchall() == [
+        ("torvik_team_results", 2)
+    ]
+    assert con.sql(
+        "SELECT count(*) FROM ncaam.torvik_team_results WHERE season = 2026"
+    ).fetchone() == (1,)
+    # no NBA tables
+    tables = {r[0] for r in con.sql("SHOW TABLES FROM ncaam").fetchall()}
+    assert tables == {"metadata", "torvik_team_results"}
+
+
+def test_list_bucket_league():
+    s3 = FakeS3([{"Contents": []}])
+    catalog.list_bucket("basketball-data", s3, "ncaam")
+    assert s3.calls == [{"Bucket": "basketball-data", "Prefix": "ncaam/"}]
+    assert catalog.catalog_path("ncaam").as_posix() == "ncaam/ncaam.duckdb"
