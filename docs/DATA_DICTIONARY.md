@@ -636,9 +636,10 @@ Not kept: names, abbreviations, the last game date (the same as
 ## v2 College Basketball (`ncaam/`)
 
 Men's college basketball, separate from the NBA data: its own prefix, and
-its own catalog, `ncaam/ncaam.duckdb`, with a view per dataset
-(`torvik_team_results`, `torvik_four_factors`, `torvik_ratings_daily`) and
-a `metadata` table like `nba.duckdb`'s:
+its own catalog, `ncaam/ncaam.duckdb`, with a view per dataset (torvik's
+`torvik_team_results`, `torvik_four_factors`, `torvik_ratings_daily`, and
+ESPN's `games`, `team_box`, `player_box`, `team_seasons`,
+`player_seasons`), and `players` and `metadata` tables like `nba.duckdb`'s:
 
 ```sql
 ATTACH 'https://basketball-data.billmill.org/ncaam/ncaam.duckdb' AS ncaam;
@@ -647,11 +648,33 @@ SELECT * FROM ncaam.torvik_team_results WHERE season = 2026 ORDER BY barthag DES
 
 The [layout](#layout), types, `snake_case` names, fractions and NULLs follow
 the v2 conventions; seasons are end years (2026 = 2025-26). There are no
-NBA ids. Teams are keyed by **torvik's team name** (`team`), which torvik
-applies to every season (a renamed school has its current name
-throughout), and which is the same in every dataset (the daily
-ratings' older names are mapped to it). A second college source would need
-a team lookup table.
+NBA ids:
+
+- **ESPN's datasets** are keyed by ESPN's ids, as strings: `game_id`,
+  `team_id` (and `opp_team_id`, `home_team_id`, `away_team_id`),
+  `player_id`. `games`, `team_seasons` and `player_seasons` are this
+  catalog's lookup tables, with the same names and the same
+  [integrity](#v2-catalog-nbanbaduckdb) rule as the NBA's: every key is in
+  them for the row's season
+- **torvik's datasets** are keyed by **torvik's team name** (`team`), which
+  torvik applies to every season (a renamed school has its current name
+  throughout), and which is the same in every torvik dataset (the daily
+  ratings' older names are mapped to it)
+- **Joining them:** `team_seasons.torvik_team` is the team's torvik name
+  (from `pipeline/ncaam_teams.csv`), so ESPN's games join to torvik's
+  ratings:
+
+```sql
+-- UConn's 2026 games, with torvik's rating the day before each
+SELECT b.game_date, o.display_name AS opponent, b.pts, b.opp_pts, d.barthag
+FROM ncaam.team_box b
+JOIN ncaam.team_seasons t USING (season, team_id)
+JOIN ncaam.team_seasons o ON o.season = b.season AND o.team_id = b.opp_team_id
+LEFT JOIN ncaam.torvik_ratings_daily d
+    ON d.season = b.season AND d.team = t.torvik_team AND d.date = b.game_date - 1
+WHERE b.season = 2026 AND t.torvik_team = 'Connecticut'
+ORDER BY b.game_date;
+```
 
 ### barttorvik.com (`ncaam/torvik/`)
 
@@ -767,6 +790,112 @@ Raw snapshots are kept as served, at
 `ncaam/raw/torvik/<season>/daily/<date>.json.gz`; `missing.txt` there lists
 the days torvik has no snapshot for (`404`) or a corrupt one (`corrupt`),
 which are never requested again.
+
+### ESPN (`ncaam/espn/`)
+
+Built by `pipeline/ncaam_espn.py` from ESPN's game data, seasons 2005 on:
+every finished game involving a Division I team, including games against
+lower-division opponents, and the postseason (conference tournaments are
+`regular_season`, as ESPN has them; the NCAA tournament, NIT and other
+national tournaments are `postseason`). About 4,300-6,300 games a season.
+
+- **2005-2026** come from [sportsdataverse](https://github.com/sportsdataverse/sportsdataverse-data)'s
+  hoopR files (MIT license), ESPN's data already scraped and published as
+  parquet, kept as downloaded at
+  `ncaam/raw/espn/<season>/sportsdataverse/<schedule|team_box|player_box>.parquet`.
+  Their schedules list about 1,500 finished games with no box score; those
+  were fetched from ESPN, which had box scores for 156 of them (35 are
+  Eastern Washington's 2017 season)
+- **The current season** comes from ESPN directly, daily: a scoreboard of
+  every Division I game per day, and each finished game's summary, kept
+  at `ncaam/raw/espn/<season>/scoreboard/<date>.json.gz` and
+  `.../summary/<game_id>.json.gz`. Summaries keep the header, box score,
+  game info, play-by-play and win probability, without ESPN's news,
+  videos and betting odds. ESPN's and sportsdataverse's data agree
+  exactly where they overlap (checked on 2026 games, every column)
+- **Box score gaps:** a game in `games` can be missing from `team_box`
+  and `player_box`, where ESPN has no box score: 681 games in 2005, about
+  240 a season in 2006-2007, 31-77 in 2008-2009, and 0-10 a season
+  since. 35 games (most in 2010-2013 and 2025) have player box scores but
+  no team box. In 2005-2013, players' points sum to the team's in 97-99.7%
+  of team games; since 2014, in about 99.9% (players missing from ESPN's
+  box score)
+- **Players with no id:** ESPN has lost the athlete record for a few
+  players (one on Eastern Washington in 2017), whose stat lines have no
+  id or name. They're left out of `player_box`, so their team's players
+  don't add up to its box score in those games
+
+#### `games/season=<season>/data.parquet`
+
+One row per finished game.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| season, game_id | | Key |
+| game_date | DATE | US Eastern date, as ESPN lists it |
+| start_time | TIMESTAMPTZ | |
+| season_type | VARCHAR | `regular_season` or `postseason` |
+| home_team_id, away_team_id | VARCHAR | As ESPN designates them, at neutral sites too |
+| home_pts, away_pts | INTEGER | |
+| neutral_site | BOOLEAN | NULL before 2008, which ESPN's data doesn't mark |
+| conference_game | BOOLEAN | |
+| note | VARCHAR | The event or tournament round, when ESPN names one ("Players Era Festival", "NCAA Men's Basketball Championship - East Region - 1st Round") |
+| venue | VARCHAR | |
+| attendance | INTEGER | NULL when ESPN has none |
+
+#### `team_box/season=<season>/data.parquet`
+
+One row per team per game with a box score.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| season, game_id, team_id | | Key |
+| opp_team_id | VARCHAR | |
+| game_date, season_type | | As in `games` |
+| home | BOOLEAN | ESPN's home team, including at neutral sites; see `games.neutral_site` |
+| win | BOOLEAN | |
+| pts, opp_pts | INTEGER | |
+| fgm, fga, fg3m, fg3a, ftm, fta | INTEGER | |
+| oreb, dreb, reb | INTEGER | Including team rebounds |
+| ast, stl, blk, pf | INTEGER | |
+| tov | INTEGER | Including team turnovers, as in the box score |
+| team_tov | INTEGER | Team turnovers (shot clock and 5-second violations, ...) |
+| tech_fouls, flagrant_fouls | INTEGER | `tech_fouls` includes bench and coach technicals |
+| pts_off_tov, fast_break_pts, pts_paint | INTEGER | From 2024 (and ESPN-fetched games) |
+| largest_lead | INTEGER | From 2024 (and ESPN-fetched games) |
+
+#### `player_box/season=<season>/data.parquet`
+
+One row per player who played in a game; players who didn't play aren't
+included. Names are in `player_seasons` and `players`.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| season, game_id, player_id | | Key |
+| team_id | VARCHAR | |
+| game_date | DATE | |
+| starter, ejected | BOOLEAN | |
+| min, pts, fgm, fga, fg3m, fg3a, ftm, fta, oreb, dreb, reb, ast, stl, blk, tov, pf | INTEGER | |
+
+#### `team_seasons/season=<season>/data.parquet`
+
+One row per team that played a game that season, Division I or not.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| season, team_id | | Key |
+| location, name, display_name, abbrev | VARCHAR | "UConn", "Huskies", "UConn Huskies", "CONN", as of the team's last game |
+| conference_id | VARCHAR | ESPN's conference id; NULL for teams outside Division I |
+| is_d1 | BOOLEAN | Has a conference id. Agrees with torvik's teams but for 0-6 schools a season moving up to Division I (ESPN counts them first) |
+| torvik_team | VARCHAR | The team's name in torvik's datasets. Set for every school torvik has ever rated, in every season, so check `is_d1` (or join torvik's season) for that season's membership |
+
+#### `player_seasons/season=<season>/data.parquet`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| season, player_id | | Key |
+| name, short_name, position | VARCHAR | As of the player's last game that season |
+| team_id | VARCHAR | The team of the player's last game |
 
 ---
 

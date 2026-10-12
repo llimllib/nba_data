@@ -526,3 +526,18 @@ def test_teams_csv():
     names = ne.torvik_names()
     assert names["41"] == "Connecticut"
     assert len(set(names.values())) == len(names)
+
+
+def test_fetcher_retries_a_server_error_once(monkeypatch):
+    def error(code):
+        return urllib.error.HTTPError("u", code, "x", Message(), io.BytesIO(b""))
+
+    fetcher, _ = fetcher_with(monkeypatch, error(504), Response(b"ok"))
+    assert fetcher.get("https://espn.test/u") == b"ok"
+    fetcher, _ = fetcher_with(monkeypatch, error(504), error(504))
+    with pytest.raises(urllib.error.HTTPError):
+        fetcher.get("https://espn.test/u")
+    # a client error isn't retried
+    fetcher, _ = fetcher_with(monkeypatch, error(403), Response(b"ok"))
+    with pytest.raises(urllib.error.HTTPError):
+        fetcher.get("https://espn.test/u")
