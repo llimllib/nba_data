@@ -102,15 +102,24 @@ jobs:
           FAIL_SOURCE: ${{ inputs.fail_source }}
 
       # men's college basketball, under ncaam/ with its own catalog. The
-      # current season's two CSVs; past seasons are never refetched
+      # current season's two CSVs (past seasons are never refetched), and
+      # the daily ratings it doesn't have yet. Those are built from every
+      # saved day, so download the season's first; sync succeeds when there
+      # are none yet
       - name: barttorvik
         id: torvik
         continue-on-error: true
         run: |
           if [ "$FAIL_SOURCE" = torvik ]; then echo "failing on purpose (fail_source)"; exit 1; fi
+          SEASON=$(uv run python -c 'from pipeline.seasons import current_season, today_eastern; print(current_season(today_eastern()))')
+          aws s3 sync "s3://$BUCKET/ncaam/raw/torvik/$SEASON/daily/" "out/ncaam/raw/torvik/$SEASON/daily/" --no-progress
           uv run python -m pipeline.torvik --out out
         env:
           FAIL_SOURCE: ${{ inputs.fail_source }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.DO_SPACES_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.DO_SPACES_SECRET }}
+          AWS_ENDPOINT_URL: https://sfo3.digitaloceanspaces.com
+          AWS_DEFAULT_REGION: us-east-1
 
       # check whatever the sources wrote before anything is published. out/
       # has no lookup tables, so they're read from the bucket

@@ -1,5 +1,7 @@
 import gzip
 import http.client
+import json
+import re
 import urllib.error
 from datetime import date
 from email.message import Message
@@ -329,3 +331,182 @@ def test_fetcher_404_is_none(monkeypatch):
     # other HTTP errors aren't retried
     with pytest.raises(urllib.error.HTTPError):
         fetcher_with(monkeypatch, http_error(500), None).get("/a")
+
+
+def snapshot(teams=341, record="10-2", **values):
+    """a time machine snapshot: gzipped JSON rows, with numbers as numbers"""
+    row = dict(TEAM_RESULTS_ROW) | {"record": record} | values
+    out = []
+    for i in range(teams):
+        r: list = []
+        for v in row.values():
+            try:
+                r.append(int(v))
+            except ValueError:
+                try:
+                    r.append(float(v))
+                except ValueError:
+                    r.append(v)
+        r[1] = f"Team {i}"
+        out.append(r)
+    return gzip.compress(json.dumps(out).encode())
+
+
+def test_parse_daily():
+    rows = torvik.parse_daily(snapshot(), SEASON, date(2026, 1, 5))
+    assert len(rows) == 341
+    row = rows[0]
+    assert row["date"] == date(2026, 1, 5)
+    assert row["team"] == "Team 0"
+    assert (row["wins"], row["losses"]) == (10, 2)
+    assert row["qual_games"] == 26
+    assert row["adj_oe"] == 129.5
+    assert set(row) == {name for name, _ in torvik.DAILY_COLUMNS}
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        b"<!DOCTYPE html><title>Verifying Browser...</title>",
+        gzip.compress(b"not json"),
+        gzip.compress(b'{"a": 1}'),
+        snapshot(teams=100),
+        snapshot(adjoe="x"),
+    ],
+)
+def test_bad_snapshot_fails(data):
+    with pytest.raises(ValueError):
+        torvik.parse_daily(data, SEASON, date(2026, 1, 5))
+
+
+class FakeDays:
+    """serves a snapshot for `days`, and a 404 for any other day"""
+
+    def __init__(self, days, data=None):
+        self.days = set(days)
+        self.data = data or snapshot()
+        self.paths = []
+
+    def get_bytes(self, path):
+        self.paths.append(path)
+        m = re.search(r"/(\d{8})_", path)
+        assert m
+        day = date.fromisoformat(f"{m[1][:4]}-{m[1][4:6]}-{m[1][6:]}")
+        return self.data if day in self.days else None
+
+
+def test_season_days():
+    days = torvik.season_days(2026)
+    assert (days[0], days[-1]) == (date(2025, 11, 1), date(2026, 4, 15))
+    assert torvik.daily_path(date(2025, 11, 3)) == (
+        "/timemachine/team_results/20251103_team_results.json.gz"
+    )
+
+
+def test_fetch_days(tmp_path):
+    # the season so far: snapshots from Nov 3; Nov 8's isn't published yet
+    today = date(2025, 11, 9)
+    fetcher = FakeDays([date(2025, 11, d) for d in range(3, 8)])
+    assert torvik.fetch_days(fetcher, tmp_path, SEASON, today) == 5
+    # nothing for today, which can't have a snapshot yet
+    assert len(fetcher.paths) == 8
+    directory = torvik.daily_dir(tmp_path, SEASON)
+    assert (directory / "2025-11-03.json.gz").read_bytes() == fetcher.data
+    # the old 404s are recorded, Nov 8's will be tried again
+    assert torvik.missing_days(tmp_path, SEASON) == {
+        date(2025, 11, 1): "404",
+        date(2025, 11, 2): "404",
+    }
+    assert (directory / "missing.txt").read_text() == (
+        "2025-11-01 404\n2025-11-02 404\n"
+    )
+
+    fetcher.days.add(date(2025, 11, 8))
+    fetcher.paths = []
+    # Nov 8's is out now; Nov 9's isn't yet, and is too recent to be missing
+    assert torvik.fetch_days(fetcher, tmp_path, SEASON, date(2025, 11, 10)) == 1
+    assert fetcher.paths == [
+        torvik.daily_path(date(2025, 11, 8)),
+        torvik.daily_path(date(2025, 11, 9)),
+    ]
+
+
+def test_fetch_days_before_the_first_season(tmp_path):
+    fetcher = FakeDays([])
+    assert torvik.fetch_days(fetcher, tmp_path, 2009, date(2026, 10, 11)) == 0
+    assert fetcher.paths == []
+
+
+def test_corrupt_snapshot(tmp_path):
+    # gzip that fails its CRC check, like torvik's 2013-03-17
+    corrupt = snapshot()[:-8] + bytes(8)
+    with pytest.raises(torvik.CorruptSnapshot):
+        torvik.parse_daily(corrupt, SEASON, date(2025, 11, 1))
+    fetcher = FakeDays([date(2025, 11, 1), date(2025, 11, 2)], data=corrupt)
+    assert torvik.fetch_days(fetcher, tmp_path, SEASON, date(2025, 11, 4)) == 0
+    # skipped like a 404: recorded once it's old, tried again until then
+    missing = torvik.missing_days(tmp_path, SEASON)
+    assert missing[date(2025, 11, 1)] == "corrupt"
+    assert date(2025, 11, 2) not in missing
+    assert not list(torvik.daily_dir(tmp_path, SEASON).glob("*.json.gz"))
+
+
+def test_a_bad_snapshot_is_not_saved(tmp_path):
+    fetcher = FakeDays([date(2025, 11, 1)], data=b"<html>Verifying Browser...</html>")
+    with pytest.raises(ValueError):
+        torvik.fetch_days(fetcher, tmp_path, SEASON, date(2025, 11, 2))
+    assert not list(torvik.daily_dir(tmp_path, SEASON).glob("*.json.gz"))
+
+
+def test_build_daily(tmp_path):
+    assert torvik.build_daily(tmp_path, SEASON) is None
+    days = [date(2025, 11, 3), date(2025, 11, 4)]
+    torvik.fetch_days(FakeDays(days), tmp_path, SEASON, date(2025, 11, 5))
+    path = torvik.build_daily(tmp_path, SEASON)
+    assert path == dataset_path(
+        tmp_path / "ncaam/torvik", "torvik_ratings_daily", SEASON
+    )
+    rel = duckdb.sql(f"SELECT * FROM read_parquet('{path}', hive_partitioning = false)")
+    assert rel.count("*").fetchone() == (682,)
+    assert rel.columns[:4] == ["season", "date", "team", "conf"]
+    types = {c: str(t) for c, t in zip(rel.columns, rel.types, strict=True)}
+    assert types["date"] == "DATE"
+    assert types["wins"] == "INTEGER"
+    assert "as_of_date" not in types
+
+
+def test_snapshots_use_current_names():
+    data = gzip.compress(
+        json.dumps(
+            [
+                [1, "North Carolina St." if i == 0 else f"Team {i}"]
+                + json.loads(gzip.decompress(snapshot(teams=1)))[0][2:]
+                for i in range(341)
+            ]
+        ).encode()
+    )
+    rows = torvik.parse_daily(data, 2015, date(2015, 1, 31))
+    assert rows[0]["team"] == "N.C. State"
+    # every old name maps to a current one, which isn't itself renamed
+    names = torvik.current_names()
+    assert names["IPFW"] == names["Fort Wayne"] == "Purdue Fort Wayne"
+    assert not set(names.values()) & set(names)
+
+
+def test_next_seasons_preseason_is_dropped(tmp_path):
+    # after the title game, 2020-2023's snapshots are the next preseason
+    directory = torvik.daily_dir(tmp_path, SEASON)
+    directory.mkdir(parents=True)
+    (directory / "2026-04-06.json.gz").write_bytes(snapshot())
+    (directory / "2026-04-07.json.gz").write_bytes(
+        snapshot(record="0-0", **{"Con Rec.": "0-0"})
+    )
+    # but this season's own preseason is kept
+    (directory / "2025-11-01.json.gz").write_bytes(
+        snapshot(record="0-0", **{"Con Rec.": "0-0"})
+    )
+    path = torvik.build_daily(tmp_path, SEASON)
+    dates = duckdb.sql(
+        f"SELECT DISTINCT date::VARCHAR FROM read_parquet('{path}') ORDER BY 1"
+    ).fetchall()
+    assert dates == [("2025-11-01",), ("2026-04-06",)]

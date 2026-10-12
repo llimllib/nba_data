@@ -58,8 +58,9 @@ needs are downloaded.
 ### Men's college basketball
 
 [Bart Torvik](https://barttorvik.com)'s T-Rank team ratings and four
-factors, 2007-08 on, are in a separate catalog, keyed by season and
-torvik's team names:
+factors, 2007-08 on, and the ratings as they were every day of the season,
+2009-10 on, are in a separate catalog, keyed by season and torvik's team
+names:
 
 ```sql
 ATTACH 'https://basketball-data.billmill.org/ncaam/ncaam.duckdb' AS ncaam;
@@ -68,6 +69,11 @@ SELECT r.team, r.conf, r.wins, r.losses, round(r.adj_oe, 1) AS adj_oe,
 FROM ncaam.torvik_team_results r
 JOIN ncaam.torvik_four_factors f USING (season, team)
 WHERE r.season = 2026 ORDER BY r.barthag DESC LIMIT 10;
+
+-- UConn's rating every day of the 2025-26 season
+SELECT date, wins, losses, adj_oe, adj_de, barthag
+FROM ncaam.torvik_ratings_daily
+WHERE season = 2026 AND team = 'Connecticut' ORDER BY date;
 ```
 
 The `data/` directory below is v1. It's still updated, but frozen in
