@@ -17,6 +17,12 @@
       "sfo3.digitaloceanspaces.com",
       "*.duckdb.org",
       "duckdb.org",
+      "*.api.espn.com",
+      "api.espn.com",
+      "*.espn.com",
+      "espn.com",
+      "*.ncaa.com",
+      "ncaa.com",
       "kenpom.com",
       "*.nba.com",
       "pypi.org"
