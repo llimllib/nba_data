@@ -15,6 +15,9 @@ old, all in one file with the time they were fetched:
 
     nba/raw/stats/<season>/team_rosters.json.gz
 
+That file also keeps the players on earlier rosters who aren't on these
+(waived before they played, say), so a player who was on a team stays in
+player_seasons, and the tables that refer to them (salaries) stay valid.
 They're optional: a season without them has only the players who played.
 
 and these are built from them, one file per season:
@@ -200,6 +203,9 @@ def fetch_rosters(
     if fetched and not force and now() - fetched < ROSTER_MAX_AGE:
         print(f"stats: rosters for {season} are from {fetched.isoformat()}")
         return
+    # players on earlier rosters but not on these (waived, say), kept so a
+    # player stays in player_seasons once they've been on a team that season
+    former = dict(saved_roster_players(outdir, season))
     rosters = {}
     for i, team_id in enumerate(lookups.NBA_TEAM_IDS):
         if i:
@@ -212,29 +218,53 @@ def fetch_rosters(
                 "league_id_nullable": "00",
             },
         )
+    for pid, _ in roster_players(rosters):
+        former.pop(pid, None)
     write_raw(
         raw_path(outdir, season, ROSTERS),
-        {"fetched": now().isoformat(), "rosters": rosters},
+        {
+            "fetched": now().isoformat(),
+            "rosters": rosters,
+            "former": sorted(former.items()),
+        },
     )
     print(f"stats: fetched {ROSTERS}")
 
 
-def load_rosters(con: duckdb.DuckDBPyConnection, outdir: Path, season: int) -> None:
+def roster_players(rosters: dict) -> list[tuple[str, str]]:
+    """(player_id, name) on every team's roster, from team_id -> response"""
+    players = []
+    for team_id, data in rosters.items():
+        rs = result_set(data)
+        missing = {"PLAYER_ID", "PLAYER"} - set(rs["headers"])
+        if missing:
+            raise ValueError(f"stats: team {team_id}'s roster has no {missing}")
+        pid, name = rs["headers"].index("PLAYER_ID"), rs["headers"].index("PLAYER")
+        players += [(str(row[pid]), row[name]) for row in rs["rowSet"]]
+    return players
+
+
+def saved_roster_players(outdir: Path, season: int) -> list[tuple[str, str]]:
     """
-    Load the saved rosters into `rosters` (player_id, player_name), empty
-    if there are none
+    (player_id, name) for everyone on the saved rosters or on earlier ones,
+    empty if there are none
     """
     path = raw_path(outdir, season, ROSTERS)
-    players: list[tuple[str, str]] = []
-    if path.is_file():
-        for team_id, data in read_raw(path)["rosters"].items():
-            rs = result_set(data)
-            missing = {"PLAYER_ID", "PLAYER"} - set(rs["headers"])
-            if missing:
-                raise ValueError(f"stats: team {team_id}'s roster has no {missing}")
-            pid, name = rs["headers"].index("PLAYER_ID"), rs["headers"].index("PLAYER")
-            players += [(str(row[pid]), row[name]) for row in rs["rowSet"]]
-    else:
+    if not path.is_file():
+        return []
+    saved = read_raw(path)
+    # files from before "former" was kept don't have it
+    former = [(str(pid), name) for pid, name in saved.get("former", [])]
+    return roster_players(saved["rosters"]) + former
+
+
+def load_rosters(con: duckdb.DuckDBPyConnection, outdir: Path, season: int) -> None:
+    """
+    Load everyone on the saved rosters, now or earlier in the season, into
+    `rosters` (player_id, player_name), empty if there are none
+    """
+    players = saved_roster_players(outdir, season)
+    if not raw_path(outdir, season, ROSTERS).is_file():
         print(
             f"stats: no rosters for {season}; player_seasons has only players who played"
         )

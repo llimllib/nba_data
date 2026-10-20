@@ -313,9 +313,11 @@ who didn't play). Players on international preseason opponents have a NULL
 | name | VARCHAR | |
 | played | BOOLEAN | False for rostered players with no games that season (injured, say) |
 
-Rosters are each team's latest, so a player who left a team without
-playing for it isn't listed. For the current season the rosters are
-refreshed daily; finished seasons have their final rosters.
+For the current season the rosters are refreshed daily, and a player on
+any roster since 2026-10-20 stays listed after leaving it (waived before
+playing, say). Before that, and in finished seasons, only the latest
+(final) rosters count, so a player who left a team without playing for it
+isn't listed.
 
 **`games/season=<season>/data.parquet`**: one row per game in `team_game_logs`.
 

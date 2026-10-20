@@ -627,3 +627,36 @@ def test_fetch_rosters(tmp_path):
     clock[0] += stats.ROSTER_MAX_AGE
     fetch_rosters()
     assert len(calls) == 90
+
+
+def test_fetch_rosters_keeps_former_players(tmp_path):
+    write_raw(tmp_path)
+    # 9 was on a roster; 8 was on one before that (and the file is old
+    # enough to have no "former")
+    write_rosters(tmp_path, {BOS: [(1, "Roster A"), (9, "Waived")]})
+    path = stats.raw_path(tmp_path, 2026, stats.ROSTERS)
+    saved = stats.read_raw(path)
+    saved["former"] = [["8", "Long Gone"]]
+    stats.write_raw(path, saved)
+
+    # now 1 is the only player on a roster
+    def fake_fetch(endpoint, kwargs):
+        players = [["Roster A", 1]] if kwargs["team_id"] == str(BOS) else []
+        return response(["PLAYER", "PLAYER_ID"], players)
+
+    stats.fetch_rosters(tmp_path, 2026, fetch=fake_fetch, sleep=lambda _: None)
+    assert stats.read_raw(path)["former"] == [["8", "Long Gone"], ["9", "Waived"]]
+
+    stats.build_season(tmp_path, 2026)
+    rows = {r["player_id"]: r for r in read(tmp_path, "player_seasons")}
+    assert rows["9"]["name"] == "Waived"
+    assert rows["9"]["played"] is False
+    assert rows["8"]["name"] == "Long Gone"
+
+    # a former player back on a roster leaves the former list
+    def rehired(endpoint, kwargs):
+        players = [["Waived", 9]] if kwargs["team_id"] == str(BOS) else []
+        return response(["PLAYER", "PLAYER_ID"], players)
+
+    stats.fetch_rosters(tmp_path, 2026, fetch=rehired, sleep=lambda _: None, force=True)
+    assert stats.read_raw(path)["former"] == [["1", "Roster A"], ["8", "Long Gone"]]
