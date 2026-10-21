@@ -77,6 +77,44 @@ def test_missing_team_fails():
         bbref.team_stats(league_page(teams=ABBREVS[:29]), SEASON, TEAM_IDS)
 
 
+def opening_week_page(played, shooting_teams):
+    """
+    `played` teams have one game; the rest are listed with none, except in
+    shooting-team, which lists `shooting_teams`, as bbref does
+    """
+    html = league_page()
+    start = html.index('<table id="shooting-team">')
+    end = html.index("</table>", start) + len("</table>")
+    shooting = bbref.TEAM_TABLES["shooting-team"]
+    rows = "".join(team_row(a, i, shooting) for i, a in enumerate(shooting_teams))
+    html = (
+        html[:start] + f'<table id="shooting-team"><tbody>{rows}</tbody></table>'
+        + html[end:]
+    )  # fmt: skip
+    for a in ABBREVS:
+        if a not in played:
+            html = html.replace(
+                f'{a}/{SEASON}.html">Team {a}</a></td><td data-stat="g" >82<',
+                f'{a}/{SEASON}.html">Team {a}</a></td><td data-stat="g" >0<',
+            ).replace(
+                f'{a}/{SEASON}.html">Team {a}*</a></td><td data-stat="g" >82<',
+                f'{a}/{SEASON}.html">Team {a}*</a></td><td data-stat="g" >0<',
+            )
+    return html
+
+
+def test_opening_week_has_the_teams_that_have_played():
+    played = ABBREVS[:6]
+    rows = bbref.team_stats(opening_week_page(played, played), SEASON, TEAM_IDS)
+    assert sorted(r["team_id"] for r in rows) == sorted(TEAM_IDS[a] for a in played)
+
+
+def test_opening_week_missing_a_team_that_has_played_fails():
+    page = opening_week_page(ABBREVS[:6], ABBREVS[:5])
+    with pytest.raises(ValueError, match="shooting-team: 5 team rows"):
+        bbref.team_stats(page, SEASON, TEAM_IDS)
+
+
 def test_unknown_team_fails():
     with pytest.raises(ValueError, match="no team_id for XXX"):
         bbref.team_stats(league_page(teams=[*ABBREVS[:29], "XXX"]), SEASON, TEAM_IDS)

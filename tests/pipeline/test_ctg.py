@@ -190,6 +190,27 @@ def test_regular_season_needs_every_team():
         summary(page(teams=range(1, 30)))
 
 
+def played(team, wins, losses):
+    return team_row(team, 0, SEASON_HEADERS, LAST_2WK_HEADERS).replace(
+        '<td class="stat value">40</td><td class="stat value">42</td>',
+        f'<td class="stat value">{wins}</td><td class="stat value">{losses}</td>',
+        1,
+    )
+
+
+def test_opening_week_has_the_teams_that_have_played():
+    # on opening night CTG lists only the teams that have played
+    rows = "".join(played(t, t % 2, 1 - t % 2) for t in range(1, 7))
+    result = summary(page(rows=rows))
+    assert [r["team_id"] for r in result] == [TEAM_IDS[str(t)] for t in range(1, 7)]
+
+
+def test_missing_teams_after_opening_week_fails():
+    rows = "".join(played(t, 2, ctg.OPENING_WEEK_GAMES - 2) for t in range(1, 7))
+    with pytest.raises(ValueError, match="6 teams have played, expected 30"):
+        summary(page(rows=rows))
+
+
 def test_teams_without_games_are_dropped():
     zero = team_row(2, 0, SEASON_HEADERS, LAST_2WK_HEADERS).replace(
         '<td class="stat value">40</td><td class="stat value">42</td>',
