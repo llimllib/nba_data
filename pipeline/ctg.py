@@ -59,6 +59,10 @@ SEASON_TYPES = {"regular_season": "regseason", "playoffs": "playoffs"}
 HEADINGS = {"regular_season": "regular season", "playoffs": "playoffs"}
 # what the page says instead of the table before a season type starts
 NO_DATA = "no data matching the filters"
+# the page only lists teams that have played. Every team has played by
+# the time any team has played this many games, so a regular-season page
+# missing teams after that is broken
+OPENING_WEEK_GAMES = 4
 
 # the table's headers -> our column names and types. The headers after the
 # "Last 2 Weeks" section's spacer get LAST_2WK appended
@@ -271,8 +275,16 @@ def team_summary(
         if nulls:
             raise ValueError(f"{label} {r['name']}: no value for {nulls}")
         rows.append(row)
-    if season_type == "regular_season" and rows and len(rows) != 30:
-        raise ValueError(f"{label}: {len(rows)} teams have played, expected 30")
+    most_games = max((r["wins"] + r["losses"] for r in rows), default=0)  # ty: ignore[unsupported-operator]
+    if (
+        season_type == "regular_season"
+        and len(rows) != 30
+        and most_games >= OPENING_WEEK_GAMES
+    ):
+        raise ValueError(
+            f"{label}: {len(rows)} teams have played, expected 30 "
+            f"after a team has played {most_games} games"
+        )
     return rows
 
 

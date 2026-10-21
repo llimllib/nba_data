@@ -359,26 +359,39 @@ def number(value: str, type_: str):
 TEAM_HREF = re.compile(r"/teams/(\w+)/")
 
 
+def team_rows(html: str, table: str) -> dict[str, dict[str, str]]:
+    """bbref abbreviation -> row, for the team rows of a table"""
+    return {
+        m[1]: r
+        for r in parse_table(html, table)
+        if (m := TEAM_HREF.search(r.get("team_href", "")))
+    }
+
+
 def team_stats(html: str, season: int, team_ids: dict[str, str]) -> list[dict]:
     """
-    One row per team from a season's league page. `team_ids` maps bbref's
-    abbreviations that season to team ids. Raises ValueError if the page
-    isn't as expected, so nothing is written from a changed page
+    One row per team that has played, from a season's league page. `team_ids`
+    maps bbref's abbreviations that season to team ids. Raises ValueError if
+    the page isn't as expected, so nothing is written from a changed page
     """
     teams: dict[str, dict] = {}
     warnings = []
+    # the totals table lists every team, with g = 0 for those that haven't
+    # played yet; some other tables leave those teams out
+    totals = team_rows(html, "totals-team")
+    if len(totals) != 30:
+        raise ValueError(
+            f"bbref {season} totals-team: {len(totals)} team rows, expected 30"
+        )
+    played = {a for a, r in totals.items() if number(r.get("g", ""), "INTEGER")}
     for table, stats in TEAM_TABLES.items():
-        rows = [
-            r
-            for r in parse_table(html, table)
-            if TEAM_HREF.search(r.get("team_href", ""))
-        ]
-        if len(rows) != 30:
+        rows = {a: r for a, r in team_rows(html, table).items() if a in played}
+        if len(rows) != len(played):
             raise ValueError(
-                f"bbref {season} {table}: {len(rows)} team rows, expected 30"
+                f"bbref {season} {table}: {len(rows)} team rows, expected "
+                f"the {len(played)} teams that have played"
             )
-        for r in rows:
-            abbrev = TEAM_HREF.search(r["team_href"])[1]  # ty: ignore[not-subscriptable]
+        for abbrev, r in rows.items():
             if abbrev not in team_ids:
                 raise ValueError(
                     f"bbref {season}: no team_id for {abbrev}; add it to team_abbrevs.csv"
@@ -408,9 +421,10 @@ def team_stats(html: str, season: int, team_ids: dict[str, str]) -> list[dict]:
                     raise ValueError(
                         f"bbref {season} {table}.{stat}: {r[stat]!r} isn't a number"
                     ) from e
-    if len(teams) != 30:
+    if len(teams) != len(played):
         raise ValueError(
-            f"bbref {season}: the tables cover {len(teams)} teams, expected 30"
+            f"bbref {season}: the tables cover {len(teams)} teams, "
+            f"expected {len(played)}"
         )
     for row in teams.values():
         missing = [s for s in REQUIRED_STATS if row.get(column_name(s)) is None]
