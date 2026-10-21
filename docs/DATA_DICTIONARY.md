@@ -210,8 +210,9 @@ rows.
 
 ## v2 NBA Stats Data (`nba/stats/`)
 
-Built by `pipeline/stats.py` from stats.nba.com. Each run refetches the
-whole current season (14 requests), so stat corrections the NBA makes after
+Built by `pipeline/stats.py` from stats.nba.com, except `game_rotations`
+(`pipeline/rotations.py`, below). Each run refetches the whole current
+season (14 requests), so stat corrections the NBA makes after
 games are picked up. Raw responses are kept at
 `nba/raw/stats/<season>/<request>.json.gz`. Team rosters (30 requests, for
 `player_seasons`) are refetched once a day, into
@@ -284,6 +285,46 @@ views compute `def_ws` from `def_ws_raw` when it's present.
 | player_height, player_height_inches, player_weight | VARCHAR, INTEGER, INTEGER | Bio |
 | college, country | VARCHAR | Bio |
 | draft_year, draft_round, draft_number | INTEGER | Bio; NULL if undrafted |
+
+### `game_rotations/season=<season>/data.parquet`
+
+One row per player stint: each time a player checked in and out of a game,
+with their points and the score change while they were on the floor. For
+rotation charts. Built by `pipeline/rotations.py` from each game's
+play-by-play (`playbyplayv3`) and box score (`boxscoretraditionalv3`),
+fetched incrementally (only new games and the last two days') and kept at
+`nba/raw/stats/<season>/playbyplay/<game_id>.json.gz`. Updated daily by
+`sources.yml`. Every game type is covered, preseason through the finals.
+
+A stint runs from a substitution to the next one, across period breaks: a
+player who plays the end of the 1st quarter and the start of the 2nd has
+one row. A player subbed out and back in at the same moment has two rows,
+one ending and one starting at that time. Stints can be very short, from
+substitutions during free throws.
+
+Free throws count for the players who were on the floor for the foul, and
+technical free throws for the players on when the technical was called,
+as in the NBA's box score plus-minus. The score is counted from the made
+shots and free throws rather than read from the play-by-play, whose scores
+are sometimes wrong.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| season, game_id, team_id, player_id | | Key: `(game_id, player_id, in_time)` |
+| period | INTEGER | The period the stint starts in: 1-4, 5 for the first overtime, and so on |
+| in_time, out_time | DOUBLE | Seconds from the start of the game, to the tenth: 720 is the end of the 1st quarter, 2880 the end of regulation, and each overtime is 300 |
+| pts | INTEGER | The player's points in the stint |
+| plus_minus | INTEGER | The team's points minus the opponent's while the player was on the floor |
+| matches_box_score | BOOLEAN | Whether the game's stints add up to the box score (see below). The same for every row of a game |
+
+**Known problems:** the NBA's play-by-play is sometimes wrong: a missed
+substitution leaves a player on the floor after they left, or a game's
+plays are in the wrong period. The build checks every game, and a game
+whose stints don't add up to each player's plus-minus and minutes, with
+five players a side, has `matches_box_score` false. Filter on it for
+charts. The NBA's two box scores (`player_game_logs` and the game's box
+score) sometimes disagree about a player's plus-minus; matching either
+counts. Of 440 games checked (2010-2027, every game type), 437 match.
 
 ---
 

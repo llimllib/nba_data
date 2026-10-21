@@ -139,12 +139,23 @@ def raw_path(outdir: Path, season: int, name: str) -> Path:
     return outdir / RAW_DIR / str(season) / f"{name}.json.gz"
 
 
-def fetch(endpoint: Callable, kwargs: dict, sleep=time.sleep) -> dict:
-    """call an nba_api endpoint, retrying with backoff, and return its JSON"""
-    for attempt, delay in enumerate([*RETRY_DELAYS, None]):
+def fetch(
+    endpoint: Callable,
+    kwargs: dict,
+    sleep=time.sleep,
+    delays: list[int] = RETRY_DELAYS,
+    timeout: int = TIMEOUT,
+    check: Callable[[dict], object] | None = None,
+) -> dict:
+    """
+    call an nba_api endpoint, retrying with backoff, and return its JSON.
+    `check` raises if a response is bad, which is retried; by default it
+    must have a result set
+    """
+    for attempt, delay in enumerate([*delays, None]):
         try:
-            data = endpoint(**kwargs, timeout=TIMEOUT).get_dict()
-            result_set(data)
+            data = endpoint(**kwargs, timeout=timeout).get_dict()
+            (check or result_set)(data)
             return data
         except Exception as exc:
             if delay is None:
@@ -155,7 +166,10 @@ def fetch(endpoint: Callable, kwargs: dict, sleep=time.sleep) -> dict:
                 f"stats: {label}({args}) failed (attempt {attempt + 1}), "
                 f"retrying in {delay}s: {exc!r}"
             )
-            if not isinstance(exc, (TimeoutError, ConnectionError, OSError)):
+            # a 500 from stats.nba.com has an empty body, which isn't JSON
+            if not isinstance(
+                exc, (TimeoutError, ConnectionError, OSError, json.JSONDecodeError)
+            ):
                 print(traceback.format_exc())
             sleep(delay)
     raise AssertionError("unreachable")
@@ -503,10 +517,10 @@ def build_season(outdir: Path, season: int) -> bool:
     False if there are none. A dataset with no rows (no games played yet) is
     not written
     """
-    raw = outdir / RAW_DIR / str(season)
     names = requests(season)
     if not all(raw_path(outdir, season, n).is_file() for n in names):
-        if any(raw.glob("*.json.gz")):
+        # other raw files in the directory (game_rotations) don't count
+        if any(raw_path(outdir, season, n).is_file() for n in names):
             missing = [n for n in names if not raw_path(outdir, season, n).is_file()]
             raise FileNotFoundError(
                 f"stats: missing raw responses for {season}: {missing}"
