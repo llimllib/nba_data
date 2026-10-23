@@ -423,7 +423,8 @@ def durant_matches(tmp_path, logged, box):
     logs = dataset_path(tmp_path / stats.OUT_DIR, "player_game_logs", 2026)
     logs.parent.mkdir(parents=True, exist_ok=True)
     duckdb.sql(
-        f"SELECT '{GAME}' AS game_id, '201142' AS player_id, {logged} AS plus_minus"
+        f"SELECT '{GAME}' AS game_id, '201142' AS player_id, '{HOU}' AS team_id, "
+        f"0.0 AS min, 0 AS pts, {logged} AS plus_minus"
     ).write_parquet(str(logs))
     assert rotations.build_season(tmp_path, 2026)
     path = dataset_path(tmp_path / stats.OUT_DIR, rotations.NAME, 2026)
@@ -439,6 +440,41 @@ def test_build_checks_against_the_box_scores(tmp_path, capsys):
     capsys.readouterr()
     assert not durant_matches(tmp_path, logged=99, box=99)
     assert "1 of 1 games' stints don't match" in capsys.readouterr().out
+
+
+def test_build_uses_the_game_logs_ids(tmp_path):
+    """
+    A player the game logs have under another id (international teams in
+    preseason) gets the game logs' id, matched by team, points and minutes
+    """
+    save_fixture(tmp_path)
+    game = stats.read_raw(FIXTURE)
+    (durant,) = [
+        p
+        for t in rotations.box_teams(game["boxscore"])
+        for p in t["players"]
+        if p["personId"] == 201142
+    ]
+    st = durant["statistics"]
+    minutes = rotations.minutes_seconds(st["minutes"]) / 60
+    write_parquet(
+        tmp_path,
+        "player_game_logs",
+        2026,
+        f"SELECT * FROM (VALUES "
+        f"('{GAME}', '999', '{HOU}', {minutes}, {st['points']}, "
+        f"{round(st['plusMinusPoints'])}), "
+        # a teammate with other points isn't him
+        f"('{GAME}', '998', '{HOU}', {minutes}, {st['points'] + 1}, 0)) "
+        "t(game_id, player_id, team_id, min, pts, plus_minus)",
+    )
+    assert rotations.build_season(tmp_path, 2026)
+    path = dataset_path(tmp_path / stats.OUT_DIR, rotations.NAME, 2026)
+    ids = {r[0] for r in duckdb.sql(f"SELECT player_id FROM '{path}'").fetchall()}
+    assert "999" in ids
+    assert not ids & {"201142", "998"}
+    flags = duckdb.sql(f"SELECT DISTINCT matches_box_score FROM '{path}'").fetchall()
+    assert flags == [(True,)]
 
 
 def test_no_games(tmp_path):
@@ -606,7 +642,7 @@ def test_fetch_season_stops_if_a_pause_doesnt_fit(tmp_path, monkeypatch):
 
 def test_a_stopped_run_fails_after_building(tmp_path, monkeypatch):
     save_fixture(tmp_path)
-    monkeypatch.setattr(rotations, "logged_plus_minus", lambda *a: {})
+    monkeypatch.setattr(rotations, "game_logs", lambda *a: {})
     monkeypatch.setattr(rotations, "season_games", lambda *a: GAMES)
     monkeypatch.setattr(
         rotations, "fetch_season", lambda *a, **kw: rotations.FetchResult(0, [], True)
