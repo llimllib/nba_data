@@ -160,12 +160,23 @@ def season_games(outdir: Path, season: int, url: str = URL) -> list[tuple[str, d
     )
 
 
-def logged_plus_minus(
+@dataclass
+class Logged:
+    """a player's line in player_game_logs"""
+
+    team_id: int
+    seconds: float
+    pts: int
+    plus_minus: int
+
+
+def game_logs(
     outdir: Path, season: int, url: str = URL
-) -> dict[str, dict[int, int]]:
+) -> dict[str, dict[int, Logged]]:
     """
-    game_id -> player id -> plus-minus, from the season's player_game_logs.
-    They're only for checking, so if they can't be read it's empty
+    game_id -> player id -> their line, from the season's player_game_logs.
+    They're for checking and for player ids, so if they can't be read it's
+    empty
     """
     found = defaultdict(dict)
     try:
@@ -173,15 +184,51 @@ def logged_plus_minus(
             outdir,
             season,
             "player_game_logs",
-            "SELECT game_id, player_id, plus_minus FROM t",
+            "SELECT game_id, player_id, team_id, min::DOUBLE, pts, plus_minus FROM t",
             url,
         )
     except duckdb.IOException as e:
         print(f"rotations: checking against the box score; no game logs: {e}")
         rows = []
-    for game_id, player_id, pm in rows:
-        found[game_id][int(player_id)] = pm
+    for game_id, player_id, team_id, minutes, pts, pm in rows:
+        found[game_id][int(player_id)] = Logged(
+            int(team_id), (minutes or 0) * 60, pts or 0, pm
+        )
     return found
+
+
+def logged_ids(game: dict, logged: dict[int, Logged]) -> dict[int, int]:
+    """
+    box score id -> game log id, for players the game logs have under
+    another id. The NBA gives some players on international teams in
+    preseason a different id in each (Jordan Hunter of South East Melbourne
+    is 196295505 in the box score and 196295493 in the game logs), and
+    player_seasons comes from the game logs. A player is matched to the
+    only teammate missing from the box score with their points and minutes
+    """
+    ids = {}
+    box_ids = {p["personId"] for t in box_teams(game["boxscore"]) for p in t["players"]}
+    for t in box_teams(game["boxscore"]):
+        unmatched = {
+            pid: line
+            for pid, line in logged.items()
+            if line.team_id == t["teamId"] and pid not in box_ids
+        }
+        for p in t["players"]:
+            pid, st = p["personId"], p["statistics"]
+            secs = minutes_seconds(st["minutes"])
+            if pid in logged or not secs:
+                continue
+            same = [
+                log_id
+                for log_id, line in unmatched.items()
+                if line.pts == (st.get("points") or 0)
+                and abs(line.seconds - secs) <= MINUTES_TOLERANCE
+            ]
+            if len(same) == 1:
+                ids[pid] = same[0]
+                del unmatched[same[0]]
+    return ids
 
 
 # --- time
@@ -721,14 +768,19 @@ def build_season(outdir: Path, season: int, url: str = URL) -> bool:
     paths = saved_games(outdir, season)
     if not paths:
         return False
-    logged = logged_plus_minus(outdir, season, url)
+    logs = game_logs(outdir, season, url)
     rows: dict[str, list] = defaultdict(list)
     flagged = []
     for path in paths:
         game = stats.read_raw(path)
         game_id = path.name.removesuffix(".json.gz")
         stints, problems = derive(game)
-        problems += box_differences(game, stints, logged.get(game_id))
+        logged = logs.get(game_id, {})
+        ids = logged_ids(game, logged)
+        # the game logs' plus-minus, by box score id
+        logged_pm = {pid: line.plus_minus for pid, line in logged.items()}
+        logged_pm |= {pid: logged[log_id].plus_minus for pid, log_id in ids.items()}
+        problems += box_differences(game, stints, logged_pm)
         if problems:
             flagged.append((game_id, problems))
         home = game["boxscore"]["boxScoreTraditional"]["homeTeamId"]
@@ -739,7 +791,7 @@ def build_season(outdir: Path, season: int, url: str = URL) -> bool:
                 continue
             rows["game_id"].append(game_id)
             rows["team_id"].append(str(s.team_id))
-            rows["player_id"].append(str(s.player_id))
+            rows["player_id"].append(str(ids.get(s.player_id, s.player_id)))
             rows["period"].append(s.period)
             rows["in_time"].append(round(s.start, 1))
             rows["out_time"].append(round(s.end, 1))
