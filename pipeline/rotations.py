@@ -25,9 +25,11 @@ and the stints are built from them:
     nba/stats/game_rotations/season=<season>/data.parquet
 
 Games are fetched WORKERS at a time, newest first. A game that fails is
-left for the next run; MAX_CONSECUTIVE_FAILURES in a row stops the run,
-since the endpoint or the network is down. --minutes stops starting games
-after that long.
+left for the next run. stats.nba.com throttles after ~600 requests, so when
+half the recent games have failed the run pauses (5, 10, then 20 minutes)
+and carries on; if it's still failing after that, it stops. Either way the
+games it got are built and written, but a run that stopped exits with an
+error. --minutes stops starting games after that long (not an error).
 
 How the stints are derived:
 
@@ -67,7 +69,7 @@ import argparse
 import re
 import time
 import unicodedata
-from collections import defaultdict
+from collections import defaultdict, deque
 from collections.abc import Callable, Collection
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass
@@ -94,9 +96,15 @@ TIMEOUT = 60
 # time a second apart got rate limited after ~600 requests
 WORKERS = 1
 REQUEST_DELAY = 2
-# this many games failing in a row means the endpoint or the network is
-# down, so stop rather than retry every game
-MAX_CONSECUTIVE_FAILURES = 10
+# stats.nba.com throttles after ~600 requests, and then lets a few through,
+# so a run watches the failure rate of its last WINDOW games. When at least
+# THROTTLED of them (and MIN_WINDOW games) have failed, it pauses for the
+# next of PAUSES seconds and carries on; after the last one, it stops. A
+# healthy window after a pause resets them
+WINDOW = 20
+MIN_WINDOW = 10
+THROTTLED = 0.5
+PAUSES = [300, 600, 1200]
 
 # a player's minutes may differ from the box score's by this much, in seconds
 MINUTES_TOLERANCE = 6
@@ -603,6 +611,15 @@ def fetch_game(game_id: str, sleep=time.sleep) -> dict:
     return game
 
 
+@dataclass
+class FetchResult:
+    fetched: int
+    # games that failed, or were left for lack of time or after stopping
+    left: list[str]
+    # whether the run gave up because the endpoint kept failing
+    stopped: bool = False
+
+
 def fetch_season(
     outdir: Path,
     season: int,
@@ -613,12 +630,13 @@ def fetch_season(
     clock: Callable[[], float] = time.monotonic,
     budget: float | None = None,
     workers: int = WORKERS,
-) -> tuple[int, list[str]]:
+) -> FetchResult:
     """
     Fetch the games in `games` that aren't saved or are recent, newest
     first and `workers` at a time, starting new ones for up to `budget`
-    seconds. Each game is saved as it arrives. Returns how many were fetched
-    and the ids of those that failed or were left for lack of time
+    seconds. Each game is saved as it arrives. When too many recent games
+    have failed, pause and carry on (see PAUSES); a pause that wouldn't fit
+    in the budget, or one after the last, stops the run
     """
     todo = [
         g
@@ -626,11 +644,14 @@ def fetch_season(
         if not raw_path(outdir, season, g).is_file() or d >= today - RECENT
     ]
     start = clock()
-    fetched, failed, consecutive = 0, [], 0
+    result = FetchResult(0, [])
+    # the last WINDOW games' outcomes, True for a failure
+    window: deque[bool] = deque(maxlen=WINDOW)
+    pauses = 0
     pending: dict[Future, str] = {}
 
     def finish(done: set[Future]) -> None:
-        nonlocal fetched, consecutive
+        nonlocal pauses
         for future in done:
             game_id = pending.pop(future)
             try:
@@ -638,26 +659,41 @@ def fetch_season(
             # network errors, 500s (an empty body isn't JSON), bad responses
             except (OSError, ValueError, TypeError, KeyError) as e:
                 print(f"rotations: giving up on {game_id} for now: {e!r}")
-                failed.append(game_id)
-                consecutive += 1
+                result.left.append(game_id)
+                window.append(True)
                 continue
-            consecutive = 0
-            fetched += 1
-            if fetched % 100 == 0:
-                print(f"rotations: fetched {fetched} of {len(todo)} games")
+            window.append(False)
+            if len(window) == WINDOW and not throttled():
+                pauses = 0
+            result.fetched += 1
+            if result.fetched % 100 == 0:
+                print(f"rotations: fetched {result.fetched} of {len(todo)} games")
+
+    def throttled() -> bool:
+        return len(window) >= MIN_WINDOW and sum(window) >= THROTTLED * len(window)
 
     executor = ThreadPoolExecutor(workers)
     try:
         for i, game_id in enumerate(todo):
             if len(pending) >= workers:
                 finish(wait(pending, return_when=FIRST_COMPLETED).done)
+            if throttled():
+                failures = f"{sum(window)} of the last {len(window)} games failed"
+                pause = PAUSES[pauses] if pauses < len(PAUSES) else None
+                if pause is None or (
+                    budget is not None and clock() - start + pause > budget
+                ):
+                    print(f"rotations: {failures}; stopping")
+                    result.left += todo[i:]
+                    result.stopped = True
+                    break
+                print(f"rotations: {failures}; pausing {pause // 60} minutes")
+                sleep(pause)
+                pauses += 1
+                window.clear()
             if budget is not None and clock() - start > budget:
                 print(f"rotations: out of time, leaving {len(todo) - i} games")
-                failed += todo[i:]
-                break
-            if consecutive >= MAX_CONSECUTIVE_FAILURES:
-                print(f"rotations: {consecutive} games failed in a row; stopping")
-                failed += todo[i:]
+                result.left += todo[i:]
                 break
             if i:
                 sleep(REQUEST_DELAY)
@@ -666,8 +702,11 @@ def fetch_season(
     finally:
         # don't wait for requests still in flight after an interrupt
         executor.shutdown(wait=False, cancel_futures=True)
-    print(f"rotations: fetched {fetched} games for {season}, {len(failed)} left")
-    return fetched, failed
+    print(
+        f"rotations: fetched {result.fetched} games for {season}, "
+        f"{len(result.left)} left"
+    )
+    return result
 
 
 # --- building
@@ -776,6 +815,7 @@ def main(argv: list[str] | None = None) -> None:
 
     today = today_eastern()
     start = time.monotonic()
+    stopped = []
     for season in args.season or [current_season(today)]:
         if not args.no_fetch:
             games = season_games(args.out, season, args.url)
@@ -786,13 +826,20 @@ def main(argv: list[str] | None = None) -> None:
             budget = None
             if args.minutes is not None:
                 budget = args.minutes * 60 - (time.monotonic() - start)
-            fetched, failed = fetch_season(
+            result = fetch_season(
                 args.out, season, games, today, budget=budget, workers=args.workers
             )
-            if not fetched and len(failed) >= MAX_CONSECUTIVE_FAILURES:
-                raise SystemExit(f"rotations: every game failed for {season}")
+            if result.stopped:
+                stopped.append(season)
         if not build_season(args.out, season, args.url):
             print(f"rotations: no rotations for {season}")
+    # the games fetched are built and written either way, so a run that gave
+    # up still publishes them; it fails after, so the gap is noticed
+    if stopped:
+        raise SystemExit(
+            f"rotations: stopped with games left for {stopped}: stats.nba.com "
+            "kept failing; run again later"
+        )
 
 
 if __name__ == "__main__":

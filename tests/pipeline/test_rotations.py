@@ -500,7 +500,7 @@ def test_fetch_season_fetches_new_and_recent_games(tmp_path):
         seen.append(game_id)
         return fake_game(game_id)
 
-    assert fetch_season(tmp_path, fetch) == (3, [])
+    assert fetch_season(tmp_path, fetch) == rotations.FetchResult(3, [])
     # newest first. 0022500001 is saved and old; 0022500003 is saved but recent
     assert seen == ["0022500004", "0022500003", "0022500002"]
     assert saved(tmp_path) == [g for g, _ in GAMES]
@@ -517,7 +517,7 @@ def test_fetch_season_fetches_games_at_once(tmp_path):
         barrier.wait()
         return fake_game(game_id)
 
-    assert fetch_season(tmp_path, fetch, workers=2) == (4, [])
+    assert fetch_season(tmp_path, fetch, workers=2) == rotations.FetchResult(4, [])
     assert saved(tmp_path) == [g for g, _ in GAMES]
 
 
@@ -527,20 +527,98 @@ def test_fetch_season_leaves_failures(tmp_path):
             raise TimeoutError
         return fake_game(game_id)
 
-    assert fetch_season(tmp_path, fetch) == (3, ["0022500002"])
+    assert fetch_season(tmp_path, fetch) == rotations.FetchResult(3, ["0022500002"])
     assert "0022500002" not in saved(tmp_path)
 
 
-def test_fetch_season_stops_after_consecutive_failures(tmp_path, monkeypatch):
-    monkeypatch.setattr(rotations, "MAX_CONSECUTIVE_FAILURES", 2)
-    calls = []
+def many_games(n):
+    return [(f"00225{i:05d}", date(2026, 1, 1)) for i in range(1, n + 1)]
+
+
+def throttle(tmp_path, monkeypatch, outcomes, budget=None):
+    """
+    fetch games that fail or succeed by `outcomes` (True for a failure),
+    with a small window. Returns the result and the pauses taken
+    """
+    monkeypatch.setattr(rotations, "WINDOW", 4)
+    monkeypatch.setattr(rotations, "MIN_WINDOW", 4)
+    monkeypatch.setattr(rotations, "PAUSES", [300, 600])
+    games = many_games(len(outcomes))
+    fails = dict(zip(sorted((g for g, _ in games), reverse=True), outcomes))
+    clock, pauses = [0.0], []
 
     def fetch(game_id):
-        calls.append(game_id)
-        raise TimeoutError
+        if fails[game_id]:
+            raise TimeoutError
+        return fake_game(game_id)
 
-    assert fetch_season(tmp_path, fetch) == (0, [g for g, _ in reversed(GAMES)])
-    assert len(calls) == 2
+    def sleep(seconds):
+        clock[0] += seconds
+        if seconds >= 60:
+            pauses.append(seconds)
+
+    result = rotations.fetch_season(
+        tmp_path,
+        2026,
+        games,
+        TODAY,
+        fetch=fetch,
+        sleep=sleep,
+        clock=lambda: clock[0],
+        budget=budget,
+        workers=1,
+    )
+    return result, pauses
+
+
+def test_fetch_season_pauses_when_throttled(tmp_path, monkeypatch):
+    # 2 of 4 failing is throttled; after a pause, the games go through
+    result, pauses = throttle(
+        tmp_path, monkeypatch, [False, True, False, True] + [False] * 6
+    )
+    assert pauses == [300]
+    assert (result.fetched, len(result.left), result.stopped) == (8, 2, False)
+
+
+def test_fetch_season_stops_when_still_throttled(tmp_path, monkeypatch):
+    # a few get through, but most fail: the old consecutive count never
+    # stopped this
+    result, pauses = throttle(tmp_path, monkeypatch, [True, True, False, True] * 10)
+    assert pauses == [300, 600]
+    assert result.stopped
+    assert result.fetched == 3
+    assert len(result.left) == 40 - 3
+
+
+def test_fetch_season_healthy_window_resets_pauses(tmp_path, monkeypatch):
+    # without the reset, the second pause would be the longer one
+    bad = [True] * 4
+    result, pauses = throttle(tmp_path, monkeypatch, bad + [False] * 4 + bad)
+    assert pauses == [300, 300]
+    assert not result.stopped
+
+
+def test_fetch_season_stops_if_a_pause_doesnt_fit(tmp_path, monkeypatch):
+    result, pauses = throttle(tmp_path, monkeypatch, [True] * 10, budget=200)
+    assert pauses == []
+    assert result.stopped
+
+
+def test_a_stopped_run_fails_after_building(tmp_path, monkeypatch):
+    save_fixture(tmp_path)
+    monkeypatch.setattr(rotations, "logged_plus_minus", lambda *a: {})
+    monkeypatch.setattr(rotations, "season_games", lambda *a: GAMES)
+    monkeypatch.setattr(
+        rotations, "fetch_season", lambda *a, **kw: rotations.FetchResult(0, [], True)
+    )
+    with pytest.raises(SystemExit, match="stopped with games left for \\[2026\\]"):
+        rotations.main(["--out", str(tmp_path), "--season", "2026"])
+    assert dataset_path(tmp_path / stats.OUT_DIR, rotations.NAME, 2026).is_file()
+
+    monkeypatch.setattr(
+        rotations, "fetch_season", lambda *a, **kw: rotations.FetchResult(0, ["x"])
+    )
+    rotations.main(["--out", str(tmp_path), "--season", "2026"])
 
 
 def test_fetch_season_budget(tmp_path):
@@ -550,8 +628,9 @@ def test_fetch_season_budget(tmp_path):
         clock[0] += 60
         return fake_game(game_id)
 
-    fetched, left = fetch_season(tmp_path, fetch, clock=lambda: clock[0], budget=90)
-    assert (fetched, left) == (2, ["0022500002", "0022500001"])
+    result = fetch_season(tmp_path, fetch, clock=lambda: clock[0], budget=90)
+    # running out of time isn't stopping
+    assert result == rotations.FetchResult(2, ["0022500002", "0022500001"])
     assert saved(tmp_path) == ["0022500003", "0022500004"]
 
 
