@@ -302,9 +302,11 @@ one row. A player subbed out and back in at the same moment has two rows,
 one ending and one starting at that time. Stints can be very short, from
 substitutions during free throws.
 
-Free throws count for the players who were on the floor for the foul, and
-technical free throws for the players on when the technical was called,
-as in the NBA's box score plus-minus. The score is counted from the made
+Free throws count for the players who were on the floor for the foul
+(unless a player subbed in shoots them, for an injured or ejected player),
+and technical free throws for the players on when the technical was
+called (except flopping technicals', which count for the players on when
+they're shot), as in the NBA's box score plus-minus. The score is counted from the made
 shots and free throws rather than read from the play-by-play, whose scores
 are sometimes wrong.
 
@@ -324,7 +326,9 @@ whose stints don't add up to each player's plus-minus and minutes, with
 five players a side, has `matches_box_score` false. Filter on it for
 charts. The NBA's two box scores (`player_game_logs` and the game's box
 score) sometimes disagree about a player's plus-minus; matching either
-counts. Of 440 games checked (2010-2027, every game type), 437 match.
+counts. Of 440 games checked (2010-2027, every game type), 437 match, and
+2,777 of the 2,787 in 2025-2027. The 2025 All-Star games, played to a
+target score with no game clock, have no rows.
 
 ---
 

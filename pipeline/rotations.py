@@ -39,17 +39,22 @@ How the stints are derived:
   one going out of other subs (which covers renames: "Kanter" is Enes
   Freedom), in their other actions, and the box score's names, including
   "Jal. Williams"-style prefixes. Failing that, a family name with a suffix
-  ("Porter" for "Porter Jr."), or the only teammate who played and is
-  never named.
+  ("Porter" for "Porter Jr."), a first name ("Cui" for Cui Yongxi, whose
+  box score has his names the other way round), or the only teammate who
+  played and is never named.
 - The play-by-play doesn't say who starts a period. Anyone with an action
   in it, or subbed out of it, before they're subbed in was on the floor at
   its start (technicals and ejections don't count; bench players get
   those). If that finds fewer than five, someone played without doing
   anything, and a box score of just that period says who played.
 - Free throws count for the players who were on the floor for the foul, so
-  a sub between free throws takes effect after them. Technical free throws
-  count for the players on when the technical was called. That's how the
-  NBA's box score plus-minus works.
+  a sub between free throws takes effect after them, unless the player
+  coming in shoots them (for an injured or ejected player). Technical free
+  throws count for the players on when the technical was called, except a
+  flopping technical's, which count for the players on when they're shot.
+  That's how the NBA's box score plus-minus works.
+- Games without a game clock (the 2025 All-Star games, played to a target
+  score) have no stints.
 - The score is counted from the made shots and free throws, not read
   from the rows' scores, which are sometimes wrong (the final score at the
   end of the 1st quarter, 0-0 on misses in older games, a basket listed
@@ -310,9 +315,11 @@ class Names:
     def _fallbacks(self, box: dict, actions: list[dict]) -> None:
         """
         For incoming names that match no one: a family name with a suffix
-        ("Porter" for "Porter Jr."). And the players who played but no sub
-        names, for incoming() to choose from by elimination (a player who
-        was renamed, and never went out to teach us the old name)
+        ("Porter" for "Porter Jr."), or a first name ("Cui" for Cui Yongxi,
+        whose box score has his names the other way round). And the players
+        who played but no sub names, for incoming() to choose from by
+        elimination (a player who was renamed, and never went out to teach
+        us the old name)
         """
         named = set()
         for a in actions:
@@ -340,8 +347,11 @@ class Names:
                     for p in players
                     if norm(p["familyName"]).startswith(n + " ")
                 }
-                if len(suffixed) == 1:
-                    self.names[team][n] = suffixed
+                first = {p["personId"] for p in players if norm(p["firstName"]) == n}
+                for ids in (suffixed, first):
+                    if len(ids) == 1:
+                        self.names[team][n] = ids
+                        break
 
     def lookup(self, team: int, name: str) -> set[int]:
         return self.names[team].get(norm(name), set())
@@ -449,26 +459,65 @@ def missing_starters(game: dict) -> list[int]:
     ]
 
 
-def lead_at_sub(acts: list[dict], i: int, lead: int, home: int) -> int:
+def lead_at_sub(
+    acts: list[dict],
+    i: int,
+    lead: int,
+    home: int,
+    names: Names | None = None,
+    incoming: int | None = None,
+) -> int:
     """
-    the home team's lead when the sub at acts[i] takes effect, from `lead`
-    before it. Free throws at the same clock count for the players on for
-    the foul, so the sub takes effect after them, unless a new foul comes
-    first. Technical free throws count for the players on when the
-    technical was called
+    the home team's lead when the sub at acts[i], bringing in `incoming`,
+    takes effect, from `lead` before it. Free throws at the same clock count
+    for the players on for the foul, so the sub takes effect after them,
+    unless a new foul comes first, or a player coming in at this sub or a
+    later one of the team's shoots them (they weren't on for the foul;
+    they're shooting for an injured or ejected player). Technical free
+    throws count for the players on when the technical was called, except a
+    flopping technical's, which count for the players on when they're shot
     """
-    technical_before = True
+    same_clock = []
     for b in acts[i + 1 :]:
         if b["clock"] != acts[i]["clock"]:
             break
+        same_clock.append(b)
+    before = []
+    for b in reversed(acts[:i]):
+        if b["clock"] != acts[i]["clock"] or b["period"] != acts[i]["period"]:
+            break
+        before.append(b)
+    # the players coming in who weren't on for the foul: a player going out
+    # and straight back in was
+    went_out = {b["personId"] for b in before if sub(b)} | {acts[i]["personId"]}
+    coming_in = {incoming} - went_out
+    shot_by_sub = False
+    for b in same_clock:
+        if b["actionType"] == "Foul" and "Technical" not in b["subType"]:
+            break
+        if sub(b) and b["teamId"] == acts[i]["teamId"] and names is not None:
+            coming_in |= {names.incoming(b)} - went_out
+            went_out.add(b["personId"])
+        if b["actionType"] == "Free Throw" and b["personId"] in coming_in - {None}:
+            shot_by_sub = True
+            break
+    fouls = [b for b in before if b["actionType"] == "Foul"]
+    flops = [b for b in fouls if "Flopping" in b["subType"]]
+    technical_before = not flops or any(
+        OFF_FLOOR.search(f"{b['subType']} {b['description']}")
+        for b in fouls
+        if b not in flops
+    )
+    for b in same_clock:
         if b["actionType"] == "Foul":
             if "Technical" not in b["subType"]:
                 break
             technical_before = False
             continue
-        if b["actionType"] == "Free Throw" and (
-            "Technical" not in b["subType"] or technical_before
-        ):
+        if b["actionType"] != "Free Throw":
+            continue
+        technical = "Technical" in b["subType"]
+        if (technical and technical_before) or (not technical and not shot_by_sub):
             lead += points(b) if b["teamId"] == home else -points(b)
     return lead
 
@@ -527,15 +576,15 @@ def derive(game: dict) -> tuple[list[Stint], list[str]]:
             if not sub(a) or a["personId"] not in names.team_of:
                 continue
             t = elapsed(period, a["clock"])
-            at_sub = lead_at_sub(acts, i, lead, home)
             outgoing = a["personId"]
-            if outgoing in on:
-                stint = on.pop(outgoing)
+            stint = on.pop(outgoing, None)
+            incoming = names.incoming(a, on)
+            at_sub = lead_at_sub(acts, i, lead, home, names, incoming)
+            if stint is not None:
                 close(stint, t, at_sub)
                 last[outgoing] = stint
             else:
                 problems.append(f"{a['description']} at {t}s: {outgoing} isn't on")
-            incoming = names.incoming(a, on)
             if incoming is None:
                 problems.append(f"no player for {a['description']!r} at {t}s")
             elif incoming in on:
@@ -566,6 +615,14 @@ def joined(stints: list[Stint]) -> list[Stint]:
         out.append(s)
     # a sub in and out at the same moment, with nothing scored, isn't a stint
     return [s for s in out if s.end > s.start or s.lead_end != s.lead_start or s.pts]
+
+
+def timed(game: dict) -> bool:
+    """whether a game's play-by-play has a game clock; the 2025 All-Star
+    games, played to a target score, have every play at 0:00"""
+    return any(
+        a["clock"] != "PT00M00.00S" for a in game["playbyplay"]["game"]["actions"]
+    )
 
 
 def plus_minus(stint: Stint, home: int) -> int:
@@ -770,10 +827,13 @@ def build_season(outdir: Path, season: int, url: str = URL) -> bool:
         return False
     logs = game_logs(outdir, season, url)
     rows: dict[str, list] = defaultdict(list)
-    flagged = []
+    flagged, untimed = [], []
     for path in paths:
         game = stats.read_raw(path)
         game_id = path.name.removesuffix(".json.gz")
+        if not timed(game):
+            untimed.append(game_id)
+            continue
         stints, problems = derive(game)
         logged = logs.get(game_id, {})
         ids = logged_ids(game, logged)
@@ -826,10 +886,13 @@ def build_season(outdir: Path, season: int, url: str = URL) -> bool:
     check_keys(con, NAME, KEYS, f"rotations {NAME}")
     path = dataset_path(outdir / stats.OUT_DIR, NAME, season)
     write_parquet(con, NAME, path)
-    print(f"rotations: wrote {path} ({len(paths)} games)")
+    built = len(paths) - len(untimed)
+    print(f"rotations: wrote {path} ({built} games)")
+    if untimed:
+        print(f"rotations: no game clock, so no stints, for {', '.join(untimed)}")
     if flagged:
         print(
-            f"rotations: {len(flagged)} of {len(paths)} games' stints don't match "
+            f"rotations: {len(flagged)} of {built} games' stints don't match "
             "their box score:"
         )
         for game_id, problems in flagged[:20]:

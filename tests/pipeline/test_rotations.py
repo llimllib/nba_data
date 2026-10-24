@@ -225,6 +225,47 @@ def test_technical_free_throws_count_for_the_players_on_for_the_technical():
     assert rotations.plus_minus(stints[1], HOME) == -1
     assert rotations.plus_minus(stints[11], HOME) == -1
 
+    # a flopping technical's free throw is for the players on when it's
+    # shot (0022401078)
+    plays = Plays()
+    plays.starters(1)
+    plays.add(
+        1, 600, HOME, 2, "Foul", "Non-Unsportsmanlike Tech Foul - Flopping", "Flopping"
+    )
+    plays.sub(1, 600, HOME, 1, "Home11", "Home1")
+    plays.scores(1, 600, AWAY, 21, 1, "Free Throw", "Free Throw Technical")
+    stints = by_player(derive(plays))
+    assert rotations.plus_minus(stints[1], HOME) == 0
+    assert rotations.plus_minus(stints[11], HOME) == -1
+
+
+def test_free_throws_shot_by_the_player_coming_in():
+    # 1 is fouled and hurt, and 11 comes in to shoot (0022401088)
+    plays = Plays()
+    plays.starters(1)
+    plays.add(1, 600, AWAY, 21, "Foul", "S.FOUL")
+    plays.sub(1, 600, HOME, 1, "Home11", "Home1")
+    plays.scores(1, 600, HOME, 11, 1, "Free Throw")
+    plays.scores(1, 600, HOME, 11, 1, "Free Throw")
+    stints = by_player(derive(plays))
+    assert rotations.plus_minus(stints[1], HOME) == 0
+    assert rotations.plus_minus(stints[11], HOME) == 2
+    assert stints[11].pts == 2
+
+    # but a shooter who goes out and straight back in was on for the foul,
+    # and so were the others going out (0022401107)
+    plays = Plays()
+    plays.starters(1)
+    plays.add(1, 600, AWAY, 21, "Foul", "S.FOUL")
+    plays.sub(1, 600, HOME, 1, "Home11", "Home1")
+    plays.sub(1, 600, HOME, 2, "Home12", "Home2")
+    plays.sub(1, 600, HOME, 12, "Home2", "Home12")
+    plays.scores(1, 600, HOME, 2, 1, "Free Throw")
+    stints = by_player(derive(plays))
+    assert rotations.plus_minus(stints[1], HOME) == 1
+    assert rotations.plus_minus(stints[11], HOME) == 0
+    assert 12 not in stints
+
 
 def test_bench_technicals_dont_make_starters():
     plays = Plays()
@@ -271,6 +312,26 @@ def test_names_by_suffix_and_elimination():
     plays.sub(1, 500, HOME, 2, "Kanter", "Home2")
     stints = by_player(derive(plays, box_score=box(home=home, minutes=minutes)))
     assert (stints[14].start, stints[15].start) == (120, 220)
+
+
+def test_names_by_first_name():
+    # the box score has Cui Yongxi's names the other way round (0012400019)
+    home = [*HOME_PLAYERS[:-1], (15, "Cui", "Yongxi")]
+    minutes = {p: "12:00" for p in [1, 2, 3, 4, 5, 15]}
+    plays = Plays()
+    plays.starters(1)
+    plays.sub(1, 600, HOME, 1, "Cui", "Home1")
+    plays.add(1, 500, HOME, 15, "Foul", "Cui P.FOUL", name="Yongxi")
+    stints = by_player(derive(plays, box_score=box(home=home, minutes=minutes)))
+    assert stints[15].start == 120
+
+
+def test_untimed_games():
+    plays = Plays()
+    plays.starters(1, left=0)
+    assert not rotations.timed(plays.game())
+    plays.starters(1)
+    assert rotations.timed(plays.game())
 
 
 def test_unmatched_name():
