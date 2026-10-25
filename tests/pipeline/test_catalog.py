@@ -1,3 +1,4 @@
+import json
 import re
 from datetime import UTC, datetime
 
@@ -146,6 +147,61 @@ def test_metadata(tmp_path):
         "SELECT updated FROM nba.metadata WHERE dataset = 'games'"
     ).fetchone()
     assert updated and abs((datetime.now(UTC) - updated[0]).total_seconds()) < 60
+
+
+def test_metadata_json_matches_the_table(tmp_path):
+    write(tmp_path, "games", 2025, "SELECT 2025 AS season")
+    write(tmp_path, "games", 2026, "SELECT 2026 AS season")
+    write(tmp_path, "team_box", 2026, "SELECT 2026 AS season", source="espn")
+    path = tmp_path / catalog.CATALOG
+    metadata = tmp_path / catalog.metadata_path("nba")
+    catalog.build(path, catalog.list_dir(tmp_path), str(tmp_path), metadata)
+    assert metadata.as_posix().endswith("nba/metadata.json")
+
+    published = json.loads(metadata.read_text())["datasets"]
+    con = duckdb.connect()
+    con.execute(f"ATTACH '{path}' AS nba (READ_ONLY)")
+    rows = con.sql("FROM nba.metadata ORDER BY dataset").fetchall()
+    assert sorted(published) == ["games", "team_box"]
+    for dataset, source, first, last, seasons, updated in rows:
+        assert published[dataset] == {
+            "source": source,
+            "first_season": first,
+            "last_season": last,
+            "seasons": seasons,
+            "updated": updated.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+    # so it can be found from the catalog
+    assert con.sql(
+        "SELECT comment FROM duckdb_tables() "
+        "WHERE database_name = 'nba' AND table_name = 'metadata'"
+    ).fetchone() == ("also published as nba/metadata.json",)
+
+
+def test_local_catalog_has_no_metadata_json(tmp_path):
+    write(tmp_path, "games", 2026, "SELECT 2026 AS season")
+    catalog.main(["--out", str(tmp_path)])
+    assert (tmp_path / catalog.LOCAL_CATALOG).exists()
+    assert list(tmp_path.rglob("*.json")) == []
+
+
+def test_failed_check_writes_no_metadata_json(tmp_path):
+    write(tmp_path, "games", 2026, "SELECT 2026 AS season, '0022500001' AS game_id")
+    write(
+        tmp_path,
+        "team_game_logs",
+        2026,
+        "SELECT 2026 AS season, '0022500999' AS game_id",
+    )
+    metadata = tmp_path / catalog.metadata_path("nba")
+    with pytest.raises(integrity.IntegrityError):
+        catalog.build(
+            tmp_path / catalog.CATALOG,
+            catalog.list_dir(tmp_path),
+            str(tmp_path),
+            metadata,
+        )
+    assert not metadata.exists()
 
 
 def test_new_seasons_appear_on_rebuild(tmp_path):

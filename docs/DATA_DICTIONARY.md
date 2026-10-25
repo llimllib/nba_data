@@ -127,8 +127,10 @@ through `nba.duckdb`.
 nba/raw/<source>/<season>/...                        raw responses, gzipped
 nba/<source>/<dataset>/season=<season>/data.parquet  one file per season
 nba/nba.duckdb                                       the catalog
+nba/metadata.json                                    the catalog's metadata table, as JSON
 ncaam/...                                            college basketball, laid out the same
 ncaam/ncaam.duckdb                                   its catalog
+ncaam/metadata.json                                  its metadata table, as JSON
 ```
 
 The season is in the path (Hive partitioning) so that a query filtered on
@@ -169,6 +171,23 @@ ORDER BY ppg DESC LIMIT 10;
 | `players` | table | One row per `player_id`: `name` (the latest one known), `first_season`, `last_season` (seasons on a roster count, even without games). A table, so joining it reads no parquet files |
 | `player_season_stats_per_game`, `player_season_stats_per_36`, `player_season_stats_per_100` | view | `player_season_stats` with counting stats scaled; see below |
 | `metadata` | table | Per dataset: `source`, `first_season`, `last_season`, `seasons`, and `updated`, when its newest file was uploaded |
+
+**Without DuckDB:** the `metadata` table is also published as
+`nba/metadata.json` (and `ncaam/metadata.json`), built and uploaded with the
+catalog, for clients that read the parquet files directly (hyparquet,
+pyarrow) and need to know which seasons exist. It has the table's rows, keyed
+by dataset, with `updated` in UTC ISO 8601:
+
+```json
+{
+  "datasets": {
+    "games": {"source": "stats", "first_season": 2010, "last_season": 2027, "seasons": 18, "updated": "2026-10-24T14:42:21Z"}
+  }
+}
+```
+
+`seasons` is a count: a dataset has a gap if it's less than
+`last_season - first_season + 1`. None has one.
 
 Views read their files with hive partitioning, so filtering on `season`
 only downloads the files for those seasons; other filters (`player_id`,

@@ -26,6 +26,10 @@ uploaded: the files are listed from the bucket and the views read them
 through the CDN. Without it, the views read the files in --out directly, and
 the catalog goes to <out>/nba.local.duckdb so it's never uploaded.
 
+With --bucket, the metadata table is also written as nba/metadata.json, for
+clients that read the parquet without DuckDB (#85). It's read back from the
+table, so the two can't disagree, and only written once the catalog is.
+
 Before the catalog is written, pipeline.integrity checks every key against
 the lookup tables; a bad key fails the build and keeps the previous catalog.
 
@@ -43,6 +47,7 @@ usage: python -m pipeline.catalog [--out out] [--league nba|ncaam] [--bucket bas
 """
 
 import argparse
+import json
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -67,6 +72,11 @@ def catalog_path(league: str) -> Path:
 def local_catalog_path(league: str) -> Path:
     """a local catalog, at the top of --out so it's never uploaded"""
     return Path(f"{league}.local.duckdb")
+
+
+def metadata_path(league: str) -> Path:
+    """the metadata table as JSON, next to the catalog: nba/metadata.json"""
+    return Path(league) / "metadata.json"
 
 
 CATALOG = catalog_path("nba")
@@ -176,14 +186,18 @@ def league_of(files: list[File]) -> str:
     return leagues.pop()
 
 
-def build(path: Path, files: list[File], location: str) -> None:
+def build(
+    path: Path, files: list[File], location: str, metadata: Path | None = None
+) -> None:
     """
     Write the catalog to `path`, with views reading each file at
-    `location`/key. `location` is a URL or a local directory
+    `location`/key. `location` is a URL or a local directory. With
+    `metadata`, write the metadata table there as JSON too
     """
     datasets = by_dataset(files)
     if not datasets:
         raise ValueError("catalog: no parquet files found")
+    rows: list[dict] = []
 
     # DuckDB's default 256KB blocks would make the file ~1MB, mostly empty
     def write(tmp: Path) -> None:
@@ -196,10 +210,37 @@ def build(path: Path, files: list[File], location: str) -> None:
             con.execute("USE catalog")
             create(con, datasets, location.rstrip("/"))
             integrity.check(con, list(datasets), league == "nba")
+            con.execute(
+                "COMMENT ON TABLE metadata IS "
+                + quote(f"also published as {metadata_path(league).as_posix()}")
+            )
+            result = con.execute("FROM metadata ORDER BY dataset")
+            columns = [d[0] for d in result.description]
+            rows[:] = [dict(zip(columns, row)) for row in result.fetchall()]
 
     league = league_of(files)
     write_atomic(path, write)
     print(f"catalog: wrote {path} ({len(datasets)} datasets)")
+    if metadata:
+        write_atomic(metadata, lambda tmp: tmp.write_text(metadata_json(rows) + "\n"))
+        print(f"catalog: wrote {metadata}")
+
+
+def metadata_json(rows: list[dict]) -> str:
+    """the metadata table's rows, keyed by dataset, with UTC ISO 8601 times"""
+
+    def utc(t: datetime) -> str:
+        return t.astimezone(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+    datasets = {
+        row["dataset"]: {
+            k: utc(v) if isinstance(v, datetime) else v
+            for k, v in row.items()
+            if k != "dataset"
+        }
+        for row in rows
+    }
+    return json.dumps({"datasets": datasets}, indent=2)
 
 
 # each league's lookup tables are built by one source: the NBA's by
@@ -343,7 +384,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--out", type=Path, default=Path("out"))
     parser.add_argument(
         "--bucket",
-        help="list this bucket's files, read them from --url, and write <out>/<league>/<league>.duckdb",
+        help="list this bucket's files, read them from --url, and write <out>/<league>/<league>.duckdb and metadata.json",
     )
     parser.add_argument(
         "--league",
@@ -375,6 +416,7 @@ def main(argv: list[str] | None = None) -> None:
             args.out / catalog_path(args.league),
             list_bucket(args.bucket, league=args.league),
             args.url,
+            args.out / metadata_path(args.league),
         )
     else:
         build(

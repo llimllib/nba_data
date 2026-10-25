@@ -244,6 +244,7 @@ jobs:
         run: |
           uv run python -m pipeline.catalog --out out --bucket "$BUCKET"
           aws s3 cp out/nba/nba.duckdb "s3://$BUCKET/nba/nba.duckdb" --acl public-read --no-progress
+          aws s3 cp out/nba/metadata.json "s3://$BUCKET/nba/metadata.json" --acl public-read --content-type application/json --no-progress
         env: *spaces
 
       # the college data's catalog, ncaam/ncaam.duckdb; nothing in it has NBA
@@ -253,6 +254,7 @@ jobs:
         run: |
           uv run python -m pipeline.catalog --out out --bucket "$BUCKET" --league ncaam
           aws s3 cp out/ncaam/ncaam.duckdb "s3://$BUCKET/ncaam/ncaam.duckdb" --acl public-read --no-progress
+          aws s3 cp out/ncaam/metadata.json "s3://$BUCKET/ncaam/metadata.json" --acl public-read --content-type application/json --no-progress
         env: *spaces
 
       - name: Purge the CDN again, for the catalogs

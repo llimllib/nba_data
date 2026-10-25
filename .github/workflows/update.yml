@@ -112,6 +112,7 @@ jobs:
         run: |
           uv run python -m pipeline.catalog --out out --bucket "$BUCKET"
           aws s3 cp out/nba/nba.duckdb "s3://$BUCKET/nba/nba.duckdb" --acl public-read --no-progress
+          aws s3 cp out/nba/metadata.json "s3://$BUCKET/nba/metadata.json" --acl public-read --content-type application/json --no-progress
         env: *spaces
 
       - name: Purge the CDN again, for the catalog
