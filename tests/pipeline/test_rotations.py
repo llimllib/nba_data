@@ -67,6 +67,7 @@ class Plays:
         self.actions.append(
             {
                 "actionNumber": len(self.actions) + 1,
+                "actionId": len(self.actions) + 1,
                 "period": period,
                 "clock": clock(left),
                 "teamId": team,
@@ -391,6 +392,41 @@ def test_a_basket_listed_out_of_order():
     assert rotations.plus_minus(stints[11], HOME) == -3
 
 
+def test_scoring():
+    plays = Plays()
+    plays.starters(1)
+    plays.scores(1, 700, HOME, 1, 2)
+    plays.add(1, 600, HOME, 1, "Foul", "S.FOUL")
+    plays.scores(1, 600, AWAY, 21, 1, "Free Throw")
+    plays.sub(1, 600, HOME, 1, "Home11", "Home1")
+    plays.scores(1, 600, AWAY, 21, 1, "Free Throw")
+    plays.misses_free_throw(1, 500, HOME, 11)
+    plays.starters(2, home=[11, 2, 3, 4, 5])
+    plays.scores(2, 100, AWAY, 22, 3)
+    game = plays.game()
+    scores = [
+        (s.action_id, s.time, s.team_id, s.pts, s.home_score, s.away_score)
+        for s in rotations.scoring(game)
+    ]
+    assert scores == [
+        (11, 20, HOME, 2, 2, 0),
+        (13, 120, AWAY, 1, 2, 1),
+        (15, 120, AWAY, 1, 2, 2),
+        (27, 1340, AWAY, 3, 2, 5),
+    ]
+    # the free throw after the sub is at the time it was shot, but the
+    # stints count it for the players on for the foul, so on the same clock
+    # the two can differ
+    stints = by_player(derive(plays))
+    assert stints[11].lead_start == 0
+    # they agree on the final score
+    pts = {
+        team: sum(s.pts for s in stints.values() if s.team_id == team)
+        for team in (HOME, AWAY)
+    }
+    assert pts == {HOME: 2, AWAY: 5}
+
+
 def test_box_differences():
     plays = Plays()
     plays.starters(1)
@@ -468,6 +504,43 @@ def test_build(tmp_path):
     assert table.filter("NOT matches_box_score").count("*").fetchone() == (0,)
     row = table.filter("player_id = '201142' AND in_time = 949").fetchone()
     assert row == (2026, GAME, str(HOU), "201142", 2, 949.0, 1439.3, 6, 4, True)
+
+    path = dataset_path(tmp_path / stats.OUT_DIR, rotations.SCORING, 2026)
+    scoring = duckdb.read_parquet(str(path), hive_partitioning=False)
+    types = dict(zip(scoring.columns, map(str, scoring.types)))
+    assert types == {
+        "season": "INTEGER",
+        "game_id": "VARCHAR",
+        "action_id": "INTEGER",
+        "time": "DOUBLE",
+        "team_id": "VARCHAR",
+        "pts": "INTEGER",
+        "home_team_id": "VARCHAR",
+        "away_team_id": "VARCHAR",
+        "home_score": "INTEGER",
+        "away_score": "INTEGER",
+        "matches_box_score": "BOOLEAN",
+    }
+    # the final score is the box score's, and each team's stints' points
+    game = stats.read_raw(FIXTURE)
+    box = game["boxscore"]["boxScoreTraditional"]
+    final = {
+        t["teamId"]: sum(p["statistics"]["points"] for p in t["players"])
+        for t in rotations.box_teams(game["boxscore"])
+    }
+    last = scoring.order("action_id DESC").limit(1)
+    assert last.project("home_score, away_score").fetchone() == (
+        final[box["homeTeamId"]],
+        final[box["awayTeamId"]],
+    )
+    assert last.project("home_team_id, away_team_id").fetchone() == (str(OKC), str(HOU))
+    pts = dict(scoring.aggregate("team_id, sum(pts)::INTEGER").fetchall())
+    assert pts == dict(table.aggregate("team_id, sum(pts)::INTEGER").fetchall())
+    # in time order, on the stints' clock: two overtimes, to 3480
+    times = [t for (t,) in scoring.order("action_id").project("time").fetchall()]
+    assert times == sorted(times) and 3180 < times[-1] <= 3480
+    assert table.aggregate("max(out_time)").fetchone() == (3480,)
+    assert scoring.filter("NOT matches_box_score").count("*").fetchone() == (0,)
 
 
 def durant_matches(tmp_path, logged, box):

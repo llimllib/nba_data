@@ -24,6 +24,11 @@ and the stints are built from them:
 
     nba/stats/game_rotations/season=<season>/data.parquet
 
+along with every scoring play and the score after it, for score-margin
+(worm) charts:
+
+    nba/stats/game_scoring/season=<season>/data.parquet
+
 Games are fetched WORKERS at a time, newest first. A game that fails is
 left for the next run. stats.nba.com throttles after ~600 requests, so when
 half the recent games have failed the run pauses (5, 10, then 20 minutes)
@@ -92,6 +97,15 @@ from .seasons import current_season, today_eastern
 
 NAME = "game_rotations"
 KEYS = ["game_id", "player_id", "in_time"]
+SCORING = "game_scoring"
+SCORING_KEYS = ["game_id", "action_id"]
+# rows per row group in game_scoring, which has ~120 rows a game, so a
+# reader skipping row groups by game_id (hyparquet's filter does) reads
+# ~70 games' rows rather than half the season. Smaller groups read fewer
+# rows but grow the footer, which has every group's statistics: for one
+# game of 2026, 8192 reads a 25KB footer and 44KB of rows, 4096 47KB and
+# 24KB, 2048 (DuckDB's smallest) 93KB and 13KB
+SCORING_ROW_GROUP = 8192
 
 # games this recent are refetched every run, for the NBA's corrections
 RECENT = timedelta(days=2)
@@ -617,6 +631,44 @@ def joined(stints: list[Stint]) -> list[Stint]:
     return [s for s in out if s.end > s.start or s.lead_end != s.lead_start or s.pts]
 
 
+@dataclass
+class Score:
+    """a scoring play, and the score after it"""
+
+    action_id: int
+    time: float
+    team_id: int
+    pts: int
+    home_score: int
+    away_score: int
+
+
+def scoring(game: dict) -> list[Score]:
+    """
+    A game's scoring plays in the play-by-play's order, counted as derive()
+    counts them. Each is at the time it happened, so a free throw shot
+    after a sub is after it here, even when derive() counts it for the
+    players on before the sub
+    """
+    actions = game["playbyplay"]["game"]["actions"]
+    home = game["boxscore"]["boxScoreTraditional"]["homeTeamId"]
+    home_score = away_score = 0
+    scores = []
+    for period, acts in period_actions(actions).items():
+        for a in acts:
+            if not (pts := points(a)):
+                continue
+            if a["teamId"] == home:
+                home_score += pts
+            else:
+                away_score += pts
+            t = elapsed(period, a["clock"])
+            scores.append(
+                Score(a["actionId"], t, a["teamId"], pts, home_score, away_score)
+            )
+    return scores
+
+
 def timed(game: dict) -> bool:
     """whether a game's play-by-play has a game clock; the 2025 All-Star
     games, played to a target score, have every play at 0:00"""
@@ -816,17 +868,43 @@ def fetch_season(
 # --- building
 
 
+def write_table(
+    outdir: Path,
+    season: int,
+    name: str,
+    keys: list[str],
+    columns: dict[str, pa.Array],
+    order: str,
+    row_group_size: int | None = None,
+) -> Path:
+    """write a season of `name`, with a season column first, sorted by `order`"""
+    con = duckdb.connect()
+    con.register("arrow", pa.table(columns))
+    con.execute(
+        f"""
+        CREATE TABLE {name} AS
+        SELECT {season}::INTEGER AS season, * FROM arrow
+        ORDER BY {order}
+        """
+    )
+    check_keys(con, name, keys, f"rotations {name}")
+    path = dataset_path(outdir / stats.OUT_DIR, name, season)
+    write_parquet(con, name, path, row_group_size)
+    return path
+
+
 def build_season(outdir: Path, season: int, url: str = URL) -> bool:
     """
-    Build the season's parquet file from its saved games. Returns False if
-    there are none. Games whose stints don't match their box score are kept,
-    and listed
+    Build the season's parquet files, the stints and the scoring plays, from
+    its saved games. Returns False if there are none. Games whose stints
+    don't match their box score are kept, and listed
     """
     paths = saved_games(outdir, season)
     if not paths:
         return False
     logs = game_logs(outdir, season, url)
     rows: dict[str, list] = defaultdict(list)
+    scores: dict[str, list] = defaultdict(list)
     flagged, untimed = [], []
     for path in paths:
         game = stats.read_raw(path)
@@ -843,7 +921,19 @@ def build_season(outdir: Path, season: int, url: str = URL) -> bool:
         problems += box_differences(game, stints, logged_pm)
         if problems:
             flagged.append((game_id, problems))
-        home = game["boxscore"]["boxScoreTraditional"]["homeTeamId"]
+        box = game["boxscore"]["boxScoreTraditional"]
+        home = box["homeTeamId"]
+        for sc in scoring(game):
+            scores["game_id"].append(game_id)
+            scores["action_id"].append(sc.action_id)
+            scores["time"].append(round(sc.time, 1))
+            scores["team_id"].append(str(sc.team_id))
+            scores["pts"].append(sc.pts)
+            scores["home_team_id"].append(str(home))
+            scores["away_team_id"].append(str(box["awayTeamId"]))
+            scores["home_score"].append(sc.home_score)
+            scores["away_score"].append(sc.away_score)
+            scores["matches_box_score"].append(not problems)
         for s in stints:
             # players with no NBA id (international teams in preseason)
             # can't be keyed
@@ -861,8 +951,11 @@ def build_season(outdir: Path, season: int, url: str = URL) -> bool:
     if not rows:
         return False
 
-    con = duckdb.connect()
-    table = pa.table(
+    path = write_table(
+        outdir,
+        season,
+        NAME,
+        KEYS,
         {
             "game_id": pa.array(rows["game_id"], pa.string()),
             "team_id": pa.array(rows["team_id"], pa.string()),
@@ -873,21 +966,32 @@ def build_season(outdir: Path, season: int, url: str = URL) -> bool:
             "pts": pa.array(rows["pts"], pa.int32()),
             "plus_minus": pa.array(rows["plus_minus"], pa.int32()),
             "matches_box_score": pa.array(rows["matches_box_score"], pa.bool_()),
-        }
+        },
+        "game_id, team_id, in_time, player_id",
     )
-    con.register("arrow", table)
-    con.execute(
-        f"""
-        CREATE TABLE {NAME} AS
-        SELECT {season}::INTEGER AS season, * FROM arrow
-        ORDER BY game_id, team_id, in_time, player_id
-        """
-    )
-    check_keys(con, NAME, KEYS, f"rotations {NAME}")
-    path = dataset_path(outdir / stats.OUT_DIR, NAME, season)
-    write_parquet(con, NAME, path)
     built = len(paths) - len(untimed)
     print(f"rotations: wrote {path} ({built} games)")
+    path = write_table(
+        outdir,
+        season,
+        SCORING,
+        SCORING_KEYS,
+        {
+            "game_id": pa.array(scores["game_id"], pa.string()),
+            "action_id": pa.array(scores["action_id"], pa.int32()),
+            "time": pa.array(scores["time"], pa.float64()),
+            "team_id": pa.array(scores["team_id"], pa.string()),
+            "pts": pa.array(scores["pts"], pa.int32()),
+            "home_team_id": pa.array(scores["home_team_id"], pa.string()),
+            "away_team_id": pa.array(scores["away_team_id"], pa.string()),
+            "home_score": pa.array(scores["home_score"], pa.int32()),
+            "away_score": pa.array(scores["away_score"], pa.int32()),
+            "matches_box_score": pa.array(scores["matches_box_score"], pa.bool_()),
+        },
+        "game_id, action_id",
+        SCORING_ROW_GROUP,
+    )
+    print(f"rotations: wrote {path}")
     if untimed:
         print(f"rotations: no game clock, so no stints, for {', '.join(untimed)}")
     if flagged:

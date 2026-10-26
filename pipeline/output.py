@@ -35,17 +35,25 @@ def write_atomic(path: Path, write: Callable[[Path], object]) -> None:
     os.replace(tmp, path)
 
 
-def write_parquet(con: duckdb.DuckDBPyConnection, table: str, path: Path) -> None:
+def write_parquet(
+    con: duckdb.DuckDBPyConnection,
+    table: str,
+    path: Path,
+    row_group_size: int | None = None,
+) -> None:
     """
     write `table` to `path`, recording the time in the file's metadata.
-    zstd makes files about a third smaller than DuckDB's default, snappy
+    zstd makes files about a third smaller than DuckDB's default, snappy.
+    DuckDB's row groups are 122,880 rows unless `row_group_size` says
+    otherwise
     """
     updated = datetime.now(UTC).isoformat()
+    row_groups = f", ROW_GROUP_SIZE {row_group_size}" if row_group_size else ""
     write_atomic(
         path,
         lambda tmp: con.execute(
             f"COPY {table} TO '{tmp}' (FORMAT parquet, COMPRESSION zstd, "
-            f"KV_METADATA {{updated: '{updated}'}})"
+            f"KV_METADATA {{updated: '{updated}'}}{row_groups})"
         ),
     )
 
