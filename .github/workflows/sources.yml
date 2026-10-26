@@ -80,6 +80,18 @@ jobs:
         env:
           FAIL_SOURCE: ${{ inputs.fail_source }}
 
+      # OpenRAPM's ratings, every season from 2010 (2 files from GitHub).
+      # Each publish recomputes every season, so they're all rewritten when
+      # its built date changes, and nothing is written when it hasn't
+      - name: OpenRAPM
+        id: openrapm
+        continue-on-error: true
+        run: |
+          if [ "$FAIL_SOURCE" = openrapm ]; then echo "failing on purpose (fail_source)"; exit 1; fi
+          uv run python -m pipeline.openrapm --out out
+        env:
+          FAIL_SOURCE: ${{ inputs.fail_source }}
+
       # the current season's league summary (2 requests); past seasons are
       # final and never refetched
       - name: Cleaning the Glass
@@ -271,6 +283,7 @@ jobs:
             {"basketball-reference": "${{ steps.bbref.outcome }}",
              "basketball-reference salaries": "${{ steps.bbref_salaries.outcome }}",
              "dunksandthrees": "${{ steps.dunksandthrees.outcome }}",
+             "openrapm": "${{ steps.openrapm.outcome }}",
              "cleaningtheglass": "${{ steps.ctg.outcome }}",
              "espn-net-points": "${{ steps.espn_net_pts.outcome }}",
              "barttorvik": "${{ steps.torvik.outcome }}",

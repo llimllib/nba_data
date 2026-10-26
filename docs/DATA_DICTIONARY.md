@@ -168,6 +168,7 @@ ORDER BY ppg DESC LIMIT 10;
 | `bbref_team_stats`, `bbref_salaries` | view | Every season of basketball-reference's team stats and player salaries (`nba/bbref/`) |
 | `ctg_team_summary` | view | Every season of Cleaning the Glass's team summary (`nba/ctg/`) |
 | `epm`, `epm_predictive` | view | dunksandthrees' season and predictive EPM, from 2026 (`nba/dunksandthrees/`) |
+| `openrapm` | view | OpenRAPM player ratings, from 2010 (`nba/openrapm/`) |
 | `players` | table | One row per `player_id`: `name` (the latest one known), `first_season`, `last_season` (seasons on a roster count, even without games). A table, so joining it reads no parquet files |
 | `player_season_stats_per_game`, `player_season_stats_per_36`, `player_season_stats_per_100` | view | `player_season_stats` with counting stats scaled; see below |
 | `metadata` | table | Per dataset: `source`, `first_season`, `last_season`, `seasons`, and `updated`, when its newest file was uploaded |
@@ -696,6 +697,48 @@ are dropped. Every stat is a prediction.
 
 Not kept: names, abbreviations, the last game date (the same as
 `as_of_date`), and the site's ranks and z-scores (`*_rk`, `*_z`).
+
+---
+
+## v2 OpenRAPM Data (`nba/openrapm/`)
+
+Built by `pipeline/openrapm.py` from [OpenRAPM](https://openrapm.com)'s
+published data, `docs/data/ratings.json` and `decompose_openrapm.json` in
+[bbstats/openrapm](https://github.com/bbstats/openrapm) (MIT licensed).
+OpenRAPM is RAPM (a ridge regression of the points scored on the ten
+players on the court) pulled toward a box-score prior, fitted on regular
+season and playoff games together. Its README explains the model.
+
+Each publish recomputes every season, so every season's file is rewritten
+when OpenRAPM's `built` date changes, and all of them hold the same version.
+The raw files of each version are kept at
+`nba/raw/openrapm/<built>/<name>.json.gz`. OpenRAPM rates seasons from
+1997, but only seasons covered by `player_seasons` (2010 on) are kept.
+
+### `openrapm/season=<season>/data.parquet`
+
+One row per player per season, for players with possessions. Join
+`players` for names.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| season, player_id | | Key |
+| built | DATE | The date OpenRAPM built this version of the ratings |
+| possessions | INTEGER | The player's offensive possessions on the court (OpenRAPM's `poss_season`) |
+| o_rating, d_rating, rating | DOUBLE | Offensive, defensive and total rating, points per 100 possessions, positive is good. Two decimals, as published |
+| o_box_score, d_box_score | DOUBLE | The part of the rating from the box-score prior |
+| o_on_court, d_on_court | DOUBLE | The part from the season's possessions the player was on the court for |
+| o_off_court, d_off_court | DOUBLE | The part from the player's team's possessions without them |
+| o_team_sos, d_team_sos | DOUBLE | The part from every other possession |
+| o_swap, d_swap | DOUBLE | OpenRAPM's adjustment inside the player's team (0 for every row as of 2026-10-25) |
+
+The five pieces of each side add up to its rating, within 0.06 because
+each piece is rounded to two decimals. They come from the decomposition
+file, which is an extra page on the site; if it's missing or is for a
+different version of the ratings, the pieces are NULL.
+
+Not kept: names, and the decomposition's team abbreviations (teams are in
+`player_game_logs`).
 
 ---
 
