@@ -164,8 +164,8 @@ def write_raw(outdir, season=2026, empty=False, **overrides):
         ),
         "player_game_logs_base": response(PGL, player_logs()),
         "player_game_logs_advanced": response(
-            ["PLAYER_ID", "GAME_ID", "USG_PCT"],
-            [[r[1], r[PGL.index("GAME_ID")], 0.25] for r in player_logs()],
+            ["PLAYER_ID", "TEAM_ID", "GAME_ID", "USG_PCT"],
+            [[r[1], r[3], r[PGL.index("GAME_ID")], 0.25] for r in player_logs()],
         ),
     }
     for name, players in (("regular_season", (1, 2)), ("playoffs", (1,))):
@@ -415,6 +415,30 @@ def test_fetch_season(tmp_path):
     path = stats.raw_path(tmp_path, 2026, "player_stats_playoffs_bio")
     with gzip.open(path, "rt") as f:
         assert json.load(f)["resultSets"][0]["rowSet"] == [[14]]
+
+
+def test_player_on_both_teams(tmp_path):
+    # the NBA listed Devin Booker on both teams in a game, the extra row with
+    # no minutes and a free throw
+    date = "2025-10-21T00:00:00"
+    phantom = player_log(1, "A", NYK, GAME, date, "NYK @ BOS", "L", 1)
+    phantom[PGL.index("MIN")] = 0.0
+    logs = player_logs() + [phantom]
+    write_raw(
+        tmp_path,
+        player_game_logs_base=response(PGL, logs),
+        player_game_logs_advanced=response(
+            ["PLAYER_ID", "TEAM_ID", "GAME_ID", "USG_PCT"],
+            [[r[1], r[3], r[PGL.index("GAME_ID")], r[3] / 1e10] for r in logs],
+        ),
+    )
+    assert stats.build_season(tmp_path, 2026)
+    rows = [r for r in read(tmp_path, "player_game_logs") if r["player_id"] == "1"]
+    assert len(rows) == 1
+    assert rows[0]["team_id"] == str(BOS)
+    assert rows[0]["pts"] == 20
+    # the advanced stats are the same team's
+    assert rows[0]["usg_pct"] == BOS / 1e10
 
 
 def test_unidentified_players(tmp_path):

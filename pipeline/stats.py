@@ -451,7 +451,8 @@ def build_team_game_logs(con: duckdb.DuckDBPyConnection, season: int) -> None:
 
 
 def build_player_game_logs(con: duckdb.DuckDBPyConnection, season: int) -> None:
-    join_raw(con, ["pgl_base", "pgl_advanced"], ["game_id", "player_id"], "pgl")
+    keys = ["game_id", "player_id", "team_id"]
+    join_raw(con, ["pgl_base", "pgl_advanced"], keys, "pgl")
     rest = normalized(
         con,
         "pgl",
@@ -464,6 +465,26 @@ def build_player_game_logs(con: duckdb.DuckDBPyConnection, season: int) -> None:
     unidentified = count(con, "pgl WHERE player_id IS NULL AND game_id LIKE '001%'")
     if unidentified:
         print(f"stats: skipping {unidentified} preseason player rows with no player_id")
+    # The NBA sometimes lists a player on both teams in a game, the extra row
+    # with no minutes (Devin Booker on OKC in 0022600124, with a free throw
+    # that was probably a Thunder player's). Keep the team with the most
+    # minutes; a duplicate row for the same team still fails the key check
+    con.execute(
+        """
+        CREATE OR REPLACE TEMP TABLE pgl_other_team AS
+        SELECT game_id, player_id, team_id, minutes FROM (
+            SELECT game_id, player_id, team_id, max(min) AS minutes
+            FROM pgl WHERE player_id IS NOT NULL GROUP BY ALL)
+        QUALIFY row_number() OVER (
+            PARTITION BY game_id, player_id ORDER BY minutes DESC NULLS LAST) > 1
+        """
+    )
+    extra = con.execute("SELECT * FROM pgl_other_team").fetchall()
+    for game_id, player_id, team_id, minutes in extra:
+        print(
+            f"stats: dropping player {player_id}'s row for team {team_id} in "
+            f"{game_id} ({minutes} min), they have another row in that game"
+        )
     # home and opponent come from the team's game log
     con.execute(
         f"""
@@ -475,6 +496,9 @@ def build_player_game_logs(con: duckdb.DuckDBPyConnection, season: int) -> None:
         FROM pgl p
         LEFT JOIN team_game_logs t
             ON t.game_id = p.game_id AND t.team_id = p.team_id::VARCHAR
+        ANTI JOIN pgl_other_team x
+            ON x.game_id = p.game_id AND x.player_id = p.player_id
+            AND x.team_id = p.team_id
         WHERE NOT (p.player_id IS NULL AND p.game_id LIKE '001%')
         ORDER BY game_date, game_id, team_id, player_id
         """
