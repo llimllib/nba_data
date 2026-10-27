@@ -58,18 +58,44 @@ def write_parquet(
     )
 
 
+# when set, a file that check_keys appends the rows it drops to, rather than
+# raising. The workflows set it so that one bad row doesn't stop the update,
+# and fail the run after publishing if the file isn't empty
+DROPPED_ENV = "PIPELINE_DROPPED"
+
+
 def check_keys(
     con: duckdb.DuckDBPyConnection, table: str, keys: list[str], label: str
 ) -> None:
-    """raise if any row of `table` has a NULL key or shares its key with another"""
+    """
+    raise if any row of `table` has a NULL key or shares its key with
+    another. If DROPPED_ENV is set, delete those rows instead (every row
+    with a duplicated key, since there's no telling which is right), and
+    record them in its file
+    """
     cols = ", ".join(keys)
     dupes = con.execute(
-        f"SELECT {cols}, count(*) FROM {table} GROUP BY ALL HAVING count(*) > 1 LIMIT 5"
+        f"SELECT {cols}, count(*) FROM {table} GROUP BY ALL HAVING count(*) > 1"
     ).fetchall()
+    any_null = " OR ".join(f"{k} IS NULL" for k in keys)
+    nulls = con.execute(f"SELECT count(*) FROM {table} WHERE {any_null}").fetchone()
+    problems = []
     if dupes:
-        raise ValueError(f"{label}: duplicate ({cols}): {dupes}")
-    nulls = con.execute(
-        f"SELECT count(*) FROM {table} WHERE {' OR '.join(f'{k} IS NULL' for k in keys)}"
-    ).fetchone()
+        problems.append(f"{label}: duplicate ({cols}): {dupes[:5]}")
     if nulls and nulls[0]:
-        raise ValueError(f"{label}: {nulls[0]} rows with a NULL in ({cols})")
+        problems.append(f"{label}: {nulls[0]} rows with a NULL in ({cols})")
+    if not problems:
+        return
+    dropped = os.environ.get(DROPPED_ENV)
+    if not dropped:
+        raise ValueError("; ".join(problems))
+    con.execute(
+        f"""
+        DELETE FROM {table} WHERE {any_null} OR ({cols}) IN (
+            SELECT ({cols}) FROM {table} GROUP BY ALL HAVING count(*) > 1)
+        """
+    )
+    with open(dropped, "a") as f:
+        for problem in problems:
+            print(f"{problem}; dropping them")
+            f.write(f"{problem}; dropped them\n")

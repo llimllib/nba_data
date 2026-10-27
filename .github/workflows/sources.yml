@@ -36,6 +36,10 @@ permissions:
 env:
   BUCKET: basketball-data
   UV_HTTP_TIMEOUT: 600
+  # pipeline.output.check_keys drops rows with a duplicate or NULL key and
+  # lists them here rather than stopping the run; "Report dropped rows"
+  # fails the run after everything else is published
+  PIPELINE_DROPPED: /tmp/pipeline-dropped.txt
 
 jobs:
   update:
@@ -273,6 +277,18 @@ jobs:
         run: *purge
         env: *cdn
 
+      # rows check_keys dropped: everything else was published, but the run
+      # fails so the notifier reports them
+      - name: Report dropped rows
+        id: dropped
+        if: always()
+        run: |
+          if [ -s "$PIPELINE_DROPPED" ]; then
+            cat "$PIPELINE_DROPPED"
+            echo "::error::rows with a duplicate or NULL key were dropped"
+            exit 1
+          fi
+
       # one issue per source: comment on its open issue, or file one. Then
       # fail the run, so it shows red in Actions too
       - name: Report failed sources
@@ -326,11 +342,17 @@ jobs:
         if: >-
           always() && (steps.check.outcome == 'failure' || steps.upload.outcome == 'failure'
           || steps.purge.outcome == 'failure' || steps.catalog.outcome == 'failure'
-          || steps.catalog_ncaam.outcome == 'failure')
+          || steps.catalog_ncaam.outcome == 'failure' || steps.dropped.outcome == 'failure')
         uses: actions/github-script@v9.0.0
         with:
           script: |
             const issueTitle = 'Data update (v2) workflow failed';
+            const fs = require('fs');
+            const dropped = fs.existsSync(process.env.PIPELINE_DROPPED)
+              ? fs.readFileSync(process.env.PIPELINE_DROPPED, 'utf8').trim() : '';
+            const detail = dropped
+              ? `\n\nRows dropped for a duplicate or NULL key (everything else was published):\n\`\`\`\n${dropped}\n\`\`\``
+              : '';
             const issues = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -344,13 +366,13 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: existingIssue.number,
-                body: `Another failure detected in workflow run (sources.yml): ${runUrl}`
+                body: `Another failure detected in workflow run (sources.yml): ${runUrl}${detail}`
               });
             } else {
               await github.rest.issues.create({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 title: issueTitle,
-                body: `Workflow run failed (sources.yml): ${runUrl}\n\nPlease check the workflow logs for details.`
+                body: `Workflow run failed (sources.yml): ${runUrl}\n\nPlease check the workflow logs for details.${detail}`
               });
             }
