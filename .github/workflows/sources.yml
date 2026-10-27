@@ -193,31 +193,6 @@ jobs:
           AWS_ENDPOINT_URL: https://sfo3.digitaloceanspaces.com
           AWS_DEFAULT_REGION: us-east-1
 
-      # player stints, from each game's play-by-play and box score on
-      # stats.nba.com, which blocks Actions IPs, so through the exit node
-      # too. Two requests a game, only for games it doesn't have yet (and
-      # the last two days'), but the season is built from every saved game,
-      # so download them first. Games that fail are left for the next run,
-      # and --minutes keeps a bad day from using up the job's time. The
-      # build checks the stints against player_game_logs, from the bucket
-      - name: stats.nba.com rotations
-        id: rotations
-        continue-on-error: true
-        run: |
-          if [ "$FAIL_SOURCE" = rotations ]; then echo "failing on purpose (fail_source)"; exit 1; fi
-          if [ "$EXIT_NODE" != success ]; then echo "no exit node (tailscale: $TAILSCALE, exit node: $EXIT_NODE), and stats.nba.com blocks Actions IPs"; exit 1; fi
-          SEASON=$(uv run python -c 'from pipeline.seasons import current_season, today_eastern; print(current_season(today_eastern()))')
-          aws s3 sync "s3://$BUCKET/nba/raw/stats/$SEASON/playbyplay/" "out/nba/raw/stats/$SEASON/playbyplay/" --no-progress
-          uv run python -m pipeline.rotations --out out --minutes 10
-        env:
-          FAIL_SOURCE: ${{ inputs.fail_source }}
-          TAILSCALE: ${{ steps.tailscale.outcome }}
-          EXIT_NODE: ${{ steps.exit_node.outcome }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.DO_SPACES_ACCESS_KEY }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.DO_SPACES_SECRET }}
-          AWS_ENDPOINT_URL: https://sfo3.digitaloceanspaces.com
-          AWS_DEFAULT_REGION: us-east-1
-
       # everything after this (the upload, the CDN purge, the catalog)
       # goes direct again
       - name: Disable the exit node
@@ -308,7 +283,6 @@ jobs:
              "cleaningtheglass": "${{ steps.ctg.outcome }}",
              "espn-net-points": "${{ steps.espn_net_pts.outcome }}",
              "barttorvik": "${{ steps.torvik.outcome }}",
-             "stats-nba-rotations": "${{ steps.rotations.outcome }}",
              "espn-college": "${{ steps.ncaam_espn.outcome }}"}
         with:
           script: |

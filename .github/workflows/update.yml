@@ -79,6 +79,21 @@ jobs:
       - name: Fetch NBA stats
         run: uv run python -m pipeline.stats --out out
 
+      # player stints and play-by-play, for the games in the games table just
+      # built (so a night's games are fetched in the first run that has
+      # them). Two requests a game, only for games it doesn't have yet (and
+      # the last two days'), but the season is built from every saved game,
+      # so download them first. Games that fail are left for the next run,
+      # and --minutes keeps a bad day from using up the job's time. A failure
+      # here doesn't stop the rest from publishing; it's reported at the end
+      - name: Rotations
+        id: rotations
+        continue-on-error: true
+        run: |
+          aws s3 sync "s3://$BUCKET/nba/raw/stats/$SEASON/playbyplay/" "out/nba/raw/stats/$SEASON/playbyplay/" --no-progress
+          uv run python -m pipeline.rotations --out out --minutes 10
+        env: *spaces
+
       # ESPN is on AWS and doesn't block Actions IPs
       - name: Disable the exit node
         if: always()
@@ -139,6 +154,12 @@ jobs:
             echo "::error::rows with a duplicate or NULL key were dropped"
             exit 1
           fi
+
+      - name: Report a rotations failure
+        if: always() && steps.rotations.outcome == 'failure'
+        run: |
+          echo "::error::the rotations step failed; the other files were published"
+          exit 1
 
       # if there's a failure, comment on the open failure issue or file one,
       # to avoid an avalanche of tickets when something breaks
