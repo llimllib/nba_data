@@ -183,6 +183,29 @@ def test_duplicate_game_fails(tmp_path):
         espn.build_season(tmp_path, 2026)
 
 
+def test_player_on_both_teams(tmp_path):
+    # Booker in 0022600124: two player_box rows marked with his team, one
+    # with the other team's offense, and player_details under both teams
+    data = day(
+        [
+            player(1, "BRK", BKN, tTmPoss=66.05),
+            player(1, "BRK", BKN, tTmPoss=135.0),
+            player(2, "NOR", NOP, home=1, tTmPoss=135.0),
+        ]
+    )
+    data["player_details"] = [
+        {"gmID": GAME, "plyrID": p, "teamId": int(t), "deanAbbrev": a}
+        | {"actionType": "total", "tNetPts": 0.5}
+        for p, t, a in ((1, BKN, "BRK"), (1, NOP, "NOR"), (2, NOP, "NOR"))
+    ]
+    write_raw(tmp_path, 2026, "2025-11-05", data)
+    espn.build_season(tmp_path, 2026)
+    box = read(tmp_path, "player_box", 2026).filter("player_id = '1'")
+    assert box.select("team_id, t_team_poss").fetchall() == [(BKN, 135.0)]
+    details = read(tmp_path, "player_details", 2026).select("player_id, team_id")
+    assert sorted(details.fetchall()) == [("1", BKN), ("2", NOP)]
+
+
 def test_no_raw_files(tmp_path):
     assert espn.build_season(tmp_path, 2026) is False
 

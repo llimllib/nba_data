@@ -297,12 +297,63 @@ def build_season(
         )
         check_abbrevs(con, dataset)
         con.execute(f"CREATE OR REPLACE TABLE out AS {query}")
+        drop_other_team(con, dataset)
         check_keys(con, "out", KEYS[dataset], f"espn {dataset}")
 
         path = dataset_path(outdir / OUT_DIR, dataset, season)
         write_parquet(con, "out", path)
         print(f"espn: wrote {path}")
     return True
+
+
+def drop_other_team(con, dataset: str) -> None:
+    """
+    ESPN, like the NBA, sometimes has a player on both teams in a game:
+    Devin Booker in 0022600124 had a second player_box row, also marked PHO
+    with his minutes and box score but with OKC's offense (0.05 team
+    possessions to the real row's 69), and player_details rows under OKC.
+    Keep the player_box row with the most possessions on the floor, and the
+    player_details rows for its team. Rows that don't differ in team
+    possessions (a game in two days' files) are left for the key check
+    """
+    if dataset == "player_box":
+        extra = con.execute(
+            """
+            DELETE FROM out WHERE rowid IN (
+                SELECT rowid FROM out JOIN (
+                    SELECT game_id, player_id FROM out GROUP BY ALL
+                    HAVING count(*) > 1 AND count(DISTINCT t_team_poss) = count(*)
+                ) USING (game_id, player_id)
+                QUALIFY row_number() OVER (
+                    PARTITION BY game_id, player_id ORDER BY t_team_poss DESC) > 1)
+            RETURNING game_id, player_id, team_id, t_team_poss
+            """
+        ).fetchall()
+        for game_id, player_id, team_id, poss in extra:
+            print(
+                f"espn: dropping player {player_id}'s player_box row for team "
+                f"{team_id} in {game_id} ({poss} team possessions), they have "
+                "another row in that game"
+            )
+        con.execute(
+            "CREATE OR REPLACE TABLE player_teams AS "
+            "SELECT game_id, player_id, team_id FROM out"
+        )
+    elif dataset == "player_details":
+        extra = con.execute(
+            """
+            DELETE FROM out WHERE rowid IN (
+                SELECT o.rowid FROM out o JOIN player_teams p USING (game_id, player_id)
+                WHERE o.team_id <> p.team_id)
+            RETURNING game_id, player_id, team_id
+            """
+        ).fetchall()
+        for game_id, player_id, team_id in sorted(set(extra)):
+            print(
+                f"espn: dropping player {player_id}'s player_details rows for "
+                f"team {team_id} in {game_id}, their player_box row is for "
+                "another team"
+            )
 
 
 def check_abbrevs(con, dataset: str) -> None:
