@@ -25,6 +25,11 @@ env:
   # lists them here rather than stopping the run; "Report dropped rows"
   # fails the run after everything else is published
   PIPELINE_DROPPED: /tmp/pipeline-dropped.txt
+  # browsers revalidate every file on every load (a 304 if it hasn't
+  # changed) and the CDN caches it for an hour (purged after each upload).
+  # Without max-age=0, a browser can keep part of a file and combine it with
+  # ranges of the next version, so a parquet reader finds a bad footer
+  CACHE_CONTROL: "public, max-age=0, must-revalidate, s-maxage=3600"
 
 jobs:
   update:
@@ -95,7 +100,7 @@ jobs:
         run: uv run python -m pipeline.catalog --out out --check
 
       - name: Upload
-        run: aws s3 sync out/ "s3://$BUCKET/" --acl public-read --no-progress --exclude '*.local.duckdb'
+        run: aws s3 sync out/ "s3://$BUCKET/" --acl public-read --cache-control "$CACHE_CONTROL" --no-progress --exclude '*.local.duckdb'
         env: *spaces
 
       # the catalog build reads the files through the CDN, so it must see the
@@ -115,8 +120,8 @@ jobs:
       - name: Build and upload the catalog
         run: |
           uv run python -m pipeline.catalog --out out --bucket "$BUCKET"
-          aws s3 cp out/nba/nba.duckdb "s3://$BUCKET/nba/nba.duckdb" --acl public-read --no-progress
-          aws s3 cp out/nba/metadata.json "s3://$BUCKET/nba/metadata.json" --acl public-read --content-type application/json --no-progress
+          aws s3 cp out/nba/nba.duckdb "s3://$BUCKET/nba/nba.duckdb" --acl public-read --cache-control "$CACHE_CONTROL" --no-progress
+          aws s3 cp out/nba/metadata.json "s3://$BUCKET/nba/metadata.json" --acl public-read --cache-control "$CACHE_CONTROL" --content-type application/json --no-progress
         env: *spaces
 
       - name: Purge the CDN again, for the catalog
