@@ -24,13 +24,14 @@ and the stints are built from them:
 
     nba/stats/game_rotations/season=<season>/data.parquet
 
-along with every scoring play and the score after it, for score-margin
-(worm) charts:
+along with every action in the play-by-play and the score after it, for
+score-margin (worm) charts and anything else that needs the plays:
 
-    nba/stats/game_scoring/season=<season>/data.parquet
+    nba/stats/game_events/season=<season>/data.parquet
 
-Games are fetched WORKERS at a time, newest first. A game that fails is
-left for the next run. stats.nba.com throttles after ~600 requests, so when
+Games are fetched WORKERS at a time, newest first. Games that fail are
+tried again once at the end of the run, after a pause, and left for the
+next run if they fail again. stats.nba.com throttles after ~600 requests, so when
 half the recent games have failed the run pauses (5, 10, then 20 minutes)
 and carries on; if it's still failing after that, it stops. Either way the
 games it got are built and written, but a run that stopped exits with an
@@ -97,15 +98,15 @@ from .seasons import current_season, today_eastern
 
 NAME = "game_rotations"
 KEYS = ["game_id", "player_id", "in_time"]
-SCORING = "game_scoring"
-SCORING_KEYS = ["game_id", "action_id"]
-# rows per row group in game_scoring, which has ~120 rows a game, so a
+EVENTS = "game_events"
+EVENTS_KEYS = ["game_id", "action_id"]
+# rows per row group in game_events, which has ~500 rows a game, so a
 # reader skipping row groups by game_id (hyparquet's filter does) reads
-# ~70 games' rows rather than half the season. Smaller groups read fewer
+# ~32 games' rows rather than half the season. Smaller groups read fewer
 # rows but grow the footer, which has every group's statistics: for one
-# game of 2026, 8192 reads a 25KB footer and 44KB of rows, 4096 47KB and
-# 24KB, 2048 (DuckDB's smallest) 93KB and 13KB
-SCORING_ROW_GROUP = 8192
+# game of 2026's worm columns, 8192 reads a 212KB footer and 24KB of rows,
+# 16384 106KB and 43KB, 32768 55KB and 92KB, 65536 28KB and 180KB
+EVENTS_ROW_GROUP = 16384
 
 # games this recent are refetched every run, for the NBA's corrections
 RECENT = timedelta(days=2)
@@ -124,6 +125,9 @@ WINDOW = 20
 MIN_WINDOW = 10
 THROTTLED = 0.5
 PAUSES = [300, 600, 1200]
+# the wait before trying the run's failed games again: they're mostly from a
+# stretch of throttling, which has usually passed by the end of the run
+RETRY_PAUSE = 60
 
 # a player's minutes may differ from the box score's by this much, in seconds
 MINUTES_TOLERANCE = 6
@@ -632,41 +636,57 @@ def joined(stints: list[Stint]) -> list[Stint]:
 
 
 @dataclass
-class Score:
-    """a scoring play, and the score after it"""
+class Event:
+    """a play-by-play action, and the score after it"""
 
-    action_id: int
-    time: float
-    team_id: int
+    action: dict
+    # None for a game with no game clock
+    time: float | None
     pts: int
     home_score: int
     away_score: int
 
 
-def scoring(game: dict) -> list[Score]:
+def events(game: dict) -> list[Event]:
     """
-    A game's scoring plays in the play-by-play's order, counted as derive()
-    counts them. Each is at the time it happened, so a free throw shot
-    after a sub is after it here, even when derive() counts it for the
-    players on before the sub
+    A game's actions in the play-by-play's order, with the score counted
+    as derive() counts it. Each is at the time it happened, so a free
+    throw shot after a sub is after it here, even when derive() counts it
+    for the players on before the sub
     """
     actions = game["playbyplay"]["game"]["actions"]
     home = game["boxscore"]["boxScoreTraditional"]["homeTeamId"]
+    has_clock = timed(game)
     home_score = away_score = 0
-    scores = []
+    found = []
     for period, acts in period_actions(actions).items():
         for a in acts:
-            if not (pts := points(a)):
-                continue
-            if a["teamId"] == home:
-                home_score += pts
-            else:
-                away_score += pts
-            t = elapsed(period, a["clock"])
-            scores.append(
-                Score(a["actionId"], t, a["teamId"], pts, home_score, away_score)
-            )
-    return scores
+            if pts := points(a):
+                if a["teamId"] == home:
+                    home_score += pts
+                else:
+                    away_score += pts
+            t = elapsed(period, a["clock"]) if has_clock else None
+            found.append(Event(a, t, pts, home_score, away_score))
+    return found
+
+
+def event_ids(action: dict, teams: Collection[int]) -> tuple[int | None, int | None]:
+    """
+    an action's (team id, person id). Team actions (team rebounds,
+    timeouts) have no teamId and the team's id as their personId
+    """
+    team, person = action["teamId"] or None, action["personId"] or None
+    if person in teams:
+        return person, None
+    return team, person
+
+
+def shot_result(action: dict) -> str | None:
+    """Made or Missed for shots and free throws, which have no shotResult"""
+    if action["actionType"] == "Free Throw":
+        return "Missed" if action["description"].startswith("MISS") else "Made"
+    return action["shotResult"] or None
 
 
 def timed(game: dict) -> bool:
@@ -792,7 +812,9 @@ def fetch_season(
     first and `workers` at a time, starting new ones for up to `budget`
     seconds. Each game is saved as it arrives. When too many recent games
     have failed, pause and carry on (see PAUSES); a pause that wouldn't fit
-    in the budget, or one after the last, stops the run
+    in the budget, or one after the last, stops the run. Games that failed
+    are tried again after RETRY_PAUSE, if the run got through every game
+    and has time
     """
     todo = [
         g
@@ -801,6 +823,7 @@ def fetch_season(
     ]
     start = clock()
     result = FetchResult(0, [])
+    failed: list[str] = []
     # the last WINDOW games' outcomes, True for a failure
     window: deque[bool] = deque(maxlen=WINDOW)
     pauses = 0
@@ -814,8 +837,8 @@ def fetch_season(
                 stats.write_raw(raw_path(outdir, season, game_id), future.result())
             # network errors, 500s (an empty body isn't JSON), bad responses
             except (OSError, ValueError, TypeError, KeyError) as e:
-                print(f"rotations: giving up on {game_id} for now: {e!r}")
-                result.left.append(game_id)
+                print(f"rotations: {game_id} failed: {e!r}")
+                failed.append(game_id)
                 window.append(True)
                 continue
             window.append(False)
@@ -828,9 +851,11 @@ def fetch_season(
     def throttled() -> bool:
         return len(window) >= MIN_WINDOW and sum(window) >= THROTTLED * len(window)
 
-    executor = ThreadPoolExecutor(workers)
-    try:
-        for i, game_id in enumerate(todo):
+    def run(games: list[str]) -> bool:
+        """fetch `games`; False if the run stopped or ran out of time"""
+        nonlocal pauses
+        complete = True
+        for i, game_id in enumerate(games):
             if len(pending) >= workers:
                 finish(wait(pending, return_when=FIRST_COMPLETED).done)
             if throttled():
@@ -840,21 +865,42 @@ def fetch_season(
                     budget is not None and clock() - start + pause > budget
                 ):
                     print(f"rotations: {failures}; stopping")
-                    result.left += todo[i:]
+                    result.left += games[i:]
                     result.stopped = True
+                    complete = False
                     break
                 print(f"rotations: {failures}; pausing {pause // 60} minutes")
                 sleep(pause)
                 pauses += 1
                 window.clear()
             if budget is not None and clock() - start > budget:
-                print(f"rotations: out of time, leaving {len(todo) - i} games")
-                result.left += todo[i:]
+                print(f"rotations: out of time, leaving {len(games) - i} games")
+                result.left += games[i:]
+                complete = False
                 break
             if i:
                 sleep(REQUEST_DELAY)
             pending[executor.submit(fetch, game_id)] = game_id
         finish(wait(pending).done)
+        return complete
+
+    executor = ThreadPoolExecutor(workers)
+    try:
+        if (
+            run(todo)
+            and failed
+            and (budget is None or clock() - start + RETRY_PAUSE <= budget)
+        ):
+            retry = failed.copy()
+            failed.clear()
+            print(
+                f"rotations: retrying {len(retry)} failed games "
+                f"in {RETRY_PAUSE} seconds"
+            )
+            sleep(RETRY_PAUSE)
+            window.clear()
+            run(retry)
+        result.left = failed + result.left
     finally:
         # don't wait for requests still in flight after an interrupt
         executor.shutdown(wait=False, cancel_futures=True)
@@ -895,45 +941,67 @@ def write_table(
 
 def build_season(outdir: Path, season: int, url: str = URL) -> bool:
     """
-    Build the season's parquet files, the stints and the scoring plays, from
-    its saved games. Returns False if there are none. Games whose stints
-    don't match their box score are kept, and listed
+    Build the season's parquet files, the stints and the events, from its
+    saved games. Returns False if there are none. Games whose stints don't
+    match their box score are kept, and listed
     """
     paths = saved_games(outdir, season)
     if not paths:
         return False
     logs = game_logs(outdir, season, url)
     rows: dict[str, list] = defaultdict(list)
-    scores: dict[str, list] = defaultdict(list)
+    evs: dict[str, list] = defaultdict(list)
     flagged, untimed = [], []
     for path in paths:
         game = stats.read_raw(path)
         game_id = path.name.removesuffix(".json.gz")
-        if not timed(game):
-            untimed.append(game_id)
-            continue
-        stints, problems = derive(game)
         logged = logs.get(game_id, {})
         ids = logged_ids(game, logged)
-        # the game logs' plus-minus, by box score id
-        logged_pm = {pid: line.plus_minus for pid, line in logged.items()}
-        logged_pm |= {pid: logged[log_id].plus_minus for pid, log_id in ids.items()}
-        problems += box_differences(game, stints, logged_pm)
-        if problems:
-            flagged.append((game_id, problems))
         box = game["boxscore"]["boxScoreTraditional"]
         home = box["homeTeamId"]
-        for sc in scoring(game):
-            scores["game_id"].append(game_id)
-            scores["action_id"].append(sc.action_id)
-            scores["time"].append(round(sc.time, 1))
-            scores["team_id"].append(str(sc.team_id))
-            scores["pts"].append(sc.pts)
-            scores["home_team_id"].append(str(home))
-            scores["away_team_id"].append(str(box["awayTeamId"]))
-            scores["home_score"].append(sc.home_score)
-            scores["away_score"].append(sc.away_score)
-            scores["matches_box_score"].append(not problems)
+        # a game with no clock has no stints, so nothing to check
+        problems: list[str] | None = None
+        stints: list[Stint] = []
+        if timed(game):
+            stints, problems = derive(game)
+            # the game logs' plus-minus, by box score id
+            logged_pm = {pid: line.plus_minus for pid, line in logged.items()}
+            logged_pm |= {pid: logged[log_id].plus_minus for pid, log_id in ids.items()}
+            problems += box_differences(game, stints, logged_pm)
+            if problems:
+                flagged.append((game_id, problems))
+        else:
+            untimed.append(game_id)
+        teams = {home, box["awayTeamId"]}
+        for ev in events(game):
+            a = ev.action
+            team, person = event_ids(a, teams)
+            shot = bool(a["isFieldGoal"])
+            evs["game_id"].append(game_id)
+            evs["action_id"].append(a["actionId"])
+            evs["action_number"].append(a["actionNumber"])
+            evs["period"].append(a["period"])
+            evs["time"].append(None if ev.time is None else round(ev.time, 1))
+            evs["team_id"].append(None if team is None else str(team))
+            evs["person_id"].append(
+                None if person is None else str(ids.get(person, person))
+            )
+            evs["action_type"].append(a["actionType"] or None)
+            evs["sub_type"].append(a["subType"] or None)
+            evs["description"].append(a["description"] or None)
+            evs["shot_result"].append(shot_result(a))
+            evs["is_field_goal"].append(shot)
+            evs["shot_value"].append(a["shotValue"] if shot else None)
+            evs["shot_distance"].append(a["shotDistance"] if shot else None)
+            evs["x"].append(a["xLegacy"] if shot else None)
+            evs["y"].append(a["yLegacy"] if shot else None)
+            evs["video_available"].append(bool(a["videoAvailable"]))
+            evs["pts"].append(ev.pts)
+            evs["home_team_id"].append(str(home))
+            evs["away_team_id"].append(str(box["awayTeamId"]))
+            evs["home_score"].append(ev.home_score)
+            evs["away_score"].append(ev.away_score)
+            evs["matches_box_score"].append(None if problems is None else not problems)
         for s in stints:
             # players with no NBA id (international teams in preseason)
             # can't be keyed
@@ -974,22 +1042,35 @@ def build_season(outdir: Path, season: int, url: str = URL) -> bool:
     path = write_table(
         outdir,
         season,
-        SCORING,
-        SCORING_KEYS,
+        EVENTS,
+        EVENTS_KEYS,
         {
-            "game_id": pa.array(scores["game_id"], pa.string()),
-            "action_id": pa.array(scores["action_id"], pa.int32()),
-            "time": pa.array(scores["time"], pa.float64()),
-            "team_id": pa.array(scores["team_id"], pa.string()),
-            "pts": pa.array(scores["pts"], pa.int32()),
-            "home_team_id": pa.array(scores["home_team_id"], pa.string()),
-            "away_team_id": pa.array(scores["away_team_id"], pa.string()),
-            "home_score": pa.array(scores["home_score"], pa.int32()),
-            "away_score": pa.array(scores["away_score"], pa.int32()),
-            "matches_box_score": pa.array(scores["matches_box_score"], pa.bool_()),
+            "game_id": pa.array(evs["game_id"], pa.string()),
+            "action_id": pa.array(evs["action_id"], pa.int32()),
+            "action_number": pa.array(evs["action_number"], pa.int32()),
+            "period": pa.array(evs["period"], pa.int32()),
+            "time": pa.array(evs["time"], pa.float64()),
+            "team_id": pa.array(evs["team_id"], pa.string()),
+            "person_id": pa.array(evs["person_id"], pa.string()),
+            "action_type": pa.array(evs["action_type"], pa.string()),
+            "sub_type": pa.array(evs["sub_type"], pa.string()),
+            "description": pa.array(evs["description"], pa.string()),
+            "shot_result": pa.array(evs["shot_result"], pa.string()),
+            "is_field_goal": pa.array(evs["is_field_goal"], pa.bool_()),
+            "shot_value": pa.array(evs["shot_value"], pa.int32()),
+            "shot_distance": pa.array(evs["shot_distance"], pa.int32()),
+            "x": pa.array(evs["x"], pa.int32()),
+            "y": pa.array(evs["y"], pa.int32()),
+            "video_available": pa.array(evs["video_available"], pa.bool_()),
+            "pts": pa.array(evs["pts"], pa.int32()),
+            "home_team_id": pa.array(evs["home_team_id"], pa.string()),
+            "away_team_id": pa.array(evs["away_team_id"], pa.string()),
+            "home_score": pa.array(evs["home_score"], pa.int32()),
+            "away_score": pa.array(evs["away_score"], pa.int32()),
+            "matches_box_score": pa.array(evs["matches_box_score"], pa.bool_()),
         },
         "game_id, action_id",
-        SCORING_ROW_GROUP,
+        EVENTS_ROW_GROUP,
     )
     print(f"rotations: wrote {path}")
     if untimed:

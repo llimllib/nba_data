@@ -392,7 +392,7 @@ def test_a_basket_listed_out_of_order():
     assert rotations.plus_minus(stints[11], HOME) == -3
 
 
-def test_scoring():
+def test_events():
     plays = Plays()
     plays.starters(1)
     plays.scores(1, 700, HOME, 1, 2)
@@ -404,9 +404,16 @@ def test_scoring():
     plays.starters(2, home=[11, 2, 3, 4, 5])
     plays.scores(2, 100, AWAY, 22, 3)
     game = plays.game()
+    found = rotations.events(game)
+    # every action, in order
+    assert [e.action["actionId"] for e in found] == [
+        a["actionId"] for a in plays.actions
+    ]
     scores = [
-        (s.action_id, s.time, s.team_id, s.pts, s.home_score, s.away_score)
-        for s in rotations.scoring(game)
+        (e.action["actionId"], e.time, e.action["teamId"], e.pts)
+        + (e.home_score, e.away_score)
+        for e in found
+        if e.pts
     ]
     assert scores == [
         (11, 20, HOME, 2, 2, 0),
@@ -414,6 +421,11 @@ def test_scoring():
         (15, 120, AWAY, 1, 2, 2),
         (27, 1340, AWAY, 3, 2, 5),
     ]
+    # rows that don't score carry the score
+    miss = next(
+        e for e in found if e.action["actionType"] == "Free Throw" and not e.pts
+    )
+    assert (miss.time, miss.home_score, miss.away_score) == (220, 2, 2)
     # the free throw after the sub is at the time it was shot, but the
     # stints count it for the players on for the foul, so on the same clock
     # the two can differ
@@ -505,15 +517,28 @@ def test_build(tmp_path):
     row = table.filter("player_id = '201142' AND in_time = 949").fetchone()
     assert row == (2026, GAME, str(HOU), "201142", 2, 949.0, 1439.3, 6, 4, True)
 
-    path = dataset_path(tmp_path / stats.OUT_DIR, rotations.SCORING, 2026)
-    scoring = duckdb.read_parquet(str(path), hive_partitioning=False)
-    types = dict(zip(scoring.columns, map(str, scoring.types)))
+    path = dataset_path(tmp_path / stats.OUT_DIR, rotations.EVENTS, 2026)
+    events = duckdb.read_parquet(str(path), hive_partitioning=False)
+    types = dict(zip(events.columns, map(str, events.types)))
     assert types == {
         "season": "INTEGER",
         "game_id": "VARCHAR",
         "action_id": "INTEGER",
+        "action_number": "INTEGER",
+        "period": "INTEGER",
         "time": "DOUBLE",
         "team_id": "VARCHAR",
+        "person_id": "VARCHAR",
+        "action_type": "VARCHAR",
+        "sub_type": "VARCHAR",
+        "description": "VARCHAR",
+        "shot_result": "VARCHAR",
+        "is_field_goal": "BOOLEAN",
+        "shot_value": "INTEGER",
+        "shot_distance": "INTEGER",
+        "x": "INTEGER",
+        "y": "INTEGER",
+        "video_available": "BOOLEAN",
         "pts": "INTEGER",
         "home_team_id": "VARCHAR",
         "away_team_id": "VARCHAR",
@@ -521,8 +546,28 @@ def test_build(tmp_path):
         "away_score": "INTEGER",
         "matches_box_score": "BOOLEAN",
     }
-    # the final score is the box score's, and each team's stints' points
+    # every action in the play-by-play
     game = stats.read_raw(FIXTURE)
+    actions = game["playbyplay"]["game"]["actions"]
+    assert events.count("*").fetchone() == (len(actions),)
+    # fouls, with who committed them
+    fouls = events.filter("action_type = 'Foul'")
+    assert fouls.count("*").fetchone() == (
+        sum(a["actionType"] == "Foul" for a in actions),
+    )
+    # team actions have the team, and no person
+    teams = events.filter("action_type = 'Timeout'")
+    assert teams.filter("team_id IS NULL OR person_id IS NOT NULL").count(
+        "*"
+    ).fetchone() == (0,)
+    # shots have a result and a location; free throws a result
+    assert events.filter("is_field_goal AND (shot_result IS NULL OR x IS NULL)").count(
+        "*"
+    ).fetchone() == (0,)
+    made = events.filter("action_type = 'Free Throw' AND shot_result = 'Made'")
+    assert made.filter("pts <> 1").count("*").fetchone() == (0,)
+    scoring = events.filter("pts > 0")
+    # the final score is the box score's, and each team's stints' points
     box = game["boxscore"]["boxScoreTraditional"]
     final = {
         t["teamId"]: sum(p["statistics"]["points"] for p in t["players"])
@@ -692,13 +737,53 @@ def test_fetch_season_fetches_games_at_once(tmp_path):
 
 
 def test_fetch_season_leaves_failures(tmp_path):
+    seen = []
+
     def fetch(game_id):
+        seen.append(game_id)
         if game_id == "0022500002":
             raise TimeoutError
         return fake_game(game_id)
 
     assert fetch_season(tmp_path, fetch) == rotations.FetchResult(3, ["0022500002"])
     assert "0022500002" not in saved(tmp_path)
+    # tried again once at the end
+    assert seen[-2:] == ["0022500001", "0022500002"]
+
+
+def test_fetch_season_retries_failures(tmp_path):
+    failures = {"0022500003", "0022500002"}
+    slept = []
+
+    def fetch(game_id):
+        if game_id in failures:
+            failures.remove(game_id)
+            raise TimeoutError
+        return fake_game(game_id)
+
+    result = rotations.fetch_season(
+        tmp_path, 2026, GAMES, TODAY, fetch=fetch, sleep=slept.append, workers=1
+    )
+    assert result == rotations.FetchResult(4, [])
+    assert saved(tmp_path) == [g for g, _ in GAMES]
+    assert rotations.RETRY_PAUSE in slept
+
+
+def test_fetch_season_doesnt_retry_without_time(tmp_path):
+    # three games at 20s each leave 30s of the budget, less than RETRY_PAUSE
+    clock = [0.0]
+    seen = []
+
+    def fetch(game_id):
+        seen.append(game_id)
+        clock[0] += 20
+        if game_id == "0022500002":
+            raise TimeoutError
+        return fake_game(game_id)
+
+    result = fetch_season(tmp_path, fetch, clock=lambda: clock[0], budget=90)
+    assert result == rotations.FetchResult(3, ["0022500002"])
+    assert seen.count("0022500002") == 1
 
 
 def many_games(n):
@@ -707,8 +792,10 @@ def many_games(n):
 
 def throttle(tmp_path, monkeypatch, outcomes, budget=None):
     """
-    fetch games that fail or succeed by `outcomes` (True for a failure),
-    with a small window. Returns the result and the pauses taken
+    fetch games that fail or succeed by `outcomes` (True for a failure;
+    a game that failed works when it's retried), with a small window.
+    Returns the result and the pauses taken, including the one before
+    retrying
     """
     monkeypatch.setattr(rotations, "WINDOW", 4)
     monkeypatch.setattr(rotations, "MIN_WINDOW", 4)
@@ -719,6 +806,7 @@ def throttle(tmp_path, monkeypatch, outcomes, budget=None):
 
     def fetch(game_id):
         if fails[game_id]:
+            fails[game_id] = False
             raise TimeoutError
         return fake_game(game_id)
 
@@ -746,8 +834,8 @@ def test_fetch_season_pauses_when_throttled(tmp_path, monkeypatch):
     result, pauses = throttle(
         tmp_path, monkeypatch, [False, True, False, True] + [False] * 6
     )
-    assert pauses == [300]
-    assert (result.fetched, len(result.left), result.stopped) == (8, 2, False)
+    assert pauses == [300, rotations.RETRY_PAUSE]
+    assert (result.fetched, len(result.left), result.stopped) == (10, 0, False)
 
 
 def test_fetch_season_stops_when_still_throttled(tmp_path, monkeypatch):
@@ -764,7 +852,7 @@ def test_fetch_season_healthy_window_resets_pauses(tmp_path, monkeypatch):
     # without the reset, the second pause would be the longer one
     bad = [True] * 4
     result, pauses = throttle(tmp_path, monkeypatch, bad + [False] * 4 + bad)
-    assert pauses == [300, 300]
+    assert pauses == [300, 300, rotations.RETRY_PAUSE]
     assert not result.stopped
 
 

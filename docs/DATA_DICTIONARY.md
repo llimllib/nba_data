@@ -231,7 +231,7 @@ rows.
 ## v2 NBA Stats Data (`nba/stats/`)
 
 Built by `pipeline/stats.py` from stats.nba.com, except `game_rotations`
-and `game_scoring` (`pipeline/rotations.py`, below). Each run refetches the whole current
+and `game_events` (`pipeline/rotations.py`, below). Each run refetches the whole current
 season (14 requests), so stat corrections the NBA makes after
 games are picked up. Raw responses are kept at
 `nba/raw/stats/<season>/<request>.json.gz`. Team rosters (30 requests, for
@@ -350,13 +350,16 @@ counts. Of 440 games checked (2010-2027, every game type), 437 match, and
 2,777 of the 2,787 in 2025-2027. The 2025 All-Star games, played to a
 target score with no game clock, have no rows.
 
-### `game_scoring/season=<season>/data.parquet`
+### `game_events/season=<season>/data.parquet`
 
-One row per scoring play (a made shot or free throw), with the score after
-it, for score-margin (worm) charts. Built with `game_rotations`, from the
-same play-by-play, and the score is counted the same way, from the made
-shots and free throws, so each team's points add up to its stints' `pts`
-and the last row has the final score.
+One row per action in the play-by-play (shots, free throws, rebounds,
+fouls, turnovers, steals, blocks, substitutions, timeouts, jump balls,
+violations, replays, period starts and ends), with the score after it.
+Filter on `pts > 0` for the scoring plays, for score-margin (worm)
+charts. Built with `game_rotations`, from the same play-by-play, and the
+score is counted the same way, from the made shots and free throws, so
+each team's points add up to its stints' `pts` and the last scoring row
+has the final score.
 
 The two tables put free throws at different moments. Here each play is
 at the time it happened, in the play-by-play's order. `game_rotations`
@@ -371,21 +374,30 @@ only by scoring plays on that same tick: in 2026-2027, that's 655 of
 | Column | Type | Description |
 |--------|------|-------------|
 | season, game_id | | Key: `(game_id, action_id)` |
-| action_id | INTEGER | The play's place in the play-by-play (`actionId`), which orders plays on the same clock tick. Not `actionNumber`, which repeats within a game |
-| time | DOUBLE | Seconds from the start of the game, to the tenth, on `game_rotations`' clock: 720 per period, 300 per overtime |
-| team_id | VARCHAR | The team that scored |
-| pts | INTEGER | 1, 2 or 3 |
+| action_id | INTEGER | The action's place in the play-by-play (`actionId`), which orders actions on the same clock tick |
+| action_number | INTEGER | The play-by-play's `actionNumber`, which repeats within a game: a steal or block shares it with the turnover or missed shot it goes with |
+| period | INTEGER | 1-4, 5 for the first overtime, and so on |
+| time | DOUBLE | Seconds from the start of the game, to the tenth, on `game_rotations`' clock: 720 per period, 300 per overtime. Null for games with no game clock (the 2025 All-Star games) |
+| team_id | VARCHAR | The action's team. The NBA puts team actions' (team rebounds, timeouts) team in their person id; here it's in `team_id`. Null for period starts and ends, replays, coaches' technicals and ejections, and heaves (end-of-period team shots, whose team is only in the description), and the NBA leaves out a few others (in 2023-2027, 29 blocks and 2 turnovers) |
+| person_id | VARCHAR | Who did it: usually a player (with the id `player_game_logs` uses), but the coach for a coach's technical or ejection, and an unexplained small number for instant replays. Null for team actions |
+| action_type | VARCHAR | `Made Shot`, `Missed Shot`, `Free Throw`, `Rebound`, `Foul`, `Turnover`, `Substitution`, `Timeout`, `Jump Ball`, `Violation`, `Ejection`, `Instant Replay`, `Heave`, `period`. Steals and blocks have none (the NBA leaves it empty): their `description` has `STEAL` or `BLOCK` |
+| sub_type | VARCHAR | The kind of action: the shot type, the foul type (`Shooting`, `Personal`, `Offensive Charge`, `Technical`, ...), the turnover type, `start` or `end` for periods |
+| description | VARCHAR | The NBA's text, which has what other columns don't: who assisted, who drew a foul or got the steal, the referee, foul counts (`P2.T3`: the player's second foul, the team's third of the period) |
+| shot_result | VARCHAR | `Made` or `Missed`, for shots and free throws (the NBA leaves free throws' empty; here it's from the description, as the score is) |
+| is_field_goal | BOOLEAN | Whether it's a shot from the field |
+| shot_value, shot_distance, x, y | INTEGER | For shots from the field: 2 or 3, the distance in feet, and the location (the NBA's `xLegacy` and `yLegacy`, in tenths of a foot from the basket) |
+| video_available | BOOLEAN | Whether the NBA has video of it |
+| pts | INTEGER | The points it scored: 0, 1, 2 or 3 |
 | home_team_id, away_team_id | VARCHAR | The box score's home and away teams, which `home_score` and `away_score` are for. Neutral-site games, which have none in `games`, have them here too |
-| home_score, away_score | INTEGER | The score after this play |
-| matches_box_score | BOOLEAN | `game_rotations`' flag for the game: whether its stints add up to the box score. A game's scoring can be right when its stints aren't (a missed substitution doesn't change the score); the site filters on it to match the rotations it shows |
+| home_score, away_score | INTEGER | The score after this action |
+| matches_box_score | BOOLEAN | `game_rotations`' flag for the game: whether its stints add up to the box score. A game's scoring can be right when its stints aren't (a missed substitution doesn't change the score); the site filters on it to match the rotations it shows. Null for games with no game clock, which have no stints |
 
-Sorted by `game_id` and `action_id`, in row groups of 8,192 rows (about
-70 games), so reading one game by `game_id` reads one row group: for 2026
-(167k rows, 0.96MB), a 25KB footer and 44KB of rows. In hyparquet the
-filter must use an operator (`{game_id: {$eq: id}}`) to skip row groups,
-and its default first read is the file's last 512KB, so pass a smaller
-`initialFetchSize` (32KB) to read only the footer. Games with no game
-clock (the 2025 All-Star games) have no rows, as in `game_rotations`.
+Sorted by `game_id` and `action_id`, in row groups of 16,384 rows (about
+32 games), so reading one game by `game_id` reads one row group: for 2026
+(703k rows, 11MB), a 106KB footer and, for the scoring columns, 43KB of
+rows. In hyparquet the filter must use an operator (`{game_id: {$eq: id}}`)
+to skip row groups, and its default first read is the file's last 512KB,
+so pass a smaller `initialFetchSize` (128KB) to read only the footer.
 
 ---
 
