@@ -2,10 +2,10 @@
 
 Up to date NBA data dumps
 
-## v2: query everything from one URL
+## Query everything from one URL
 
-The data is moving out of this repo and into object storage, as one dataset
-with consistent keys. Every dataset is a table in a small DuckDB catalog:
+The data is in object storage, as one dataset with consistent keys. Every
+dataset is a table in a small DuckDB catalog:
 
 ```sql
 ATTACH 'https://basketball-data.billmill.org/nba/nba.duckdb' AS nba;
@@ -55,8 +55,8 @@ needs are downloaded.
   [`nba/metadata.json`](https://basketball-data.billmill.org/nba/metadata.json),
   the `metadata` table as JSON
 - **Docs:** every table and column is in
-  [docs/DATA_DICTIONARY.md](docs/DATA_DICTIONARY.md) (the "v2" sections);
-  the plan is in [docs/v2.md](docs/v2.md)
+  [docs/DATA_DICTIONARY.md](docs/DATA_DICTIONARY.md); the decisions
+  behind it are in [docs/v2.md](docs/v2.md)
 
 ### Men's college basketball
 
@@ -88,42 +88,13 @@ JOIN ncaam.team_seasons o ON o.season = b.season AND o.team_id = b.opp_team_id
 WHERE b.season = 2026 AND t.torvik_team = 'Connecticut' ORDER BY b.game_date;
 ```
 
-The `data/` directory below is v1. It's still updated, but frozen in
-format, and will be removed once everything has moved to v2.
+## Code
 
-## data/
-
-In the `data` directory, all seasons represent the end of the season, so 2025 means the 2024-25 nba season. `data` has data for the 2009-10 season up to the current season
-
-- **`gamelog_<season>.parquet`**: game logs per team for the given season
-- **`gamelogs.parquet`**: game logs per team for all seasons
-- **`metadata.json`**: the date of the last update
-- **`playerlog_<season>.parquet`**: game logs per player
-- **`player_game_logs.parquet`**: game logs per player, all seasons
-- **`players_<season>.parquet`**: player data for the whole season
-- **`players_<season>_playoffs.parquet`**: player data for the whole playoffs
-- **`playerstats.parquet`**: player data per season for all collected seasons
-- **`playerstats_playoffs.parquet`**: player data per playoff season for all collected seasons
-- **`team_efficiency_<season>.json`**: team efficiency stats
-- **`team_summary_<season>.json`**: team summary stats for a given season
-- **`team_summary.json`**: team summary stats for all seasons
-
-## data/espn
-
-Data collected from [espnanalytics.com](https://espnanalytics.com/). Covers the 2018-19 season through the current season.
-
-**note**: in this directory, the season name represents the _first_ year of the season, not the last. Apologies for the inconsistency
-
-**note update**: as of feb 24 2026, this is no longer true. If you're using this data, you will need to update your usages. I apologize for the churn and regret the initial error I made
-
-- **`four_factors.parquet`**: four factors data per game
-- **`player_box.parquet`**: player box score data per game
-- **`player_details.parquet`**: more detailed player box scores
-- **`team_box.parquet`**: team box score data per game
-
-## src
-
-The source code for updating the data. See the makefile for how to run it
+`pipeline/` fetches each source and builds its parquet files, run every 4
+hours (stats.nba.com, ESPN) and daily (the other sources) by the workflows in
+`.github/workflows/`. The data itself isn't in this repo; until October 2026
+it was committed to `data/` (v1), which was removed from the history when v2
+replaced it.
 
 ## NBA Game ID Prefixes
 
