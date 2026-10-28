@@ -397,6 +397,28 @@ def test_main_skips_last_seasons_pages(tmp_path, monkeypatch):
     assert not (tmp_path / d.OUT_DIR / "epm_predictive").exists()
 
 
+def test_main_writes_the_new_seasons_predictive_epm_first(tmp_path, monkeypatch):
+    # the predictive page moves on to the new season before the season pages
+    fake_fetch(
+        monkeypatch,
+        {
+            **season_pages(),
+            "predictive": predictive_page([predicted(1, season=2027)], season=2027),
+        },
+    )
+    write_player_seasons(tmp_path, ["1"], season=2027)
+    d.main(["--out", str(tmp_path)])
+    assert dataset_path(tmp_path / d.OUT_DIR, "epm", SEASON).is_file()
+    path = dataset_path(tmp_path / d.OUT_DIR, "epm_predictive", 2027)
+    assert read(path).select("season, player_id").fetchall() == [(2027, "1")]
+    assert not dataset_path(tmp_path / d.OUT_DIR, "epm_predictive", SEASON).exists()
+
+    # and the same from the saved pages
+    path.unlink()
+    d.main(["--out", str(tmp_path), "--no-fetch"])
+    assert read(path).select("season, player_id").fetchall() == [(2027, "1")]
+
+
 def test_main_keeps_a_page_it_cant_parse(tmp_path, monkeypatch):
     fake_fetch(monkeypatch, {"regular_season": "<html>changed</html>"})
     with pytest.raises(ValueError, match="no `data:{stats:"):

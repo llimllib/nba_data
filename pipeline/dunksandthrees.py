@@ -18,10 +18,13 @@ usage: python -m pipeline.dunksandthrees [--out out] [--no-fetch]
 Only the site's current season is public: other seasons redirect to a
 subscribe page. So there's no backfill, and we fetch the default pages and
 take the season from their data. The regular-season page decides which
-season is written; the playoffs and predictive pages are only used if
-they're for the same season (between seasons the playoffs page may still
-show the previous playoffs, whose file is already final). When the site moves on to a new season, the previous
-season's file stays as it was last written.
+season's EPM is written; the playoffs page is only used if it's for the same
+season (between seasons it may still show the previous playoffs, whose file
+is already final). The predictive page is written for its own season unless
+it's behind the regular-season page: it moves on to a new season before the
+season pages do, which stay on the last season until the first games. When
+the site moves on to a new season, the previous season's files stay as they
+were last written.
 
 The pages are SvelteKit apps with their data embedded as a javascript
 object literal. The season pages have `data:{stats:[[...], ...],k:{season:0,
@@ -677,12 +680,15 @@ def update(outdir: Path, today: date) -> None:
         predictive_raw_path(outdir, predictive["season"], predictive["date"]),
         predictive.pop("html"),
     )
-    if predictive["season"] != season:
+    # before the new season's first games, the predictive page is on the new
+    # season while the season pages are still on the last one
+    if predictive["season"] < season:
         print(
             f"dunksandthrees: the predictive page is for {predictive['season']}, "
             f"not {season}; skipping it"
         )
         return
+    season = predictive["season"]
     build_predictive(outdir, season, predictive, known_players(outdir, season))
 
 
@@ -700,9 +706,11 @@ def main(argv: list[str] | None = None) -> None:
         update(args.out, today_eastern())
         return
     for season, pages in sorted(saved_pages(args.out).items()):
-        if "regular_season" not in pages:
-            continue
-        build_epm(args.out, season, pages)
+        if "regular_season" in pages:
+            build_epm(args.out, season, pages)
+    # a season's predictive pages may be saved before its season pages are
+    for season_dir in sorted((args.out / RAW_DIR).glob("[0-9][0-9][0-9][0-9]")):
+        season = int(season_dir.name)
         if predictive := latest_predictive(args.out, season):
             build_predictive(
                 args.out, season, predictive, known_players(args.out, season)
