@@ -61,6 +61,7 @@ import io
 import json
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import date, timedelta
 from pathlib import Path
@@ -395,11 +396,18 @@ class Snapshots(Protocol):
     def get_bytes(self, path: str) -> bytes | None: ...
 
 
+class Redirected(Exception):
+    pass
+
+
 class Fetcher:
     """
     Fetches files no faster than one per REQUEST_DELAY seconds. A 404 is
-    None: torvik's file for that season doesn't exist (yet). A dropped or
-    truncated response is retried once
+    None: torvik's file for that season doesn't exist (yet). torvik also
+    answers a CSV it doesn't have with a redirect to its home page (and its
+    browser check), which `get` reads as None too; `get_bytes`, for the
+    snapshots, raises Redirected, so a blocked request is never recorded as
+    a missing day. A dropped or truncated response is retried once
     """
 
     def __init__(self, delay: float = REQUEST_DELAY, sleep=time.sleep, clock=time.time):
@@ -409,7 +417,11 @@ class Fetcher:
         self.last = 0.0
 
     def get(self, path: str) -> str | None:
-        data = self.get_bytes(path)
+        try:
+            data = self.get_bytes(path)
+        except Redirected as e:
+            print(f"torvik: {e}", flush=True)
+            return None
         return None if data is None else data.decode("utf-8")
 
     def get_bytes(self, path: str) -> bytes | None:
@@ -431,6 +443,8 @@ class Fetcher:
         )
         try:
             with urllib.request.urlopen(req, timeout=60) as res:
+                if urllib.parse.urlparse(res.geturl()).path != path:
+                    raise Redirected(f"{path} redirects to {res.geturl()}")
                 return res.read()
         except urllib.error.HTTPError as e:
             if e.code == 404:
@@ -478,6 +492,9 @@ def season_files(
         saved = latest_file(outdir, season, file)
         if fetcher and (refresh or saved is None):
             text = fetcher.get(path(season, file))
+            # a file torvik had doesn't go away: more likely we're blocked
+            if text is None and saved is not None:
+                raise ValueError(f"torvik: {file} for {season} is gone")
             if text is None:
                 print(f"torvik: no {file} for {season} yet")
             else:

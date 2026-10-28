@@ -287,8 +287,12 @@ def test_duplicate_team_writes_nothing(tmp_path):
 
 
 class FlakyResponse:
-    def __init__(self, error):
+    def __init__(self, error, url=None):
         self.error = error
+        self.url = url
+
+    def geturl(self):
+        return self.url
 
     def __enter__(self):
         return self
@@ -310,7 +314,10 @@ def fetcher_with(monkeypatch, *responses):
         r = queue.pop(0)
         if isinstance(r, urllib.error.HTTPError):
             raise r
-        return FlakyResponse(r)
+        # a str is where the request was redirected
+        if isinstance(r, str):
+            return FlakyResponse(None, torvik.BASE_URL + r)
+        return FlakyResponse(r, req.full_url)
 
     monkeypatch.setattr(torvik.urllib.request, "urlopen", urlopen)
     return torvik.Fetcher(delay=0, sleep=lambda s: None, clock=lambda: 0.0)
@@ -325,6 +332,22 @@ def test_fetcher_retries_a_truncated_response_once(monkeypatch):
     assert fetcher_with(monkeypatch, truncated, None).get("/a") == "ok"
     with pytest.raises(http.client.IncompleteRead):
         fetcher_with(monkeypatch, truncated, truncated).get("/a")
+
+
+def test_fetcher_redirect_is_none_for_a_csv_only(monkeypatch):
+    # torvik redirects a CSV it doesn't have to its home page
+    assert fetcher_with(monkeypatch, "/").get("/2027_fffinal.csv") is None
+    # a snapshot isn't recorded as missing: the run fails instead
+    with pytest.raises(torvik.Redirected):
+        fetcher_with(monkeypatch, "/").get_bytes("/a.json.gz")
+
+
+def test_a_file_that_was_there_is_never_missing(tmp_path):
+    fetcher = FakeFetcher({"/2026_team_results.csv": csv_text("team_results")})
+    torvik.season_files(fetcher, tmp_path, SEASON, TODAY, refresh=True)
+    del fetcher.files["/2026_team_results.csv"]
+    with pytest.raises(ValueError, match="team_results for 2026 is gone"):
+        torvik.season_files(fetcher, tmp_path, SEASON, date(2026, 10, 12), True)
 
 
 def test_fetcher_404_is_none(monkeypatch):
