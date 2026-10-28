@@ -364,11 +364,11 @@ def test_main(tmp_path, monkeypatch):
     assert read(predictive).select("player_id").fetchall() == [("1",), ("2",)]
     for season_type in d.SEASON_TYPES:
         assert d.raw_path(tmp_path, SEASON, season_type).is_file()
-    assert d.predictive_raw_path(tmp_path, SEASON, "2026-06-13").is_file()
+    assert d.daily_raw_path(tmp_path, SEASON, "predictive", "2026-06-13").is_file()
 
     # and the same from the saved pages, using the latest predictive page
     later = predictive_page([predicted(1, tot=5.0)], as_of="2026-06-14")
-    d.save_raw(d.predictive_raw_path(tmp_path, SEASON, "2026-06-14"), later)
+    d.save_raw(d.daily_raw_path(tmp_path, SEASON, "predictive", "2026-06-14"), later)
     epm.unlink()
     predictive.unlink()
     d.main(["--out", str(tmp_path), "--no-fetch"])
@@ -392,7 +392,7 @@ def test_main_skips_last_seasons_pages(tmp_path, monkeypatch):
     # the 2026 pages are kept, but their files aren't rewritten without
     # their regular season
     assert d.raw_path(tmp_path, 2026, "playoffs").is_file()
-    assert d.predictive_raw_path(tmp_path, 2026, "2026-06-13").is_file()
+    assert d.daily_raw_path(tmp_path, 2026, "predictive", "2026-06-13").is_file()
     assert not dataset_path(tmp_path / d.OUT_DIR, "epm", 2026).exists()
     assert not (tmp_path / d.OUT_DIR / "epm_predictive").exists()
 
@@ -417,6 +417,70 @@ def test_main_writes_the_new_seasons_predictive_epm_first(tmp_path, monkeypatch)
     path.unlink()
     d.main(["--out", str(tmp_path), "--no-fetch"])
     assert read(path).select("season, player_id").fetchall() == [(2027, "1")]
+
+
+def test_main_builds_the_daily_datasets(tmp_path, monkeypatch):
+    write_player_seasons(tmp_path, ["1", "2"])
+    for day, tot in ((1, 1.0), (2, 2.0)):
+        today = date(2026, 3, day)
+        monkeypatch.setattr(d, "today_eastern", lambda today=today: today)
+        fake_fetch(
+            monkeypatch,
+            {
+                **season_pages(),
+                "predictive": predictive_page(
+                    [predicted(1, tot=tot), predicted(2)], as_of=today.isoformat()
+                ),
+            },
+        )
+        d.main(["--out", str(tmp_path)])
+        assert d.daily_raw_path(
+            tmp_path, SEASON, "regular_season", today.isoformat()
+        ).is_file()
+
+    epm = dataset_path(tmp_path / d.OUT_DIR, "epm_daily", SEASON)
+    predictive = dataset_path(tmp_path / d.OUT_DIR, "epm_predictive_daily", SEASON)
+
+    def check():
+        assert read(epm).select(
+            "as_of_date::VARCHAR, season_type, player_id"
+        ).fetchall() == [
+            ("2026-03-01", "playoffs", "1"),
+            ("2026-03-01", "regular_season", "1"),
+            ("2026-03-02", "playoffs", "1"),
+            ("2026-03-02", "regular_season", "1"),
+        ]
+        assert read(predictive).select(
+            "as_of_date::VARCHAR, player_id, epm"
+        ).fetchall() == [
+            ("2026-03-01", "1", 1.0),
+            ("2026-03-01", "2", 1.25),
+            ("2026-03-02", "1", 2.0),
+            ("2026-03-02", "2", 1.25),
+        ]
+
+    check()
+    # and the same from the saved pages
+    epm.unlink()
+    predictive.unlink()
+    d.main(["--out", str(tmp_path), "--no-fetch"])
+    check()
+
+
+def test_main_keeps_no_daily_history_for_a_past_season(tmp_path, monkeypatch):
+    # in October, before the site has the new season's EPM
+    monkeypatch.setattr(d, "today_eastern", lambda: date(2026, 10, 28))
+    fake_fetch(
+        monkeypatch,
+        {**season_pages(), "predictive": predictive_page([predicted(1)])},
+    )
+    write_player_seasons(tmp_path, ["1"])
+    d.main(["--out", str(tmp_path)])
+    assert dataset_path(tmp_path / d.OUT_DIR, "epm", SEASON).is_file()
+    assert dataset_path(tmp_path / d.OUT_DIR, "epm_predictive", SEASON).is_file()
+    assert not d.saved_days(tmp_path, SEASON, "regular_season")
+    assert not (tmp_path / d.OUT_DIR / "epm_daily").exists()
+    assert not (tmp_path / d.OUT_DIR / "epm_predictive_daily").exists()
 
 
 def test_main_keeps_a_page_it_cant_parse(tmp_path, monkeypatch):

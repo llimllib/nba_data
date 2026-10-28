@@ -166,6 +166,7 @@ ORDER BY ppg DESC LIMIT 10;
 | `bbref_team_stats`, `bbref_salaries` | view | Every season of basketball-reference's team stats and player salaries (`nba/bbref/`) |
 | `ctg_team_summary` | view | Every season of Cleaning the Glass's team summary (`nba/ctg/`) |
 | `epm`, `epm_predictive` | view | dunksandthrees' season and predictive EPM, from 2026 (`nba/dunksandthrees/`) |
+| `epm_daily`, `epm_predictive_daily` | view | The same as of every day fetched, from 2027 |
 | `openrapm` | view | OpenRAPM player ratings, from 2010 (`nba/openrapm/`) |
 | `players` | table | One row per `player_id`: `name` (the latest one known), `first_season`, `last_season` (seasons on a roster count, even without games). A table, so joining it reads no parquet files |
 | `player_season_stats_per_game`, `player_season_stats_per_36`, `player_season_stats_per_100` | view | `player_season_stats` with counting stats scaled; see below |
@@ -688,8 +689,11 @@ Built by `pipeline/dunksandthrees.py` from the public season EPM tables at
 current season is public, so there is no backfill: the data starts with
 2026, and a season's file keeps the values from the last day the site
 showed that season. EPM is recomputed daily, so the current season's file is
-a snapshot; `metadata.updated` says when it was fetched. Raw pages are kept
-at `nba/raw/dunksandthrees/<season>/epm_<season_type>.html.gz`.
+a snapshot; `metadata.updated` says when it was fetched. `epm_daily` and
+`epm_predictive_daily` keep every day's values for the current season. Raw
+pages are kept at `nba/raw/dunksandthrees/<season>/epm_<season_type>.html.gz`
+(the latest) and `epm_<season_type>/<date>.html.gz` (every day, current
+season only).
 
 ### `epm/season=<season>/data.parquet`
 
@@ -744,6 +748,31 @@ are dropped. Every stat is a prediction.
 
 Not kept: names, abbreviations, the last game date (the same as
 `as_of_date`), and the site's ranks and z-scores (`*_rk`, `*_z`).
+
+### `epm_daily/season=<season>/data.parquet`
+
+`epm` as of every day it was fetched, from 2027 (the first season fetched
+daily): the same columns plus `as_of_date`, keyed by `as_of_date`,
+`season_type` and `player_id`. The page has no date of its own, so
+`as_of_date` is the day it was fetched (US Eastern, in the morning, so
+through the previous night's games). Kept for the current season only; a
+day the fetch failed is missing.
+
+### `epm_predictive_daily/season=<season>/data.parquet`
+
+`epm_predictive` for every day fetched, from 2027 (October 20, 2026, the
+first saved page of 2027): the same columns, keyed by `as_of_date` and
+`player_id`. A day the fetch failed is missing. Players are kept if they're
+in the season's `player_seasons` as of the build.
+
+```sql
+-- a player's predictive EPM through the season
+SELECT d.as_of_date, round(d.epm, 2) AS epm, round(d.o_epm, 2) AS o_epm,
+  round(d.d_epm, 2) AS d_epm
+FROM epm_predictive_daily d JOIN players p USING (player_id)
+WHERE d.season = 2027 AND p.name = 'Jayson Tatum'
+ORDER BY d.as_of_date;
+```
 
 ---
 

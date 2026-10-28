@@ -79,15 +79,24 @@ jobs:
           FAIL_SOURCE: ${{ inputs.fail_source }}
 
       # season and predictive EPM. Only the site's current season is public,
-      # so this writes whichever season the site is on
+      # so this writes whichever season the site is on. The daily datasets
+      # are built from every saved day of the current season, so download
+      # its pages first (up to ~170MB by the end of a season); sync succeeds
+      # when there are none yet
       - name: dunksandthrees EPM
         id: dunksandthrees
         continue-on-error: true
         run: |
           if [ "$FAIL_SOURCE" = dunksandthrees ]; then echo "failing on purpose (fail_source)"; exit 1; fi
+          SEASON=$(uv run python -c 'from pipeline.seasons import current_season, today_eastern; print(current_season(today_eastern()))')
+          aws s3 sync "s3://$BUCKET/nba/raw/dunksandthrees/$SEASON/" "out/nba/raw/dunksandthrees/$SEASON/" --no-progress
           uv run python -m pipeline.dunksandthrees --out out
         env:
           FAIL_SOURCE: ${{ inputs.fail_source }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.DO_SPACES_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.DO_SPACES_SECRET }}
+          AWS_ENDPOINT_URL: https://sfo3.digitaloceanspaces.com
+          AWS_DEFAULT_REGION: us-east-1
 
       # OpenRAPM's ratings, every season from 2010 (2 files from GitHub).
       # Each publish recomputes every season, so they're all rewritten when

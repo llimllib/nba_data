@@ -3,6 +3,8 @@ Fetch and parse dunksandthrees.com's public EPM tables, and build
 
     nba/dunksandthrees/epm/season=<season>/data.parquet
     nba/dunksandthrees/epm_predictive/season=<season>/data.parquet
+    nba/dunksandthrees/epm_daily/season=<season>/data.parquet
+    nba/dunksandthrees/epm_predictive_daily/season=<season>/data.parquet
 
 `epm` is season ("actual") EPM, one row per player and season type, from
 /epm/actual for the regular season and ?seasontype=4 for the playoffs.
@@ -11,7 +13,10 @@ Fetch and parse dunksandthrees.com's public EPM tables, and build
 latest one. `epm` keeps only players who played (the site also lists
 rostered players with no games and no EPM); `epm_predictive` keeps everyone
 in the season's player_seasons, which includes rostered players who haven't
-played, read from out/ or else from the bucket.
+played, read from out/ or else from the bucket. `epm_daily` and
+`epm_predictive_daily` are the same with a row for every day we fetched
+the page, for the current season only, so a player's EPM can be followed
+through the season.
 
 usage: python -m pipeline.dunksandthrees [--out out] [--no-fetch]
 
@@ -36,10 +41,13 @@ are validated before anything is written. Raw pages are kept, gzipped, even
 when parsing fails (under unparsed-<date>/), at
 
     nba/raw/dunksandthrees/<season>/epm_<season_type>.html.gz
+    nba/raw/dunksandthrees/<season>/epm_<season_type>/<date>.html.gz
     nba/raw/dunksandthrees/<season>/epm_predictive/<date>.html.gz
 
-The predictive pages are kept for every day, so a history of the
-predictions could be rebuilt.
+The daily datasets are built from every saved day, so CI downloads the
+season's raw pages first. The season pages have no date of their own, so
+their day is the day they were fetched (Eastern); the predictive pages
+have the site's date.
 """
 
 import argparse
@@ -273,6 +281,7 @@ EPM_COLUMNS = [
     ("season_type", "VARCHAR"),
     *COLUMNS.values(),
 ]
+EPM_DAILY_COLUMNS = [EPM_COLUMNS[0], ("as_of_date", "DATE"), *EPM_COLUMNS[1:]]
 
 # more rows than this means we're not reading what we think we are
 MAX_ROWS = 1000
@@ -506,9 +515,15 @@ def raw_path(outdir: Path, season: int | str, page: str) -> Path:
     return outdir / RAW_DIR / str(season) / f"epm_{page}.html.gz"
 
 
-def predictive_raw_path(outdir: Path, season: int, as_of: str) -> Path:
-    """one per day, so a history of the predictions could be rebuilt"""
-    return outdir / RAW_DIR / str(season) / "epm_predictive" / f"{as_of}.html.gz"
+def daily_raw_path(outdir: Path, season: int, page: str, as_of: str) -> Path:
+    """one per day, for the daily datasets"""
+    return outdir / RAW_DIR / str(season) / f"epm_{page}" / f"{as_of}.html.gz"
+
+
+def saved_days(outdir: Path, season: int, page: str) -> list[tuple[date, Path]]:
+    """a page's saved days for `season`, oldest first"""
+    days = daily_raw_path(outdir, season, page, "x").parent.glob("*.html.gz")
+    return sorted((date.fromisoformat(p.name.split(".")[0]), p) for p in days)
 
 
 def save_raw(path: Path, html: str) -> None:
@@ -554,8 +569,8 @@ def saved_pages(outdir: Path) -> dict[int, dict[str, dict]]:
 
 def latest_predictive(outdir: Path, season: int) -> dict | None:
     """the newest saved predictive page's data for `season`, if any"""
-    saved = sorted(predictive_raw_path(outdir, season, "x").parent.glob("*.html.gz"))
-    return predictive_data(read_raw(saved[-1])) if saved else None
+    saved = saved_days(outdir, season, "predictive")
+    return predictive_data(read_raw(saved[-1][1])) if saved else None
 
 
 def write_table(
@@ -589,6 +604,32 @@ def build_epm(outdir: Path, season: int, pages: dict[str, dict]) -> Path | None:
         print(f"dunksandthrees: no regular-season games in {season} yet")
         return None
     return write_table(outdir, "epm", EPM_COLUMNS, rows, ["season_type", "player_id"])
+
+
+def build_epm_daily(outdir: Path, season: int) -> Path | None:
+    """
+    Write a season's EPM as of each day, from every saved day's pages.
+    Returns the path, or None if no one has played on any of them
+    """
+    rows = []
+    for season_type in SEASON_TYPES:
+        for as_of, path in saved_days(outdir, season, season_type):
+            data = page_data(read_raw(path))
+            if data["season"] != season:
+                raise ValueError(f"dunksandthrees: {path} is for {data['season']}")
+            rows += [
+                {**r, "as_of_date": as_of} for r in played(epm_rows(data, season_type))
+            ]
+    if not rows:
+        print(f"dunksandthrees: no daily EPM for {season} yet")
+        return None
+    return write_table(
+        outdir,
+        "epm_daily",
+        EPM_DAILY_COLUMNS,
+        rows,
+        ["as_of_date", "season_type", "player_id"],
+    )
 
 
 def known_players(outdir: Path, season: int, url: str = URL) -> set[str] | None:
@@ -625,16 +666,55 @@ def build_predictive(
     but not players who left a team without playing. Returns the path, or
     None if there's no player_seasons for the season yet
     """
+    if not known:
+        print(f"dunksandthrees: no player_seasons for {season} yet")
+        return None
+    kept = known_rows(data, season, known, report=True)
+    return write_table(
+        outdir, "epm_predictive", PREDICTIVE_EPM_COLUMNS, kept, ["player_id"]
+    )
+
+
+def build_predictive_daily(
+    outdir: Path, season: int, known: set[str] | None
+) -> Path | None:
+    """
+    Write a season's predictive EPM as of each day, from every saved day's
+    predictive page, keeping players in `known` as build_predictive does.
+    Returns the path, or None if there's no player_seasons or no saved page
+    """
+    if not known:
+        print(f"dunksandthrees: no player_seasons for {season} yet")
+        return None
+    rows = []
+    for _, path in saved_days(outdir, season, "predictive"):
+        rows += known_rows(predictive_data(read_raw(path)), season, known)
+    if not rows:
+        return None
+    return write_table(
+        outdir,
+        "epm_predictive_daily",
+        PREDICTIVE_EPM_COLUMNS,
+        rows,
+        ["as_of_date", "player_id"],
+    )
+
+
+def known_rows(
+    data: dict, season: int, known: set[str], report: bool = False
+) -> list[dict]:
+    """
+    The predictive page's rows for players in `known`, listing the others if
+    `report`. Raises ValueError if the page isn't for `season`, or if fewer
+    than half its players are known
+    """
     if data["season"] != season:
         raise ValueError(
             f"dunksandthrees: predictive page is for {data['season']}, not {season}"
         )
     rows = predictive_rows(data)
-    if not known:
-        print(f"dunksandthrees: no player_seasons for {season} yet")
-        return None
     kept = [r for r in rows if r["player_id"] in known]
-    if len(kept) < len(rows):
+    if report and len(kept) < len(rows):
         names = {str(r.get("player_id")): r.get("player_name") for r in data["stats"]}
         dropped = sorted(names[r["player_id"]] or "" for r in rows if r not in kept)
         print(
@@ -645,24 +725,27 @@ def build_predictive(
     # isn't what we think it is
     if len(kept) < len(rows) / 2:
         raise ValueError(
-            f"dunksandthrees predictive: only {len(kept)} of {len(rows)} players "
-            "are in player_seasons"
+            f"dunksandthrees predictive {data['date']}: only {len(kept)} of "
+            f"{len(rows)} players are in player_seasons"
         )
-    return write_table(
-        outdir, "epm_predictive", PREDICTIVE_EPM_COLUMNS, kept, ["player_id"]
-    )
+    return kept
 
 
 def update(outdir: Path, today: date) -> None:
     """
-    Fetch every page and build both datasets for the season the site is on.
+    Fetch every page and build the datasets for the season the site is on.
     The season pages come first: they decide the season, and a failure on
-    the predictive page leaves the season's EPM written
+    the predictive page leaves the season's EPM written.
+
+    The daily datasets are only built for the current season: a run in CI
+    downloads only its saved days, so an older season's would be rebuilt
+    from today's page alone. A finished season's EPM doesn't change anyway
     """
-    pages = {}
+    pages, html = {}, {}
     for season_type in SEASON_TYPES:
         data = fetch_page(outdir, season_type, today, page_data)
-        save_raw(raw_path(outdir, data["season"], season_type), data.pop("html"))
+        html[season_type] = data.pop("html")
+        save_raw(raw_path(outdir, data["season"], season_type), html[season_type])
         pages[season_type] = data
     season = pages["regular_season"]["season"]
     if pages["playoffs"]["season"] != season:
@@ -674,10 +757,16 @@ def update(outdir: Path, today: date) -> None:
     if season < current_season(today):
         print(f"dunksandthrees: the site is still on {season}")
     build_epm(outdir, season, pages)
+    if season == current_season(today):
+        # the pages have no date of their own: they're as of the day fetched
+        for season_type in pages:
+            path = daily_raw_path(outdir, season, season_type, today.isoformat())
+            save_raw(path, html[season_type])
+        build_epm_daily(outdir, season)
 
     predictive = fetch_page(outdir, "predictive", today, predictive_data)
     save_raw(
-        predictive_raw_path(outdir, predictive["season"], predictive["date"]),
+        daily_raw_path(outdir, predictive["season"], "predictive", predictive["date"]),
         predictive.pop("html"),
     )
     # before the new season's first games, the predictive page is on the new
@@ -689,7 +778,10 @@ def update(outdir: Path, today: date) -> None:
         )
         return
     season = predictive["season"]
-    build_predictive(outdir, season, predictive, known_players(outdir, season))
+    known = known_players(outdir, season)
+    build_predictive(outdir, season, predictive, known)
+    if season == current_season(today):
+        build_predictive_daily(outdir, season, known)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -711,10 +803,12 @@ def main(argv: list[str] | None = None) -> None:
     # a season's predictive pages may be saved before its season pages are
     for season_dir in sorted((args.out / RAW_DIR).glob("[0-9][0-9][0-9][0-9]")):
         season = int(season_dir.name)
+        if any(saved_days(args.out, season, t) for t in SEASON_TYPES):
+            build_epm_daily(args.out, season)
         if predictive := latest_predictive(args.out, season):
-            build_predictive(
-                args.out, season, predictive, known_players(args.out, season)
-            )
+            known = known_players(args.out, season)
+            build_predictive(args.out, season, predictive, known)
+            build_predictive_daily(args.out, season, known)
 
 
 if __name__ == "__main__":
