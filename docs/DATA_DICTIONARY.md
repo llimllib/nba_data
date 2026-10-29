@@ -261,6 +261,31 @@ finals). The NBA's traditional and advanced team box scores, joined.
 | min, fgm, fga, ..., pts | | Traditional box score |
 | plus_minus | INTEGER | Points minus the opponent's points. Computed, not the NBA's value, which is wrong in 9 preseason games (once 4.4) |
 | off_rating, def_rating, net_rating, pace, poss, pie, ... | | Advanced box score; `e_` columns are the NBA's estimates |
+| team_oreb | INTEGER | Team offensive rebounds, which `oreb` doesn't count (below). From `game_events`; NULL for a game whose play-by-play we don't have |
+
+`poss` is counted from the play-by-play, not estimated from the box score.
+A possession ends when the other team gets the ball, and the team that gets
+the ball after a period ends on a make, a turnover or made free throws is
+credited with one, even if it never runs a play. That's why a team's `poss`
+and its opponent's differ by at most 4. Counting this way from
+`game_events` reproduces `poss` exactly in 80% of 2025-26 regular-season
+team games and within one in 99%. The season total comes within 12 of
+NBA.com's 246,200.
+
+`poss` is 1-3% below the textbook formula, `fga + 0.44 * fta + tov - oreb`
+(1.8 a game in 2025-26). Most of that is team offensive rebounds. The box
+score's `oreb` counts only player rebounds. A miss that goes out of bounds
+off the defense is a team rebound: it's in `game_events` (a `Rebound` with no
+`person_id`, by the shooting team), and the possession continues, but the
+formula counts a new one. Teams that crash the glass get more of them, so the
+gap differs by team: in 2025-26 it ran from 1.1% (OKC) to 3.2% (CHA) of
+possessions. `team_oreb` counts them, and `fga + 0.44 * fta + tov - oreb -
+team_oreb` is 0.8% to 1.4% below `poss` for every team. It counts a team
+rebound after the team's own miss when the team's next shot, free throw or
+turnover is in the same period. That's mostly live second chances, plus
+shot-clock violations (recorded as a team rebound, then a turnover). It
+leaves out team rebounds on a miss as a period ends, since the period ends
+either way, and the dead-ball "rebounds" between free throws.
 
 ### `player_game_logs/season=<season>/data.parquet`
 

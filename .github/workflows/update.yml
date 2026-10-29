@@ -94,6 +94,13 @@ jobs:
           uv run python -m pipeline.rotations --out out --minutes 10
         env: *spaces
 
+      # team_game_logs.team_oreb is counted from game_events, so rebuild
+      # the stats from this run's responses (no requests) to add the games
+      # just fetched. If the rotations failed, it reads the bucket's
+      # game_events, and the night's new games have none until the next run
+      - name: Add the play-by-play to the NBA stats
+        run: uv run python -m pipeline.stats --out out --no-fetch
+
       # ESPN is on AWS and doesn't block Actions IPs
       - name: Disable the exit node
         if: always()
