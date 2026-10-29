@@ -214,6 +214,73 @@ def test_requests():
     assert kwargs["measure_type_detailed_defense"] == "Defense"
 
 
+def write_events(outdir, actions, season=2026):
+    """
+    write a game_events file for GAME from (period, team, person,
+    action_type, sub_type, shot_result) tuples, in order
+    """
+    path = dataset_path(outdir / stats.OUT_DIR, stats.EVENTS, season)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    rows = ", ".join(
+        f"('{GAME}', {i}, {period}, {team and repr(str(team))}, "
+        f"{person and repr(str(person))}, '{action}', {sub and repr(sub)}, "
+        f"{result and repr(result)})".replace("None", "NULL")
+        for i, (period, team, person, action, sub, result) in enumerate(actions)
+    )
+    duckdb.sql(
+        f"COPY (SELECT * FROM (VALUES {rows}) t(game_id, action_id, period, "
+        "team_id, person_id, action_type, sub_type, shot_result)) TO "
+        f"'{path}'"
+    )
+
+
+def test_team_oreb(tmp_path):
+    miss = (1, BOS, 1, "Missed Shot", "Jump Shot", "Missed")
+    write_events(
+        tmp_path,
+        [
+            # a player's offensive rebound is in oreb already
+            miss,
+            (1, BOS, 1, "Rebound", "Unknown", None),
+            # out of bounds off the defense, then a shot: counted
+            miss,
+            (1, BOS, None, "Rebound", "Unknown", None),
+            (1, BOS, 1, "Made Shot", "Layup Shot", "Made"),
+            # a shot-clock violation: counted
+            (1, NYK, 2, "Missed Shot", "Jump Shot", "Missed"),
+            (1, NYK, None, "Rebound", "Unknown", None),
+            (1, NYK, None, "Turnover", "Shot Clock Turnover", None),
+            # a dead ball between free throws isn't
+            (1, BOS, 1, "Free Throw", "Free Throw 1 of 2", "Missed"),
+            (1, BOS, None, "Rebound", "Normal Rebound", None),
+            (1, BOS, 1, "Free Throw", "Free Throw 2 of 2", "Made"),
+            # a team defensive rebound isn't
+            (1, NYK, 2, "Missed Shot", "Jump Shot", "Missed"),
+            (1, BOS, None, "Rebound", "Unknown", None),
+            # nor is one as the period ends
+            miss,
+            (1, BOS, None, "Rebound", "Unknown", None),
+            (2, NYK, 2, "Made Shot", "Jump Shot", "Made"),
+        ],
+    )
+    write_raw(tmp_path)
+    assert stats.build_season(tmp_path, 2026)
+    rows = {(r["game_id"], r["team_id"]): r for r in read(tmp_path, "team_game_logs")}
+    assert rows[(GAME, str(BOS))]["team_oreb"] == 1
+    assert rows[(GAME, str(NYK))]["team_oreb"] == 1
+    # no play-by-play
+    assert rows[(CUP_FINAL, str(BOS))]["team_oreb"] is None
+    assert types(tmp_path, "team_game_logs")["team_oreb"] == "INTEGER"
+
+
+@pytest.mark.parametrize("url", [None, "http://nowhere.invalid"])
+def test_team_oreb_without_events(tmp_path, url):
+    # a bucket that can't be read doesn't stop the build
+    write_raw(tmp_path)
+    assert stats.build_season(tmp_path, 2026, url)
+    assert all(r["team_oreb"] is None for r in read(tmp_path, "team_game_logs"))
+
+
 def test_team_game_logs(tmp_path):
     write_raw(tmp_path)
     assert stats.build_season(tmp_path, 2026)

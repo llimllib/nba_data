@@ -22,7 +22,7 @@ They're optional: a season without them has only the players who played.
 
 and these are built from them, one file per season:
 
-    nba/stats/team_game_logs/season=<season>/data.parquet
+    nba/stats/team_game_logs/season=<season>/data.parquet  (and team_oreb, from game_events)
     nba/stats/player_game_logs/season=<season>/data.parquet
     nba/stats/player_season_stats/season=<season>/data.parquet
     nba/stats/{team_seasons,player_seasons,games}/season=<season>/data.parquet  (lookups)
@@ -31,7 +31,12 @@ Season stats are totals only; per-game, per-36 and per-100 values are
 computed from them in the catalog. Everything is relative to an output
 directory laid out like the basketball-data bucket; see docs/v2.md.
 
-usage: python -m pipeline.stats [--out out] [--season 2026 ...] [--no-fetch | --rosters-only]
+team_game_logs.team_oreb is counted from the play-by-play, which
+pipeline.rotations fetches after this runs: the season's game_events is
+read from --out if it's there, and the bucket otherwise. The update runs
+this again with --no-fetch after the rotations, so the night's games have it.
+
+usage: python -m pipeline.stats [--out out] [--season 2026 ...] [--no-fetch | --rosters-only] [--url URL]
 """
 
 import argparse
@@ -55,6 +60,7 @@ from nba_api.stats.endpoints import (
 )
 
 from . import lookups
+from .catalog import URL
 from .output import check_keys, dataset_path, write_atomic, write_parquet
 from .seasons import current_season, today_eastern
 
@@ -67,6 +73,9 @@ TIMEOUT = 60
 RETRY_DELAYS = [1, 2, 5, 10, 20, 30, 60, 60, 60]
 
 SEASON_TYPES = {"regular_season": "Regular Season", "playoffs": "Playoffs"}
+
+# pipeline.rotations' play-by-play, for team_game_logs.team_oreb
+EVENTS = "game_events"
 
 ROSTERS = "team_rosters"
 # the update runs every 4 hours, so this refetches rosters once a day
@@ -415,6 +424,82 @@ def join_raw(
     )
 
 
+def load_team_orebs(
+    con: duckdb.DuckDBPyConnection, outdir: Path, season: int, url: str | None = None
+) -> None:
+    """
+    Load `team_orebs` (game_id, team_id, team_oreb), every team in the
+    season's game_events, from `outdir` if it has the file, else from the
+    bucket at `url` (if given). Empty if there are none.
+
+    A team offensive rebound is a rebound credited to the team rather than a
+    player (a miss that went out of bounds off the defense, or a shot-clock
+    violation) after the team's own miss, where the team's next shot, free
+    throw or turnover is in the same period. The box score's oreb has only
+    players' rebounds, and one as a period ends doesn't continue anything.
+    The rebound after a free throw with more to come in the trip is a dead
+    ball, not a rebound
+    """
+    local = dataset_path(outdir / OUT_DIR, EVENTS, season)
+    if local.is_file():
+        source = str(local)
+    elif url:
+        source = f"{url}/{OUT_DIR}/{EVENTS}/season={season}/data.parquet"
+    else:
+        source = None
+    empty = "SELECT NULL::VARCHAR AS game_id, NULL::VARCHAR AS team_id, NULL::INTEGER AS team_oreb WHERE false"
+    query = f"""
+        WITH e AS (
+            SELECT game_id, period, action_id, team_id, person_id, action_type,
+                action_type = 'Missed Shot'
+                    OR (action_type = 'Free Throw' AND shot_result = 'Missed') AS miss,
+                action_type = 'Missed Shot' OR (
+                    action_type = 'Free Throw' AND shot_result = 'Missed'
+                    AND sub_type NOT LIKE '%Technical%'
+                    AND regexp_extract(sub_type, '([0-9]) of ([0-9])', 1)
+                        = regexp_extract(sub_type, '([0-9]) of ([0-9])', 2)) AS live_miss,
+                action_type IN ('Made Shot', 'Missed Shot', 'Turnover')
+                    OR (action_type = 'Free Throw'
+                        AND sub_type NOT LIKE '%Technical%') AS plays
+            FROM read_parquet('{source}', hive_partitioning = false)
+        ), w AS (
+            SELECT *,
+                last_value(CASE WHEN miss THEN team_id END IGNORE NULLS) OVER (
+                    PARTITION BY game_id ORDER BY action_id
+                    ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS miss_team,
+                last_value(CASE WHEN miss THEN live_miss END IGNORE NULLS) OVER (
+                    PARTITION BY game_id ORDER BY action_id
+                    ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING) AS miss_live,
+                first_value(CASE WHEN plays THEN team_id END IGNORE NULLS) OVER (
+                    PARTITION BY game_id, period ORDER BY action_id
+                    ROWS BETWEEN 1 FOLLOWING AND UNBOUNDED FOLLOWING) AS next_team
+            FROM e
+        )
+        SELECT game_id, team_id,
+            count(*) FILTER (
+                WHERE action_type = 'Rebound' AND person_id IS NULL
+                AND team_id = miss_team AND miss_live AND team_id = next_team
+            )::INTEGER AS team_oreb
+        FROM w
+        WHERE team_id IS NOT NULL
+        GROUP BY ALL
+    """
+    try:
+        con.execute(
+            f"CREATE OR REPLACE TABLE team_orebs AS {query if source else empty}"
+        )
+    except duckdb.IOException as e:
+        # the bucket's file is optional: it answers 403, not 404, for a
+        # file that isn't there (a new season), and a bucket that can't be
+        # read shouldn't stop the stats
+        if local.is_file():
+            raise
+        print(f"stats: couldn't read the bucket's {EVENTS}: {str(e).splitlines()[0]}")
+        con.execute(f"CREATE OR REPLACE TABLE team_orebs AS {empty}")
+    if not count(con, "team_orebs"):
+        print(f"stats: no {EVENTS} for {season}; team_oreb is NULL")
+
+
 def build_team_game_logs(con: duckdb.DuckDBPyConnection, season: int) -> None:
     join_raw(con, ["tgl_base", "tgl_advanced"], ["game_id", "team_id"], "tgl")
     rest = normalized(
@@ -443,8 +528,11 @@ def build_team_game_logs(con: duckdb.DuckDBPyConnection, season: int) -> None:
                       OVER (PARTITION BY t.game_id) = 1
                  THEN t.matchup LIKE '% vs. %' END AS home,
             CASE t.wl WHEN 'W' THEN true WHEN 'L' THEN false END AS win,
-            {", ".join(rest)}
+            {", ".join(rest)},
+            r.team_oreb
         FROM tgl t
+        LEFT JOIN team_orebs r
+            ON r.game_id = t.game_id AND r.team_id = t.team_id::VARCHAR
         ORDER BY game_date, game_id, team_id
         """
     )
@@ -535,11 +623,12 @@ def build_player_season_stats(con: duckdb.DuckDBPyConnection, season: int) -> No
     )
 
 
-def build_season(outdir: Path, season: int) -> bool:
+def build_season(outdir: Path, season: int, url: str | None = None) -> bool:
     """
     Build the parquet files for `season` from its raw responses. Returns
     False if there are none. A dataset with no rows (no games played yet) is
-    not written
+    not written. game_events, for team_oreb, is read from the bucket at
+    `url` if `outdir` doesn't have it
     """
     names = requests(season)
     if not all(raw_path(outdir, season, n).is_file() for n in names):
@@ -560,6 +649,7 @@ def build_season(outdir: Path, season: int) -> bool:
         )
         load_raw(con, raw_path(outdir, season, name), table)
     load_rosters(con, outdir, season)
+    load_team_orebs(con, outdir, season, url)
 
     # the lookups read team_game_logs, so they're built after it
     builders = {
@@ -599,6 +689,11 @@ def main(argv: list[str] | None = None) -> None:
         action="store_true",
         help="fetch only the rosters, then rebuild from raw files (to backfill them)",
     )
+    parser.add_argument(
+        "--url",
+        default=URL,
+        help=f"bucket URL for game_events if --out has none (default: {URL})",
+    )
     args = parser.parse_args(argv)
 
     for season in args.season or [current_season(today_eastern())]:
@@ -607,7 +702,7 @@ def main(argv: list[str] | None = None) -> None:
         elif not args.no_fetch:
             fetch_season(args.out, season)
             fetch_rosters(args.out, season)
-        if not build_season(args.out, season):
+        if not build_season(args.out, season, args.url):
             raise SystemExit(f"stats: no raw data for season {season}")
 
 
