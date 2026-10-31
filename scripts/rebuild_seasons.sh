@@ -7,18 +7,24 @@
 #
 # With --rotations, it first fetches the season's missing play-by-play
 # (pipeline.rotations: two requests a game, only for games the bucket
-# doesn't have) and publishes it with game_events and game_rotations.
+# doesn't have) and publishes it with game_events and game_rotations. That's
+# the whole play-by-play backfill of a season: a few hours, ~2,700 requests.
+# If stats.nba.com keeps failing, or any games are still missing at the end,
+# it stops before uploading; run it again to fetch the rest (or pass
+# --allow-missing to publish without them).
 #
-# It works in a new scratch directory, not out/, so stale local files can't
-# get published. Each season's rebuilt team_game_logs is compared with the
-# bucket's first: if anything but team_oreb differs, it stops.
+# Each season works in its own directory, out/rebuild/<season>, not out/, so
+# stale local files can't get published. The games fetched are kept there
+# until the season is published, so a run that stops picks up where it left
+# off. Each season's rebuilt team_game_logs is compared with the bucket's
+# first: if anything but team_oreb differs, it stops.
 #
 # The catalog isn't rebuilt here: that purges the CDN first, which needs
 # DO_CDN_API_KEY. The next update.yml run does it; to run it now:
 #
 #     gh workflow run update.yml
 #
-# usage: scripts/rebuild_seasons.sh [--rotations] [--dry-run] SEASON...
+# usage: scripts/rebuild_seasons.sh [--rotations] [--allow-missing] [--dry-run] SEASON...
 # needs the Spaces credentials and AWS_ENDPOINT_URL (mise.local.toml)
 
 set -euo pipefail
@@ -28,17 +34,19 @@ URL=https://basketball-data.billmill.org
 UPLOAD=(--acl public-read --cache-control "public, max-age=0, must-revalidate, s-maxage=3600" --no-progress)
 
 rotations=false
+allow_missing=false
 dry_run=false
 while [[ "${1:-}" == --* ]]; do
   case "$1" in
     --rotations) rotations=true ;;
+    --allow-missing) allow_missing=true ;;
     --dry-run) dry_run=true ;;
     *) echo "unknown option $1" >&2; exit 2 ;;
   esac
   shift
 done
 if [ $# -eq 0 ]; then
-  echo "usage: $0 [--rotations] [--dry-run] SEASON..." >&2
+  echo "usage: $0 [--rotations] [--allow-missing] [--dry-run] SEASON..." >&2
   exit 2
 fi
 
@@ -49,9 +57,6 @@ for season in "$@"; do
     exit 2
   fi
 done
-
-out=$(mktemp -d -t rebuild_seasons)
-echo "working in $out"
 
 upload() {
   if $dry_run; then
@@ -100,15 +105,42 @@ print(f"matches the bucket's; team_oreb for {filled} of {rows} rows")
 EOF
 }
 
+# games in the season's games table with no saved play-by-play
+missing_games() {
+  uv run python - "$1" "$2" <<'EOF'
+import sys
+from pathlib import Path
+
+from pipeline import rotations
+
+out, season = Path(sys.argv[1]), int(sys.argv[2])
+saved = {p.name.removesuffix(".json.gz") for p in rotations.saved_games(out, season)}
+missing = [g for g, _ in rotations.season_games(out, season) if g not in saved]
+print(" ".join(missing))
+EOF
+}
+
 for season in "$@"; do
   echo "== $season"
+  out="out/rebuild/$season"
+  mkdir -p "$out"
+  echo "working in $out"
   raw="nba/raw/stats/$season"
   aws s3 sync "s3://$BUCKET/$raw/" "$out/$raw/" --exclude 'playbyplay/*' --no-progress
   # builds the lookups and game logs pipeline.rotations reads
   uv run python -m pipeline.stats --out "$out" --season "$season" --no-fetch
   if $rotations; then
     aws s3 sync "s3://$BUCKET/$raw/playbyplay/" "$out/$raw/playbyplay/" --no-progress
-    uv run python -m pipeline.rotations --out "$out" --season "$season"
+    if ! uv run python -m pipeline.rotations --out "$out" --season "$season"; then
+      echo "stopped; the games fetched are saved in $out. Run this again later to fetch the rest" >&2
+      exit 1
+    fi
+    missing=$(missing_games "$out" "$season")
+    if [ -n "$missing" ] && ! $allow_missing; then
+      echo "$(wc -w <<<"$missing" | tr -d ' ') games have no play-by-play: $missing" >&2
+      echo "run this again to fetch them, or pass --allow-missing to publish without them" >&2
+      exit 1
+    fi
     # again, for team_oreb from the game_events just built
     uv run python -m pipeline.stats --out "$out" --season "$season" --no-fetch
   fi
@@ -126,7 +158,11 @@ for season in "$@"; do
     done
   fi
   upload cp "$out/$key" "s3://$BUCKET/$key"
+  # published: everything in it is in the bucket now. A dry run keeps it,
+  # so the real run doesn't fetch the games again
+  if ! $dry_run; then
+    rm -rf "$out"
+  fi
 done
 
-rm -rf "$out"
 echo "done; the next update.yml run rebuilds the catalog (gh workflow run update.yml to run it now)"
