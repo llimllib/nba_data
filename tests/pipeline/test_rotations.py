@@ -923,3 +923,20 @@ def test_fetch_game_fetches_period_box_scores(monkeypatch):
         "start_range": "28800",
         "end_range": "31800",
     }
+
+
+def test_joined_folds_a_stint_with_no_time_into_the_next():
+    # out and back in twice at one clock, with a free throw against them in
+    # the middle (Bagley in 0022100968)
+    s = rotations.Stint
+    stints = rotations.joined(
+        [
+            s(1, 7, 4, 2355.0, 2878.4, -5, 1, 6),
+            s(1, 7, 4, 2878.4, 2878.4, 1, 0, 0),
+            s(1, 7, 4, 2878.4, 2880.0, 0, 3, 2),
+        ]
+    )
+    assert [(x.start, x.end, x.lead_start, x.lead_end, x.pts) for x in stints] == [
+        (2355.0, 2878.4, -5, 1, 6),
+        (2878.4, 2880.0, 1, 3, 2),
+    ]
