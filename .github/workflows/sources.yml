@@ -244,11 +244,15 @@ jobs:
           DO_CDN_API_KEY: ${{ secrets.DO_CDN_API_KEY }}
           DO_CDN_ENDPOINT_ID: ${{ secrets.DO_CDN_ENDPOINT_ID }}
 
+      # DuckDB 2.0 reads <catalog>.wal when it attaches, and fails on the 403
+      # Spaces returns for a missing key, so an empty one goes with each
+      # catalog (#95)
       - name: Build and upload the catalog
         id: catalog
         run: |
           uv run python -m pipeline.catalog --out out --bucket "$BUCKET"
           aws s3 cp out/nba/nba.duckdb "s3://$BUCKET/nba/nba.duckdb" --acl public-read --cache-control "$CACHE_CONTROL" --no-progress
+          aws s3 cp - "s3://$BUCKET/nba/nba.duckdb.wal" --acl public-read --cache-control "$CACHE_CONTROL" --no-progress < /dev/null
           aws s3 cp out/nba/metadata.json "s3://$BUCKET/nba/metadata.json" --acl public-read --cache-control "$CACHE_CONTROL" --content-type application/json --no-progress
         env: *spaces
 
@@ -259,6 +263,7 @@ jobs:
         run: |
           uv run python -m pipeline.catalog --out out --bucket "$BUCKET" --league ncaam
           aws s3 cp out/ncaam/ncaam.duckdb "s3://$BUCKET/ncaam/ncaam.duckdb" --acl public-read --cache-control "$CACHE_CONTROL" --no-progress
+          aws s3 cp - "s3://$BUCKET/ncaam/ncaam.duckdb.wal" --acl public-read --cache-control "$CACHE_CONTROL" --no-progress < /dev/null
           aws s3 cp out/ncaam/metadata.json "s3://$BUCKET/ncaam/metadata.json" --acl public-read --cache-control "$CACHE_CONTROL" --content-type application/json --no-progress
         env: *spaces
 
