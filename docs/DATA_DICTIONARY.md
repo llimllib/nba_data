@@ -658,13 +658,16 @@ who never played, say) has no `bbref_id` and is left out.
 |--------|------|-------------|
 | season, team_id, bbref_id | | Key. `bbref_id` is basketball-reference's player id (`tatumja01`) |
 | player_id | VARCHAR | NBA id; NULL for players not in that season's `player_seasons` (mostly waived players who never played for anyone that season) |
-| salary | INTEGER | Dollars that season. NULL for two-way contracts, which bbref lists without a salary |
+| salary | INTEGER | Dollars that season, summed if bbref lists the player more than once for the team. NULL for two-way contracts, which bbref lists without a salary |
 
 A player traded mid-season appears only under his last team. A player who
 was waived or bought out appears under both teams: the old team's
 remaining (or stretched) salary and the new team's contract, as with
 Lillard in 2026 (MIL $22.5M, POR $14.1M). Both are real payroll, so team
-sums are right; a player's sum is what he was paid that season.
+sums are right; a player's sum is what he was paid that season. A player
+bbref lists more than once for one team (consecutive 10-day contracts,
+waived and re-signed, a buyout's split salary) has one row with the sum,
+as with Isaac in 2027 (ORL $8M + $2.4M).
 
 ---
 

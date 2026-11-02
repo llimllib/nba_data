@@ -117,17 +117,33 @@ def test_mapped_player_not_in_the_season_has_no_id():
     assert rows[0]["player_id"] is None
 
 
-def test_listed_twice_keeps_the_larger_salary():
+def test_listed_twice_sums_the_salaries():
+    # Jonathan Isaac, ORL 2027: waived and re-signed
     rows = s.resolve(
         [
             ("10", "tatumja01", "Jayson Tatum", 5),
+            ("10", "tatumja01", "Jayson Tatum", None),
             ("10", "tatumja01", "Jayson Tatum", 9),
+            ("20", "tatumja01", "Jayson Tatum", 3),
         ],
         KNOWN,
         {},
         "t",
     )
-    assert [r["salary"] for r in rows] == [9]
+    assert [(r["team_id"], r["salary"]) for r in rows] == [("10", 14), ("20", 3)]
+
+
+def test_listed_twice_on_two_way_contracts_has_no_salary():
+    rows = s.resolve(
+        [
+            ("10", "tatumja01", "Jayson Tatum", None),
+            ("10", "tatumja01", "Jayson Tatum", None),
+        ],
+        KNOWN,
+        {},
+        "t",
+    )
+    assert [r["salary"] for r in rows] == [None]
 
 
 def test_too_many_unplaced_fails():

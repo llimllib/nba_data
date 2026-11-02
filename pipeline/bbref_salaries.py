@@ -16,7 +16,8 @@ signings and trades.
 usage: python -m pipeline.bbref_salaries [--out out] [--season 2026 ...] [--no-fetch]
 
 Rows are keyed by (team_id, bbref_id), and every row is kept so team
-payrolls add up, including players a team waived and still pays. player_id
+payrolls add up, including players a team waived and still pays; a player
+listed more than once for a team gets the sum of his salaries. player_id
 is the NBA id, through player_ids.csv (bbref rows, see pipeline.player_ids)
 or else a unique name in the season's player_seasons, and NULL for players
 not in player_seasons that season (every player_id must be there): mostly
@@ -160,9 +161,15 @@ def resolve(
         if pid not in in_season:
             unplaced.add(f"{name} ({bbref_id})")
             pid = None
-        # a player listed twice for a team keeps the larger salary
+        # a player listed twice for a team (10-day contracts, waived and
+        # re-signed, a salary split in a buyout) gets the sum: it's all
+        # payroll. NULL (a two-way contract) only if every listing is
         key = (team_id, bbref_id)
-        if key not in rows or (pay or 0) > (rows[key]["salary"] or 0):
+        if key in rows:
+            prev = rows[key]["salary"]
+            if pay is not None:
+                rows[key]["salary"] = pay if prev is None else prev + pay
+        else:
             rows[key] = {
                 "team_id": team_id,
                 "bbref_id": bbref_id,
