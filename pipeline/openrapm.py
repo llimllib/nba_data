@@ -20,8 +20,8 @@ WOSA, wins over starter average, was added 2026-11-03; it's NULL in the
 versions before.
 
 The decomposition has the same rows, with each side's rating split into
-pieces that add up to it (box score, on court, off court, team SOS, swap,
-then the rating itself). It's an extra page on the site, so it's optional:
+pieces that add up to it (box score, on court, off court, team SOS, box
+adj, then the rating itself). It's an extra page on the site, so it's optional:
 if it's missing or doesn't match ratings.json, the pieces are NULL.
 
 Every publish recomputes every season (a model change applies to all of
@@ -73,7 +73,9 @@ PIECES = {
     "on_court": "on_court",
     "off_court": "off_court",
     "team_sos": "team_sos",
-    "swap": "swap",
+    # the part of the prior learned from lineup swaps, split out of the box
+    # score 2026-11-03; before, this piece was "swap", 0 for every row
+    "box_adj": "box_adj",
 }
 # the decomposition's fields we read; it may have more after them ("w",
 # WOSA, which ratings.json also has)

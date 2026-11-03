@@ -831,11 +831,11 @@ One row per player per season, for players with possessions. Join
 | possessions | INTEGER | The player's offensive possessions on the court (OpenRAPM's `poss_season`) |
 | o_rating, d_rating, rating | DOUBLE | Offensive, defensive and total rating, points per 100 possessions, positive is good. Two decimals, as published |
 | wosa | DOUBLE | Wins over starter average: the regular-season wins the player added to his team over an average starter (the mean of the season's 150 players with the most starts), weighting each possession by its leverage in the game. Read from the regular season's ratings alone, so it changes through the current season and is fixed once the regular season ends. OpenRAPM's README explains it. Published from 2026-11-03; NULL in a version built before then |
-| o_box_score, d_box_score | DOUBLE | The part of the rating from the box-score prior |
+| o_box_score, d_box_score | DOUBLE | The part of the rating from the box-score prior, less `box_adj` |
 | o_on_court, d_on_court | DOUBLE | The part from the season's possessions the player was on the court for |
 | o_off_court, d_off_court | DOUBLE | The part from the player's team's possessions without them |
 | o_team_sos, d_team_sos | DOUBLE | The part from every other possession |
-| o_swap, d_swap | DOUBLE | OpenRAPM's adjustment inside the player's team (0 for every row as of 2026-10-25) |
+| o_box_adj, d_box_adj | DOUBLE | The part of the box-score prior learned from lineup swaps, which only moves credit between teammates (OpenRAPM's Box Adj). Split out of `box_score` from the version built 2026-11-03; it replaced `o_swap` and `d_swap`, which were 0 for every row |
 
 The five pieces of each side add up to its rating, within 0.06 because
 each piece is rounded to two decimals. They come from the decomposition

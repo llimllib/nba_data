@@ -108,7 +108,7 @@ def test_pieces():
     assert rows[0]["o_box_score"] == 1.0
     assert rows[0]["o_on_court"] == 0.25
     assert rows[0]["d_box_score"] == -0.25
-    assert rows[0]["d_swap"] == 0.0
+    assert rows[0]["d_box_adj"] == 0.0
 
 
 def test_no_decomposition_leaves_pieces_null():
