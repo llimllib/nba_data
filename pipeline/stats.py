@@ -2,9 +2,9 @@
 Download game logs and season stats from stats.nba.com and build per-season
 parquet files.
 
-Each run refetches the whole season, which takes 14 requests. That's cheap,
-and it picks up the stat corrections the NBA makes after games. Each
-response is kept, gzipped, at
+Each run refetches the whole season, which takes 14 requests (15 with the
+schedule, below). That's cheap, and it picks up the stat corrections the
+NBA makes after games. Each response is kept, gzipped, at
 
     nba/raw/stats/<season>/<request>.json.gz
 
@@ -20,12 +20,20 @@ That file also keeps the players on earlier rosters who aren't on these
 player_seasons, and the tables that refer to them (salaries) stay valid.
 They're optional: a season without them has only the players who played.
 
+The season's schedule, every game whether it's been played or not, is
+refetched every run too (one request), for pipeline.schedule:
+
+    nba/raw/stats/<season>/schedule.json.gz
+
+It's optional as well: a season without it has no schedule.
+
 and these are built from them, one file per season:
 
     nba/stats/team_game_logs/season=<season>/data.parquet  (and team_oreb, from game_events)
     nba/stats/player_game_logs/season=<season>/data.parquet
     nba/stats/player_season_stats/season=<season>/data.parquet
     nba/stats/{team_seasons,player_seasons,games}/season=<season>/data.parquet  (lookups)
+    nba/stats/schedule/season=<season>/data.parquet
 
 Season stats are totals only; per-game, per-36 and per-100 values are
 computed from them in the catalog. Everything is relative to an output
@@ -56,10 +64,11 @@ from nba_api.stats.endpoints import (
     LeagueDashPlayerPtShot,
     LeagueDashPlayerStats,
     PlayerGameLogs,
+    ScheduleLeagueV2,
     TeamGameLogs,
 )
 
-from . import lookups
+from . import lookups, schedule
 from .catalog import URL
 from .output import check_keys, dataset_path, write_atomic, write_parquet
 from .seasons import current_season, today_eastern
@@ -82,6 +91,8 @@ ROSTERS = "team_rosters"
 ROSTER_MAX_AGE = timedelta(hours=20)
 # between roster requests, to go easy on stats.nba.com
 ROSTER_DELAY = 1
+
+SCHEDULE = "schedule"
 
 # Columns we don't keep. Names and abbreviations come from the lookup tables;
 # ranks are a query away and would be wrong for per-mode stats
@@ -203,6 +214,18 @@ def fetch_season(
     for name, (endpoint, kwargs) in requests(season).items():
         write_raw(raw_path(outdir, season, name), fetch(endpoint, kwargs))
         print(f"stats: fetched {name}")
+
+
+def fetch_schedule(
+    outdir: Path, season: int, fetch: Callable[..., dict] = fetch
+) -> None:
+    data = fetch(
+        ScheduleLeagueV2,
+        {"league_id": "00", "season": season_string(season)},
+        check=schedule.games,
+    )
+    write_raw(raw_path(outdir, season, SCHEDULE), data)
+    print(f"stats: fetched {SCHEDULE}")
 
 
 def rosters_fetched(outdir: Path, season: int) -> datetime | None:
@@ -668,6 +691,15 @@ def build_season(outdir: Path, season: int, url: str | None = None) -> bool:
         path = dataset_path(outdir / OUT_DIR, dataset, season)
         write_parquet(con, dataset, path)
         print(f"stats: wrote {path}")
+
+    if raw_path(outdir, season, SCHEDULE).is_file():
+        schedule.build_schedule(
+            con, season, read_raw(raw_path(outdir, season, SCHEDULE))
+        )
+        check_keys(con, SCHEDULE, schedule.KEYS, f"stats {SCHEDULE}")
+        path = dataset_path(outdir / OUT_DIR, SCHEDULE, season)
+        write_parquet(con, SCHEDULE, path)
+        print(f"stats: wrote {path}")
     return True
 
 
@@ -701,6 +733,7 @@ def main(argv: list[str] | None = None) -> None:
             fetch_rosters(args.out, season, force=True)
         elif not args.no_fetch:
             fetch_season(args.out, season)
+            fetch_schedule(args.out, season)
             fetch_rosters(args.out, season)
         if not build_season(args.out, season, args.url):
             raise SystemExit(f"stats: no raw data for season {season}")

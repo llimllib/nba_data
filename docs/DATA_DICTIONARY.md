@@ -162,6 +162,7 @@ ORDER BY ppg DESC LIMIT 10;
 | Name | Type | Description |
 |------|------|-------------|
 | `team_game_logs`, `player_game_logs`, `player_season_stats`, `team_seasons`, `player_seasons`, `games` | view | Every season of each `nba/stats/` dataset |
+| `schedule` | view | Every game on the schedule, played or not, from 2027 |
 | `four_factors`, `player_box`, `team_box`, `player_details`, `net_pts_season` | view | Every season of each `nba/espn/` dataset |
 | `bbref_team_stats`, `bbref_salaries` | view | Every season of basketball-reference's team stats and player salaries (`nba/bbref/`) |
 | `ctg_team_summary` | view | Every season of Cleaning the Glass's team summary (`nba/ctg/`) |
@@ -223,7 +224,8 @@ tables. Every non-NULL `team_id`/`*_team_id` is in `team_seasons`, every
 `player_id`/`*_player_id` in `player_seasons`, and every `game_id` in `games`,
 all for the row's season. Each `games.game_id`'s season digits also match its
 `season`. So joining any table to a lookup on `(season, <key>)` never drops
-rows.
+rows. The exception is `schedule`, which lists games and teams before
+they've played.
 
 ---
 
@@ -231,7 +233,7 @@ rows.
 
 Built by `pipeline/stats.py` from stats.nba.com, except `game_rotations`
 and `game_events` (`pipeline/rotations.py`, below). Each run refetches the whole current
-season (14 requests), so stat corrections the NBA makes after
+season (14 requests, plus 1 for `schedule`), so stat corrections the NBA makes after
 games are picked up. Raw responses are kept at
 `nba/raw/stats/<season>/<request>.json.gz`. Team rosters (30 requests, for
 `player_seasons`) are refetched once a day, into
@@ -422,6 +424,63 @@ Sorted by `game_id` and `action_id`, in row groups of 16,384 rows (about
 rows. In hyparquet the filter must use an operator (`{game_id: {$eq: id}}`)
 to skip row groups, and its default first read is the file's last 512KB,
 so pass a smaller `initialFetchSize` (128KB) to read only the footer.
+
+### `schedule/season=<season>/data.parquet`
+
+Every game on the NBA's schedule for the season, played or not, from
+`scheduleleaguev2` (one request, refetched every run, so postponements and
+new times are picked up). Use it for upcoming games; for played games,
+`games` and `team_game_logs` have the same `game_id`s. Raw response at
+`nba/raw/stats/<season>/schedule.json.gz`. From 2027 (2026-27).
+
+Differences from `games`:
+
+- A game is listed before it's played, so its `game_id` and teams may not
+  be in `games` or `team_seasons` yet. The integrity check skips this
+  table's keys; the build checks that the ids are in the season and that
+  only NBA teams play NBA games.
+- At a neutral site, `home_team_id` and `away_team_id` are the teams the NBA
+  lists as home and away, with `neutral_site` true. In `games` they're NULL.
+- The Cup's knockout games (quarterfinals, semifinals, final) are listed
+  with their `game_id` from the start of the season, with NULL teams until
+  the matchups are set. In 2025-26 the same ids were played.
+- The regular season fills in during the Cup: the games around its knockout
+  round for the teams that aren't playing in it (24 in 2026-27) are
+  scheduled once those teams are known, so until December there are fewer
+  than 1,230 regular-season games. Playoff games appear as series are set.
+- It has the All-Star weekend games the game logs leave out (Rising Stars),
+  with their own teams, and in some past seasons it lacks preseason games
+  (2019-20 has none).
+
+| Column | Type | Description |
+|--------|------|-------------|
+| season, game_id | | Key |
+| game_date | DATE | US Eastern, as in `games` |
+| start_time | TIMESTAMPTZ | Tip-off as scheduled |
+| game_type, playoff_round, series_number, series_game | | Decoded from the game id, as in `games` |
+| home_team_id, away_team_id | VARCHAR | NULL until the teams are known |
+| neutral_site | BOOLEAN | |
+| status | VARCHAR | `scheduled`, `in_progress` or `final` |
+| status_text | VARCHAR | The NBA's: `7:30 pm ET`, `Final`, ... |
+| label, sub_label | VARCHAR | The NBA's labels: `Emirates NBA Cup` / `East Group A`, `NBA Finals` / `Game 6`, `Preseason`, `NBA Paris Game`, ... |
+| subtype | VARCHAR | `in-season` (Cup group games) or `in-season-knockout` |
+| series_text | VARCHAR | A playoff game's series score: `MIL leads 3-2` |
+| if_necessary | BOOLEAN | A playoff game that's only played if the series isn't over |
+| arena_name, arena_city, arena_state | VARCHAR | |
+
+Not kept: scores and records (in `team_game_logs`), team names (use
+`team_seasons`), broadcasters, and the times in other zones.
+
+```sql
+-- the next week's games
+SELECT s.start_time, a.nba_abbrev AS away, h.nba_abbrev AS home, s.neutral_site
+FROM schedule s
+JOIN team_seasons h ON h.season = s.season AND h.team_id = s.home_team_id
+JOIN team_seasons a ON a.season = s.season AND a.team_id = s.away_team_id
+WHERE s.season = 2027 AND s.status = 'scheduled'
+    AND s.game_date < current_date + 7
+ORDER BY s.start_time;
+```
 
 ---
 

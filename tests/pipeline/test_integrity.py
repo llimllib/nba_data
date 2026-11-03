@@ -105,6 +105,17 @@ def test_unknown_game_fails(out):
         build(out)
 
 
+def test_schedule_keys_are_not_checked(out):
+    # the schedule lists games, and teams, before they're in the lookups
+    write(
+        out,
+        "schedule",
+        "SELECT 2026 AS season, '0022500002' AS game_id, "
+        "'1610612799' AS home_team_id, NULL AS away_team_id",
+    )
+    build(out)
+
+
 def test_columns_ending_in_a_key_are_checked(out):
     write(
         out,

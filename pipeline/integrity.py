@@ -7,7 +7,8 @@ docs/DATA_DICTIONARY.md):
     player_id, *_player_id  in player_seasons (season, player_id)
     game_id, *_game_id      in games (season, game_id)
 
-so a key must exist in the same season as the row that refers to it. NULLs
+so a key must exist in the same season as the row that refers to it
+(except the keys in UNCHECKED). NULLs
 aren't checked: the pipelines reject NULL keys, and other id columns can be
 NULL (games.home_team_id at a neutral site). In the NBA catalog, the season
 digits in each games.game_id must also match its season.
@@ -29,6 +30,11 @@ LOOKUPS = {
     "game_id": "games",
 }
 KEY_OF = {lookup: key for key, lookup in LOOKUPS.items()}
+
+# Key columns that aren't checked. The schedule lists games before they're
+# played, so before they're in games, and their teams before they're in
+# team_seasons; pipeline.schedule checks its ids itself
+UNCHECKED = {"schedule": {"game_id", "home_team_id", "away_team_id"}}
 
 # how many bad values to show per column
 EXAMPLES = 5
@@ -58,7 +64,11 @@ def key_columns(con: duckdb.DuckDBPyConnection, table: str) -> dict[str, str]:
     for name in columns(con, table):
         lookup = lookup_for(name)
         # a lookup's own key defines it rather than referring to it
-        if lookup and not (lookup == table and name == KEY_OF[lookup]):
+        if (
+            lookup
+            and not (lookup == table and name == KEY_OF[lookup])
+            and name not in UNCHECKED.get(table, ())
+        ):
             cols[name] = lookup
     return cols
 
