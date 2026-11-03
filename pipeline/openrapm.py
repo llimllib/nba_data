@@ -9,10 +9,15 @@ is RAPM pulled toward a box-score prior, one rating per player per season,
 docs/data/:
 
     ratings.json            {"meta": {"built": ...}, "rows": [{"s": season,
-                            "id": NBA id, "p": possessions, "o", "d", "t"}, ...]}
-    decompose_openrapm.json {"meta": {"built", "pieces"}, "rows": {season:
-                            [[name, id, possessions, [offense pieces],
-                            [defense pieces], [total pieces], teams], ...]}}
+                            "id": NBA id, "p": possessions, "o", "d", "t",
+                            "w": WOSA}, ...]}
+    decompose_openrapm.json {"meta": {"built", "fields", "pieces"}, "rows":
+                            {season: [[name, id, possessions, [offense
+                            pieces], [defense pieces], [total pieces], teams,
+                            WOSA], ...]}}
+
+WOSA, wins over starter average, was added 2026-11-03; it's NULL in the
+versions before.
 
 The decomposition has the same rows, with each side's rating split into
 pieces that add up to it (box score, on court, off court, team SOS, swap,
@@ -70,6 +75,8 @@ PIECES = {
     "team_sos": "team_sos",
     "swap": "swap",
 }
+# the decomposition's fields we read; it may have more after them ("w",
+# WOSA, which ratings.json also has)
 DECOMPOSE_FIELDS = ["n", "id", "p", "o", "d", "t", "tm"]
 
 COLUMNS = [
@@ -80,6 +87,7 @@ COLUMNS = [
     ("o_rating", "DOUBLE"),
     ("d_rating", "DOUBLE"),
     ("rating", "DOUBLE"),
+    ("wosa", "DOUBLE"),
     *((f"o_{p}", "DOUBLE") for p in PIECES.values()),
     *((f"d_{p}", "DOUBLE") for p in PIECES.values()),
 ]
@@ -151,6 +159,7 @@ def rating_rows(doc: dict) -> list[dict]:
                 "o_rating": number(r["o"], f"{label} o"),
                 "d_rating": number(r["d"], f"{label} d"),
                 "rating": number(r["t"], f"{label} t"),
+                "wosa": number(r["w"], f"{label} w") if "w" in r else None,
             }
         )
     return rows
@@ -163,7 +172,12 @@ def pieces(doc: dict) -> dict[tuple[int, str], dict]:
     """
     meta = doc.get("meta", {})
     expected = [*PIECES, "rating"]
-    if meta.get("fields") != DECOMPOSE_FIELDS or meta.get("pieces") != expected:
+    fields = meta.get("fields")
+    if (
+        not isinstance(fields, list)
+        or fields[: len(DECOMPOSE_FIELDS)] != DECOMPOSE_FIELDS
+        or meta.get("pieces") != expected
+    ):
         raise ValueError(
             f"openrapm decomposition: fields {meta.get('fields')} and pieces "
             f"{meta.get('pieces')}, expected {DECOMPOSE_FIELDS} and {expected}"
@@ -171,9 +185,9 @@ def pieces(doc: dict) -> dict[tuple[int, str], dict]:
     found = {}
     for season, rows in doc.get("rows", {}).items():
         for r in rows:
-            if not isinstance(r, list) or len(r) != len(DECOMPOSE_FIELDS):
+            if not isinstance(r, list) or len(r) != len(fields):
                 raise ValueError(f"openrapm decomposition: malformed row {r!r:.200}")
-            _, player_id, _, off, def_, _, _ = r
+            _, player_id, _, off, def_, _, _ = r[: len(DECOMPOSE_FIELDS)]
             label = f"decomposition {season} player {player_id}"
             row = {}
             for side, values in (("o", off), ("d", def_)):

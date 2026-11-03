@@ -16,9 +16,9 @@ def few_rows(monkeypatch):
     monkeypatch.setattr(o, "MIN_ROWS", 1)
 
 
-def rating(season, player_id, off=1.5, def_=0.25, poss=1000):
+def rating(season, player_id, off=1.5, def_=0.25, poss=1000, wosa=2.5):
     return {"s": season, "n": f"Player {player_id}", "o": off, "d": def_,
-            "t": off + def_, "p": poss, "id": player_id}  # fmt: skip
+            "t": off + def_, "p": poss, "id": player_id, "w": wosa}  # fmt: skip
 
 
 def ratings(*rows, built=BUILT):
@@ -43,10 +43,11 @@ def decompose(*rows, built=BUILT):
                 split(r["d"]),
                 split(r["t"]),
                 "BOS",
+                r["w"],
             ]
         )
     return {
-        "meta": {"built": built, "fields": o.DECOMPOSE_FIELDS,
+        "meta": {"built": built, "fields": [*o.DECOMPOSE_FIELDS, "w"],
                  "pieces": [*o.PIECES, "rating"]},
         "rows": by_season,
     }  # fmt: skip
@@ -68,8 +69,15 @@ def test_rating_rows():
     rows = o.rating_rows(ratings(rating(2026, 1641705, 3.02, 5.84, 5375)))
     assert rows == [
         {"season": 2026, "player_id": "1641705", "built": date(2026, 10, 25),
-         "possessions": 5375, "o_rating": 3.02, "d_rating": 5.84, "rating": 8.86},
+         "possessions": 5375, "o_rating": 3.02, "d_rating": 5.84, "rating": 8.86,
+         "wosa": 2.5},
     ]  # fmt: skip
+
+
+def test_ratings_before_wosa_have_null_wosa():
+    r = rating(2026, 1)
+    del r["w"]
+    assert o.rating_rows(ratings(r))[0]["wosa"] is None
 
 
 @pytest.mark.parametrize(
@@ -81,6 +89,7 @@ def test_rating_rows():
         ratings({"s": 2026, "id": 1}),
         ratings(rating(2026, 1) | {"o": "1.5"}),
         ratings(rating(2026, 1.5)),
+        ratings(rating(2026, 1, wosa="2.5")),
     ],
 )
 def test_bad_ratings_fail(doc):
@@ -130,7 +139,21 @@ def test_pieces_that_dont_add_up_fail():
         o.with_pieces(o.rating_rows(ratings(r)), doc)
 
 
+def test_decomposition_before_wosa():
+    doc = decompose(r := rating(2026, 1))
+    doc["meta"]["fields"] = o.DECOMPOSE_FIELDS
+    doc["rows"]["2026"][0].pop()
+    assert o.with_pieces(o.rating_rows(ratings(r)), doc)[0]["o_box_score"] == 1.0
+
+
 def test_changed_decomposition_fields_fail():
+    doc = decompose(r := rating(2026, 1))
+    doc["meta"]["fields"] = ["n", "id", "p", "t", "o", "d", "tm"]
+    with pytest.raises(ValueError, match="fields"):
+        o.with_pieces(o.rating_rows(ratings(r)), doc)
+
+
+def test_changed_decomposition_pieces_fail():
     doc = decompose(r := rating(2026, 1))
     doc["meta"]["pieces"] = ["box_score", "rating"]
     with pytest.raises(ValueError, match="pieces"):
@@ -157,6 +180,7 @@ def test_build(tmp_path):
     ]
     cols = [c for c, _ in o.COLUMNS]
     assert dict(zip(cols, got[0]))["o_box_score"] == 1.0
+    assert dict(zip(cols, got[0]))["wosa"] == 2.5
 
 
 def test_build_drops_a_few_unknown_players(tmp_path, monkeypatch):
@@ -230,8 +254,9 @@ def test_update_without_decomposition(tmp_path, monkeypatch, no_bucket):
     monkeypatch.setattr(o, "known_players", lambda outdir, season: {"1"})
     o.update(tmp_path)
     [row] = read(dataset_path(tmp_path / o.OUT_DIR, "openrapm", 2026))
-    assert row[4] == 1.5
-    assert row[7] is None
+    row = dict(zip([c for c, _ in o.COLUMNS], row))
+    assert row["o_rating"] == 1.5
+    assert row["o_box_score"] is None
 
 
 def test_published_built_reads_out_first(tmp_path):
