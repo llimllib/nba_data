@@ -309,11 +309,15 @@ class Names:
     def __init__(self, box: dict, actions: list[dict]):
         self.team_of: dict[int, int] = {}
         self.names: dict[int, dict[str, set[int]]] = {}
+        # players with minutes in the box score
+        self.played: set[int] = set()
         for t in box_teams(box):
             names = self.names[t["teamId"]] = defaultdict(set)
             for p in t["players"]:
                 pid, first, family = p["personId"], p["firstName"], p["familyName"]
                 self.team_of[pid] = t["teamId"]
+                if minutes_seconds(p["statistics"]["minutes"]):
+                    self.played.add(pid)
                 # "Jal. Williams": as much of the first name as tells them apart
                 prefixes = [f"{first[:k]}. {family}" for k in range(1, len(first) + 1)]
                 for n in (family, p["nameI"], f"{first} {family}", *prefixes):
@@ -376,9 +380,11 @@ class Names:
 
     def incoming(self, action: dict, on: Collection = ()) -> int | None:
         """
-        the id of the player a sub brings in, if it's clear: not one in
-        `on`, the players on the floor. A name that matches no one is the
-        only player off the floor who played and is never named
+        the id of the player a sub brings in, if it's clear: one who played
+        (Shanghai's Shi Yuchen, not Tian Yuchen, who didn't, in 0011800055)
+        and not one in `on`, the players on the floor. A name that matches
+        no one is the only player off the floor who played and is never
+        named
         """
         m = sub(action)
         team = self.team_of.get(action["personId"])
@@ -387,6 +393,8 @@ class Names:
         ids = self.lookup(team, m["incoming"])
         if not ids:
             ids = self.unnamed[team]
+        if len(ids) > 1:
+            ids = (ids & self.played) or ids
         if len(ids) > 1:
             ids = ids - set(on)
         return next(iter(ids)) if len(ids) == 1 else None

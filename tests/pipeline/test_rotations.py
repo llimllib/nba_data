@@ -327,6 +327,18 @@ def test_names_by_first_name():
     assert stints[15].start == 120
 
 
+def test_names_shared_with_a_player_who_didnt_play():
+    # Shanghai's Shi Yuchen and Tian Yuchen, who didn't play (0011800055)
+    home = [*HOME_PLAYERS[:-2], (14, "Shi", "Yuchen"), (15, "Tian", "Yuchen")]
+    minutes = {p: "12:00" for p in [1, 2, 3, 4, 5, 14]}
+    plays = Plays()
+    plays.starters(1)
+    plays.sub(1, 600, HOME, 1, "Yuchen", "Home1")
+    stints = by_player(derive(plays, box_score=box(home=home, minutes=minutes)))
+    assert stints[14].start == 120
+    assert 15 not in stints
+
+
 def test_untimed_games():
     plays = Plays()
     plays.starters(1, left=0)
