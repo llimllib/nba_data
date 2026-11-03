@@ -168,6 +168,11 @@ def test_players_who_didnt_play_are_dropped():
     ]
 
 
+def test_coaches_with_a_game_and_no_minutes_are_dropped():
+    coach = player(2, gp=1, mp=0, mpg=0, off=None, tot=None, **{"def": None})
+    assert [r["player_id"] for r in d.played(rows([player(1), coach]))] == ["1"]
+
+
 def read(path):
     return duckdb.sql(
         f"SELECT * FROM read_parquet('{path}', hive_partitioning = false) ORDER BY ALL"

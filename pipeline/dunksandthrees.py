@@ -362,9 +362,11 @@ def epm_rows(data: dict, season_type: str) -> list[dict]:
 def played(rows: list[dict]) -> list[dict]:
     """
     Only players who played. The season pages also list rostered players
-    who haven't (gp = 0), who have no season EPM
+    who haven't (gp = 0), who have no season EPM, and coaches who were
+    players under their player id, with a game and no minutes (J.J. Redick,
+    2027, perhaps for a technical), who aren't in player_seasons
     """
-    return [r for r in rows if r["gp"]]
+    return [r for r in rows if r["gp"] and r["min"]]
 
 
 # --- predictive EPM ----------------------------------------------------------
