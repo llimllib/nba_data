@@ -153,6 +153,15 @@ jobs:
         run: *purge
         env: *cdn
 
+      # start yarapm's publish workflow (llimllib/yarapm#28) now that the
+      # catalog is up. It has a daily fallback, so a failed dispatch
+      # doesn't fail the update
+      - name: Tell yarapm
+        continue-on-error: true
+        run: gh api repos/llimllib/yarapm/dispatches -f event_type=nba-data-updated
+        env:
+          GH_TOKEN: ${{ secrets.YARAPM_DISPATCH_TOKEN }}
+
       # rows check_keys dropped: everything else was published, but the run
       # fails so the notifier reports them
       - name: Report dropped rows
