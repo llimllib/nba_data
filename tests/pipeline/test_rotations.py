@@ -952,3 +952,15 @@ def test_joined_folds_a_stint_with_no_time_into_the_next():
         (2355.0, 2878.4, -5, 1, 6),
         (2878.4, 2880.0, 1, 3, 2),
     ]
+
+    # the other team's flagrant free throws, between the two, count for
+    # neither (Aldrich in 0021600342): +1 and +3 is +4
+    stints = rotations.joined(
+        [
+            s(1, 7, 4, 2638.0, 2638.0, -29, -28, 1),
+            s(1, 7, 4, 2638.0, 2880.0, -30, -27, 3),
+        ]
+    )
+    assert len(stints) == 1
+    assert (stints[0].start, stints[0].end, stints[0].pts) == (2638.0, 2880.0, 4)
+    assert stints[0].lead_end - stints[0].lead_start == 4

@@ -416,7 +416,9 @@ class Stint:
     period: int
     start: float
     end: float
-    # the home team's lead when the stint started and ended
+    # the home team's lead when the stint started and ended. Only the change
+    # matters (it's the plus-minus), and a stint joined to one that didn't
+    # start at the score it ended at (joined()) keeps the change, not the start
     lead_start: int
     lead_end: int = 0
     pts: int = 0
@@ -629,7 +631,10 @@ def joined(stints: list[Stint]) -> list[Stint]:
     join each player's stints that end and restart at the end of a period.
     And a stint with no time that starts when the player's next one does
     (subbed out and back in twice at one clock, around free throws: Bagley
-    in 0022100968) is part of the next one, so they don't share a key
+    in 0022100968) is part of the next one, so they don't share a key. Free
+    throws between the two can count for neither (Aldrich in 0021600342 was
+    off for the flagrant ones), so the joined stint's plus-minus is the sum
+    of the two's
     """
     boundaries = {period_start(p) for p in range(2, 30)}
     out: list[Stint] = []
@@ -639,11 +644,10 @@ def joined(stints: list[Stint]) -> list[Stint]:
             prev is not None
             and prev.player_id == s.player_id
             and prev.end == s.start
-            and (
-                s.start in boundaries
-                or (prev.start == s.start and prev.lead_end == s.lead_start)
-            )
+            and (s.start in boundaries or prev.start == s.start)
         ):
+            # the score is the same at a period's end and the next's start
+            prev.lead_start += s.lead_start - prev.lead_end
             prev.end, prev.lead_end, prev.pts = s.end, s.lead_end, prev.pts + s.pts
             continue
         out.append(s)
