@@ -1,3 +1,4 @@
+import math
 import threading
 from datetime import date
 from pathlib import Path
@@ -133,6 +134,8 @@ def test_time():
     assert rotations.period_start(6) == 3180
     assert rotations.minutes_seconds("29:18") == 1758
     assert rotations.minutes_seconds("") == 0
+    # the NBA's box score for Devin Harris in 0011700023: played, time unknown
+    assert math.isnan(rotations.minutes_seconds("-1:0-22"))
 
 
 def test_a_game():

@@ -77,6 +77,7 @@ usage: python -m pipeline.rotations [--out out] [--season 2026 ...] [--no-fetch]
 """
 
 import argparse
+import math
 import re
 import time
 import unicodedata
@@ -271,11 +272,18 @@ def elapsed(period: int, clock: str) -> float:
 
 
 def minutes_seconds(minutes: str) -> float:
-    """seconds from the box score's "29:18" (or "" for didn't play)"""
+    """
+    seconds from the box score's "29:18" (or "" for didn't play). Minutes
+    that aren't minutes ("-1:0-22" for Devin Harris in 0011700023) are NaN:
+    the player played, so it's truthy, and the minutes check skips it
+    (abs(x - NaN) > tolerance is false)
+    """
     if not minutes:
         return 0.0
-    m, s = minutes.split(":")
-    return int(m) * 60 + float(s)
+    m = re.fullmatch(r"(\d+):(\d+(?:\.\d+)?)", minutes)
+    if not m:
+        return math.nan
+    return int(m[1]) * 60 + float(m[2])
 
 
 # --- the box score
