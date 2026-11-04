@@ -58,11 +58,110 @@ for season in "$@"; do
   fi
 done
 
+# the season's log, which gets every command's output; the terminal gets a
+# line per step
+log=/dev/null
+
+# run a step, its output to the log; if it fails, show the log's last lines
+step() {
+  local label=$1
+  shift
+  echo "  $label"
+  if ! "$@" >>"$log" 2>&1; then
+    fail "$label failed"
+  fi
+}
+
+fail() {
+  echo "$1. The end of $log:" >&2
+  tail -n 15 "$log" | sed 's/^/    /' >&2
+  exit 1
+}
+
 upload() {
   if $dry_run; then
-    echo "dry run: aws s3 $*"
+    echo "    dry run: aws s3 $1 ${2#"$out/"} -> $3"
+  elif ! aws s3 "$@" "${UPLOAD[@]}" >>"$log" 2>&1; then
+    fail "uploading ${2#"$out/"} failed"
+  fi
+}
+
+saved_games() {
+  if [ -d "$1" ]; then
+    find "$1" -name '*.json.gz' | wc -l | tr -d ' '
   else
-    aws s3 "$@" "${UPLOAD[@]}"
+    echo 0
+  fi
+}
+
+# HH:MM, $1 seconds from now
+clock_in() {
+  local t=$(($(date +%s) + $1))
+  date -d "@$t" +%H:%M 2>/dev/null || date -r "$t" +%H:%M
+}
+
+# fetch the season's play-by-play, showing progress on one line: games
+# saved, failures this run, time left at this run's rate (pauses included),
+# and when a pause (stats.nba.com throttling) or the wait before retrying
+# the run's failed games ends
+fetch_playbyplay() {
+  local season=$1 dir=$2 total=$3
+  local from before started status="" pid line last_print=-60
+  local wait_line="" wait_until=0 wait_note="" printed=""
+  from=$(($(wc -l <"$log") + 1))
+  before=$(saved_games "$dir")
+  started=$SECONDS
+  uv run python -m pipeline.rotations --out "$out" --season "$season" >>"$log" 2>&1 &
+  pid=$!
+  # games are saved with atomic writes, so stopping loses nothing
+  trap 'kill "$pid" 2>/dev/null' EXIT
+  while kill -0 "$pid" 2>/dev/null; do
+    local saved failed elapsed left=""
+    saved=$(saved_games "$dir")
+    failed=$(tail -n +"$from" "$log" | grep -c '^rotations: [0-9]* failed:' || true)
+    elapsed=$((SECONDS - started))
+    if [ "$saved" -gt "$before" ] && [ "$elapsed" -gt 60 ]; then
+      left=", ~$(((total - saved) * elapsed / (saved - before) / 60)) min left"
+    fi
+    status="    $saved of $total games saved, $failed failed this run$left"
+    # the last pause or retry pipeline.rotations announced, timed from when
+    # it's first seen, since its next message can be 100 games later
+    line=$(tail -n +"$from" "$log" | grep -n -E '^rotations: .*(pausing [0-9]+ minutes|in [0-9]+ seconds)' | tail -n 1 || true)
+    if [ -n "$line" ] && [ "$line" != "$wait_line" ]; then
+      wait_line=$line
+      local secs
+      if [[ "$line" =~ pausing\ ([0-9]+)\ minutes ]]; then
+        secs=$((BASH_REMATCH[1] * 60))
+        wait_note="stats.nba.com is throttling; paused until $(clock_in "$secs")"
+      elif [[ "$line" =~ retrying\ ([0-9]+)\ failed.*in\ ([0-9]+)\ seconds ]]; then
+        secs=${BASH_REMATCH[2]}
+        wait_note="retrying ${BASH_REMATCH[1]} failed games at $(clock_in "$secs")"
+      fi
+      wait_until=$((SECONDS + secs))
+    fi
+    if [ "$SECONDS" -lt "$wait_until" ]; then
+      status="$status; $wait_note"
+    fi
+    if [ -t 1 ]; then
+      printf '\r\033[K%s' "$status"
+    elif [ $((SECONDS - last_print)) -ge 60 ]; then
+      echo "$status"
+      printed=$status
+      last_print=$SECONDS
+    fi
+    sleep 5
+  done
+  # where it finished
+  if [ -t 1 ]; then
+    printf '\r\033[K'
+  fi
+  status="    $(saved_games "$dir") of $total games saved, $(tail -n +"$from" "$log" | grep -c '^rotations: [0-9]* failed:' || true) failed this run"
+  if [ "$status" != "$printed" ]; then
+    echo "$status"
+  fi
+  trap - EXIT
+  if ! wait "$pid"; then
+    fail "stats.nba.com kept failing, so it stopped; the games fetched are saved, run this again later to fetch the rest"
   fi
 }
 
@@ -121,34 +220,45 @@ EOF
 }
 
 for season in "$@"; do
-  echo "== $season"
   out="out/rebuild/$season"
-  mkdir -p "$out"
-  echo "working in $out"
+  log="out/rebuild/logs/$season.log"
+  mkdir -p "$out" out/rebuild/logs
+  echo "== $season (log: $log)"
+  echo "== $(date) $0 $*" >>"$log"
   raw="nba/raw/stats/$season"
-  aws s3 sync "s3://$BUCKET/$raw/" "$out/$raw/" --exclude 'playbyplay/*' --no-progress
+  step "downloading the saved responses" \
+    aws s3 sync "s3://$BUCKET/$raw/" "$out/$raw/" --exclude 'playbyplay/*' --no-progress
   # builds the lookups and game logs pipeline.rotations reads
-  uv run python -m pipeline.stats --out "$out" --season "$season" --no-fetch
+  step "building the stats" uv run python -m pipeline.stats --out "$out" --season "$season" --no-fetch
   if $rotations; then
-    aws s3 sync "s3://$BUCKET/$raw/playbyplay/" "$out/$raw/playbyplay/" --no-progress
-    if ! uv run python -m pipeline.rotations --out "$out" --season "$season"; then
-      echo "stopped; the games fetched are saved in $out. Run this again later to fetch the rest" >&2
-      exit 1
-    fi
+    step "downloading the bucket's play-by-play" \
+      aws s3 sync "s3://$BUCKET/$raw/playbyplay/" "$out/$raw/playbyplay/" --no-progress
+    missing=$(missing_games "$out" "$season")
+    games=$(($(saved_games "$out/$raw/playbyplay") + $(wc -w <<<"$missing")))
+    echo "  fetching play-by-play: $(wc -w <<<"$missing" | tr -d ' ') of $games games to fetch"
+    fetch_playbyplay "$season" "$out/$raw/playbyplay" "$games"
+    grep "games' stints don't match" "$log" | tail -n 1 | sed -e 's/^rotations: /    /' -e 's/:$//'
     missing=$(missing_games "$out" "$season")
     if [ -n "$missing" ] && ! $allow_missing; then
-      echo "$(wc -w <<<"$missing" | tr -d ' ') games have no play-by-play: $missing" >&2
-      echo "run this again to fetch them, or pass --allow-missing to publish without them" >&2
+      echo "  $(wc -w <<<"$missing" | tr -d ' ') games have no play-by-play: $missing" >&2
+      echo "  run this again to fetch them, or pass --allow-missing to publish without them" >&2
       exit 1
     fi
     # again, for team_oreb from the game_events just built
-    uv run python -m pipeline.stats --out "$out" --season "$season" --no-fetch
+    step "rebuilding the stats with the play-by-play" \
+      uv run python -m pipeline.stats --out "$out" --season "$season" --no-fetch
   fi
-  uv run python -m pipeline.catalog --out "$out" --check
+  step "checking integrity" uv run python -m pipeline.catalog --out "$out" --check
 
   key="nba/stats/team_game_logs/season=$season/data.parquet"
-  compare "$out/$key" "$URL/$key"
+  echo "  comparing team_game_logs with the bucket's"
+  if ! result=$(compare "$out/$key" "$URL/$key" 2>&1); then
+    echo "$result" | tee -a "$log" | sed 's/^/    /' >&2
+    exit 1
+  fi
+  echo "$result" | tee -a "$log" | sed 's/^/    /'
 
+  echo "  uploading"
   if $rotations; then
     # sync only uploads the games that are new
     upload sync "$out/$raw/playbyplay/" "s3://$BUCKET/$raw/playbyplay/"
@@ -159,10 +269,11 @@ for season in "$@"; do
   fi
   upload cp "$out/$key" "s3://$BUCKET/$key"
   # published: everything in it is in the bucket now. A dry run keeps it,
-  # so the real run doesn't fetch the games again
+  # so the real run doesn't fetch the games again. The log stays
   if ! $dry_run; then
     rm -rf "$out"
   fi
+  echo "  done"
 done
 
 echo "done; the next update.yml run rebuilds the catalog (gh workflow run update.yml to run it now)"
