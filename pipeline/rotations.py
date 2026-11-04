@@ -459,7 +459,9 @@ def period_actions(actions: list[dict]) -> dict[int, list[dict]]:
 def inferred_starters(acts: list[dict], names: Names) -> dict[int, set[int]]:
     """
     team -> the players who started a period: anyone with an action, or
-    subbed out, before they're subbed in
+    subbed out, before they're subbed in. A timeout isn't one: it's the
+    team's, but the NBA sometimes gives it a person (Maccabi Haifa's
+    coach, on the roster with a player id, in 0011600043)
     """
     starters = {team: set() for team in names.names}
     subbed_in, out = set(), set()
@@ -477,8 +479,12 @@ def inferred_starters(acts: list[dict], names: Names) -> dict[int, set[int]]:
             if (incoming := names.incoming(a, on)) is not None:
                 subbed_in.add(incoming)
                 out.discard(incoming)
-        elif pid not in subbed_in and not OFF_FLOOR.search(
-            " ".join((a["actionType"], a["subType"], a["description"]))
+        elif (
+            pid not in subbed_in
+            and a["actionType"] != "Timeout"
+            and not OFF_FLOOR.search(
+                " ".join((a["actionType"], a["subType"], a["description"]))
+            )
         ):
             starters[team].add(pid)
     return starters

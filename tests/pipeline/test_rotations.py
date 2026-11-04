@@ -279,6 +279,15 @@ def test_bench_technicals_dont_make_starters():
     assert 12 not in by_player(stints)
 
 
+def test_timeouts_dont_make_starters():
+    # a coach on the roster, given the team's timeout (0011600043)
+    plays = Plays()
+    plays.starters(1)
+    plays.add(1, 600, HOME, 12, "Timeout", "AZITAL Timeout:Regular", "Regular")
+    stints = derive(plays)
+    assert 12 not in by_player(stints)
+
+
 def test_names_from_the_player_going_out():
     # renamed: the box score says Freedom, the subs say Kanter
     home = [*HOME_PLAYERS[:-1], (15, "Enes", "Freedom")]
