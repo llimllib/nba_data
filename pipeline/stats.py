@@ -20,6 +20,16 @@ That file also keeps the players on earlier rosters who aren't on these
 player_seasons, and the tables that refer to them (salaries) stay valid.
 They're optional: a season without them has only the players who played.
 
+Each fetch is also kept by the day it was fetched (US Eastern; a second
+fetch that day replaces the first), and rosters_daily is built from every
+saved day, so CI downloads them first:
+
+    nba/raw/stats/<season>/team_rosters/<date>.json.gz
+
+A team whose roster is too small or too big (an empty or partial response)
+is refetched, and if it stays that way the run fails before anything is
+saved.
+
 The season's schedule, every game whether it's been played or not, is
 refetched every run too (one request), for pipeline.schedule:
 
@@ -34,6 +44,7 @@ and these are built from them, one file per season:
     nba/stats/player_season_stats/season=<season>/data.parquet
     nba/stats/{team_seasons,player_seasons,games}/season=<season>/data.parquet  (lookups)
     nba/stats/schedule/season=<season>/data.parquet
+    nba/stats/rosters_daily/season=<season>/data.parquet
 
 Season stats are totals only; per-game, per-36 and per-100 values are
 computed from them in the catalog. Everything is relative to an output
@@ -53,7 +64,7 @@ import json
 import time
 import traceback
 from collections.abc import Callable, Collection
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import duckdb
@@ -71,7 +82,7 @@ from nba_api.stats.endpoints import (
 from . import lookups, schedule
 from .catalog import URL
 from .output import check_keys, dataset_path, write_atomic, write_parquet
-from .seasons import current_season, today_eastern
+from .seasons import EASTERN, current_season, season_window, today_eastern
 
 RAW_DIR = Path("nba/raw/stats")
 OUT_DIR = Path("nba/stats")
@@ -91,6 +102,14 @@ ROSTERS = "team_rosters"
 ROSTER_MAX_AGE = timedelta(hours=20)
 # between roster requests, to go easy on stats.nba.com
 ROSTER_DELAY = 1
+# Players on a team's roster, two-way contracts included: up to 21 in the
+# offseason, and at least 13 during the season. Out of season a roster can
+# be smaller, so then it only has to have someone on it
+ROSTER_MAX = 21
+ROSTER_MIN = 13
+
+ROSTERS_DAILY = "rosters_daily"
+ROSTERS_DAILY_KEYS = ["as_of_date", "team_id", "player_id"]
 
 SCHEDULE = "schedule"
 
@@ -228,6 +247,27 @@ def fetch_schedule(
     print(f"stats: fetched {SCHEDULE}")
 
 
+def daily_rosters_path(outdir: Path, season: int, day: date) -> Path:
+    return outdir / RAW_DIR / str(season) / ROSTERS / f"{day.isoformat()}.json.gz"
+
+
+def saved_roster_days(outdir: Path, season: int) -> list[tuple[date, Path]]:
+    """(day, path) for every saved day's rosters, oldest first"""
+    paths = (outdir / RAW_DIR / str(season) / ROSTERS).glob("*.json.gz")
+    return sorted(
+        (date.fromisoformat(p.name.removesuffix(".json.gz")), p) for p in paths
+    )
+
+
+def check_roster(data: dict, minimum: int) -> None:
+    """raise if a team's roster response doesn't have minimum to ROSTER_MAX players"""
+    players = len(result_set(data)["rowSet"])
+    if not minimum <= players <= ROSTER_MAX:
+        raise ValueError(
+            f"a roster has {players} players, not {minimum} to {ROSTER_MAX}"
+        )
+
+
 def rosters_fetched(outdir: Path, season: int) -> datetime | None:
     """when the saved rosters were fetched, or None if there are none"""
     path = raw_path(outdir, season, ROSTERS)
@@ -239,7 +279,7 @@ def rosters_fetched(outdir: Path, season: int) -> datetime | None:
 def fetch_rosters(
     outdir: Path,
     season: int,
-    fetch: Callable[[Callable, dict], dict] = fetch,
+    fetch: Callable[..., dict] = fetch,
     sleep=time.sleep,
     now: Callable[[], datetime] = lambda: datetime.now(UTC),
     force: bool = False,
@@ -252,6 +292,10 @@ def fetch_rosters(
     # players on earlier rosters but not on these (waived, say), kept so a
     # player stays in player_seasons once they've been on a team that season
     former = dict(saved_roster_players(outdir, season))
+    fetched = now()
+    day = fetched.astimezone(EASTERN).date()
+    start, end = season_window(season)
+    minimum = ROSTER_MIN if start <= day <= end else 1
     rosters = {}
     for i, team_id in enumerate(lookups.NBA_TEAM_IDS):
         if i:
@@ -263,13 +307,18 @@ def fetch_rosters(
                 "season": season_string(season),
                 "league_id_nullable": "00",
             },
+            check=lambda data: check_roster(data, minimum),
         )
     for pid, _ in roster_players(rosters):
         former.pop(pid, None)
     write_raw(
+        daily_rosters_path(outdir, season, day),
+        {"fetched": fetched.isoformat(), "rosters": rosters},
+    )
+    write_raw(
         raw_path(outdir, season, ROSTERS),
         {
-            "fetched": now().isoformat(),
+            "fetched": fetched.isoformat(),
             "rosters": rosters,
             "former": sorted(former.items()),
         },
@@ -307,9 +356,13 @@ def saved_roster_players(outdir: Path, season: int) -> list[tuple[str, str]]:
 def load_rosters(con: duckdb.DuckDBPyConnection, outdir: Path, season: int) -> None:
     """
     Load everyone on the saved rosters, now or earlier in the season, into
-    `rosters` (player_id, player_name), empty if there are none
+    `rosters` (player_id, player_name), empty if there are none. That
+    includes every saved day's, so rosters_daily's players are all in
+    player_seasons
     """
     players = saved_roster_players(outdir, season)
+    for _, path in saved_roster_days(outdir, season):
+        players += roster_players(read_raw(path)["rosters"])
     if not raw_path(outdir, season, ROSTERS).is_file():
         print(
             f"stats: no rosters for {season}; player_seasons has only players who played"
@@ -646,6 +699,63 @@ def build_player_season_stats(con: duckdb.DuckDBPyConnection, season: int) -> No
     )
 
 
+def build_rosters_daily(
+    con: duckdb.DuckDBPyConnection, outdir: Path, season: int
+) -> None:
+    """
+    Load `rosters_daily`, every team's roster on each saved day, from the
+    daily roster files. SUPPLEMENTAL_STATUS is 1 for about three players a
+    team, nearly all with no salary in bbref_salaries, or one paid by a team
+    that waived them: two-way contracts. Any other value fails the build,
+    since it would mean something else
+    """
+    columns: dict[str, list] = {
+        "as_of_date": [],
+        "team_id": [],
+        "player_id": [],
+        "num": [],
+        "position": [],
+        "two_way": [],
+        "how_acquired": [],
+    }
+    for day, path in saved_roster_days(outdir, season):
+        for team_id, data in read_raw(path)["rosters"].items():
+            rs = result_set(data)
+            for values in rs["rowSet"]:
+                row = dict(zip(rs["headers"], values))
+                status = row.get("SUPPLEMENTAL_STATUS")
+                if status not in (0, 1, None):
+                    raise ValueError(
+                        f"stats: {path}: player {row['PLAYER_ID']} has "
+                        f"SUPPLEMENTAL_STATUS {status!r}, not 0 or 1"
+                    )
+                columns["as_of_date"].append(day)
+                columns["team_id"].append(team_id)
+                columns["player_id"].append(str(row["PLAYER_ID"]))
+                columns["num"].append(row.get("NUM") or None)
+                columns["position"].append(row.get("POSITION") or None)
+                columns["two_way"].append(None if status is None else status == 1)
+                columns["how_acquired"].append(row.get("HOW_ACQUIRED") or None)
+    types = {"as_of_date": pa.date32(), "two_way": pa.bool_()}
+    con.register(
+        "arrow",
+        pa.table(
+            {
+                name: pa.array(values, types.get(name, pa.string()))
+                for name, values in columns.items()
+            }
+        ),
+    )
+    con.execute(
+        f"""
+        CREATE OR REPLACE TABLE {ROSTERS_DAILY} AS
+        SELECT {season}::INTEGER AS season, * FROM arrow
+        ORDER BY {", ".join(ROSTERS_DAILY_KEYS)}
+        """
+    )
+    con.unregister("arrow")
+
+
 def build_season(outdir: Path, season: int, url: str | None = None) -> bool:
     """
     Build the parquet files for `season` from its raw responses. Returns
@@ -699,6 +809,26 @@ def build_season(outdir: Path, season: int, url: str | None = None) -> bool:
         check_keys(con, SCHEDULE, schedule.KEYS, f"stats {SCHEDULE}")
         path = dataset_path(outdir / OUT_DIR, SCHEDULE, season)
         write_parquet(con, SCHEDULE, path)
+        print(f"stats: wrote {path}")
+
+    build_rosters_daily(con, outdir, season)
+    check_keys(con, ROSTERS_DAILY, ROSTERS_DAILY_KEYS, f"stats {ROSTERS_DAILY}")
+    # before a team's first game it isn't in team_seasons, so its roster
+    # would fail the integrity check; the saved days fill in once it has one
+    missing = con.execute(
+        f"SELECT DISTINCT team_id FROM {ROSTERS_DAILY} "
+        "WHERE team_id NOT IN (SELECT team_id FROM team_seasons) ORDER BY ALL"
+    ).fetchall()
+    if not count(con, ROSTERS_DAILY):
+        print(f"stats: no {ROSTERS_DAILY} for {season}")
+    elif missing:
+        print(
+            f"stats: not writing {ROSTERS_DAILY} for {season}: "
+            f"{len(missing)} teams haven't played yet"
+        )
+    else:
+        path = dataset_path(outdir / OUT_DIR, ROSTERS_DAILY, season)
+        write_parquet(con, ROSTERS_DAILY, path)
         print(f"stats: wrote {path}")
     return True
 

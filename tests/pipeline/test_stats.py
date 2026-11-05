@@ -1,6 +1,6 @@
 import gzip
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import duckdb
 import pytest
@@ -643,6 +643,34 @@ def write_rosters(outdir, rosters, season=2026, fetched="2026-01-01T00:00:00+00:
     )
 
 
+ROSTER = ["TeamID", "PLAYER", "NUM", "POSITION", "PLAYER_ID", "HOW_ACQUIRED"]
+ROSTER += ["SUPPLEMENTAL_STATUS"]
+
+
+def full_roster(team, players=(), size=stats.ROSTER_MIN):
+    """
+    a team's roster response: `players` [(player_id, name)], then made-up
+    players (team * 100 + i) up to `size`
+    """
+    filler = [(team * 100 + i, f"Filler {i}") for i in range(size - len(players))]
+    players = [*players, *filler]
+    return response(
+        ROSTER,
+        [[team, name, "7", "F", pid, "Signed on 07/01/25", 0] for pid, name in players],
+    )
+
+
+def write_daily_rosters(outdir, day, rosters, season=2026):
+    """rosters: team_id -> response"""
+    stats.write_raw(
+        stats.daily_rosters_path(outdir, season, day),
+        {
+            "fetched": f"{day.isoformat()}T12:00:00+00:00",
+            "rosters": {str(team): data for team, data in rosters.items()},
+        },
+    )
+
+
 def test_player_seasons_includes_rostered_players(tmp_path):
     write_raw(tmp_path)
     # player 1 played; 9 is on the roster but hasn't
@@ -684,9 +712,11 @@ def test_fetch_rosters(tmp_path):
     calls, sleeps = [], []
     clock = [datetime(2026, 1, 1, tzinfo=UTC)]
 
-    def fake_fetch(endpoint, kwargs):
+    def fake_fetch(endpoint, kwargs, check):
         calls.append(kwargs)
-        return response(["PLAYER", "PLAYER_ID"], [["X", int(kwargs["team_id"])]])
+        data = full_roster(int(kwargs["team_id"]))
+        check(data)
+        return data
 
     def fetch_rosters(**kw):
         stats.fetch_rosters(
@@ -730,10 +760,11 @@ def test_fetch_rosters_keeps_former_players(tmp_path):
     saved["former"] = [["8", "Long Gone"]]
     stats.write_raw(path, saved)
 
-    # now 1 is the only player on a roster
-    def fake_fetch(endpoint, kwargs):
-        players = [["Roster A", 1]] if kwargs["team_id"] == str(BOS) else []
-        return response(["PLAYER", "PLAYER_ID"], players)
+    # now 1 is the only player on a roster (with 12 more)
+    def fake_fetch(endpoint, kwargs, check):
+        if kwargs["team_id"] == str(BOS):
+            return full_roster(BOS, [(1, "Roster A")])
+        return full_roster(int(kwargs["team_id"]))
 
     stats.fetch_rosters(tmp_path, 2026, fetch=fake_fetch, sleep=lambda _: None)
     assert stats.read_raw(path)["former"] == [["8", "Long Gone"], ["9", "Waived"]]
@@ -745,9 +776,148 @@ def test_fetch_rosters_keeps_former_players(tmp_path):
     assert rows["8"]["name"] == "Long Gone"
 
     # a former player back on a roster leaves the former list
-    def rehired(endpoint, kwargs):
-        players = [["Waived", 9]] if kwargs["team_id"] == str(BOS) else []
-        return response(["PLAYER", "PLAYER_ID"], players)
+    def rehired(endpoint, kwargs, check):
+        if kwargs["team_id"] == str(BOS):
+            return full_roster(BOS, [(9, "Waived")])
+        return full_roster(int(kwargs["team_id"]))
 
     stats.fetch_rosters(tmp_path, 2026, fetch=rehired, sleep=lambda _: None, force=True)
     assert stats.read_raw(path)["former"] == [["1", "Roster A"], ["8", "Long Gone"]]
+
+
+def test_fetch_rosters_saves_each_day(tmp_path):
+    def fake_fetch(endpoint, kwargs, check):
+        return full_roster(int(kwargs["team_id"]))
+
+    def fetch_at(when):
+        stats.fetch_rosters(
+            tmp_path,
+            2026,
+            fetch=fake_fetch,
+            sleep=lambda _: None,
+            now=lambda: when,
+            force=True,
+        )
+
+    # 3am UTC on the 2nd is still the 1st in the east
+    fetch_at(datetime(2026, 1, 2, 3, tzinfo=UTC))
+    fetch_at(datetime(2026, 1, 2, 18, tzinfo=UTC))
+    # a second fetch the same day replaces the first
+    fetch_at(datetime(2026, 1, 2, 22, tzinfo=UTC))
+    days = stats.saved_roster_days(tmp_path, 2026)
+    assert [d for d, _ in days] == [date(2026, 1, 1), date(2026, 1, 2)]
+    saved = stats.read_raw(days[1][1])
+    assert saved["fetched"] == "2026-01-02T22:00:00+00:00"
+    assert len(saved["rosters"]) == 30
+
+
+@pytest.mark.parametrize(
+    "when, size, ok",
+    [
+        (datetime(2026, 1, 2, 18, tzinfo=UTC), stats.ROSTER_MIN, True),
+        (datetime(2026, 1, 2, 18, tzinfo=UTC), stats.ROSTER_MIN - 1, False),
+        (datetime(2026, 1, 2, 18, tzinfo=UTC), stats.ROSTER_MAX + 1, False),
+        # in the offseason a roster can be small, but not empty
+        (datetime(2026, 7, 20, 18, tzinfo=UTC), 5, True),
+        (datetime(2026, 7, 20, 18, tzinfo=UTC), 0, False),
+    ],
+)
+def test_fetch_rosters_checks_their_size(tmp_path, when, size, ok):
+    def fetch(endpoint, kwargs, check):
+        team = int(kwargs["team_id"])
+        data = full_roster(team, size=size if team == BOS else stats.ROSTER_MIN)
+        check(data)
+        return data
+
+    def fetch_rosters():
+        stats.fetch_rosters(
+            tmp_path, 2026, fetch=fetch, sleep=lambda _: None, now=lambda: when
+        )
+
+    if ok:
+        fetch_rosters()
+        assert stats.rosters_fetched(tmp_path, 2026) == when
+    else:
+        with pytest.raises(ValueError, match="players, not"):
+            fetch_rosters()
+        # nothing is saved
+        assert stats.rosters_fetched(tmp_path, 2026) is None
+        assert stats.saved_roster_days(tmp_path, 2026) == []
+
+
+def test_rosters_daily(tmp_path):
+    write_raw(tmp_path)
+    first = full_roster(BOS, [(9, "Injured")])
+    first["resultSets"][0]["rowSet"][0][2:4] = [None, ""]
+    first["resultSets"][0]["rowSet"][0][5:7] = ["#3 Pick in 2025 Draft", 1]
+    write_daily_rosters(
+        tmp_path, date(2026, 1, 1), {BOS: first, NYK: full_roster(NYK, [(8, "C")])}
+    )
+    # 8 moves from New York to Boston
+    write_daily_rosters(
+        tmp_path,
+        date(2026, 1, 2),
+        {BOS: full_roster(BOS, [(9, "Injured"), (8, "C")]), NYK: full_roster(NYK)},
+    )
+    stats.build_season(tmp_path, 2026)
+    rows = read(tmp_path, stats.ROSTERS_DAILY)
+    assert len(rows) == 4 * stats.ROSTER_MIN
+    assert rows[0] == {
+        "season": 2026,
+        "as_of_date": date(2026, 1, 1),
+        "team_id": str(BOS),
+        "player_id": str(BOS * 100),
+        "num": "7",
+        "position": "F",
+        "two_way": False,
+        "how_acquired": "Signed on 07/01/25",
+    }
+    injured = [r for r in rows if r["player_id"] == "9"]
+    assert injured[0] | {"as_of_date": None} == {
+        "season": 2026,
+        "as_of_date": None,
+        "team_id": str(BOS),
+        "player_id": "9",
+        "num": None,
+        "position": None,
+        "two_way": True,
+        "how_acquired": "#3 Pick in 2025 Draft",
+    }
+    assert [(r["as_of_date"], r["team_id"]) for r in rows if r["player_id"] == "8"] == [
+        (date(2026, 1, 1), str(NYK)),
+        (date(2026, 1, 2), str(BOS)),
+    ]
+    assert types(tmp_path, stats.ROSTERS_DAILY) == {
+        "season": "INTEGER",
+        "as_of_date": "DATE",
+        "team_id": "VARCHAR",
+        "player_id": "VARCHAR",
+        "num": "VARCHAR",
+        "position": "VARCHAR",
+        "two_way": "BOOLEAN",
+        "how_acquired": "VARCHAR",
+    }
+    # every rostered player is in player_seasons, with no team_rosters.json.gz
+    players = {r["player_id"] for r in read(tmp_path, "player_seasons")}
+    assert {r["player_id"] for r in rows} <= players
+
+
+def test_rosters_daily_waits_for_teams_to_play(tmp_path):
+    write_raw(tmp_path)
+    write_daily_rosters(
+        tmp_path,
+        date(2026, 1, 1),
+        {BOS: full_roster(BOS), 1610612737: full_roster(1610612737)},
+    )
+    stats.build_season(tmp_path, 2026)
+    path = dataset_path(tmp_path / stats.OUT_DIR, stats.ROSTERS_DAILY, 2026)
+    assert not path.exists()
+
+
+def test_rosters_daily_unknown_supplemental_status_fails(tmp_path):
+    write_raw(tmp_path)
+    data = full_roster(BOS)
+    data["resultSets"][0]["rowSet"][0][6] = 2
+    write_daily_rosters(tmp_path, date(2026, 1, 1), {BOS: data})
+    with pytest.raises(ValueError, match="SUPPLEMENTAL_STATUS 2"):
+        stats.build_season(tmp_path, 2026)

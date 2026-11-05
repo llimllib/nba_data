@@ -45,10 +45,11 @@ jobs:
         run: echo "SEASON=$(uv run python -c 'from pipeline.seasons import current_season, today_eastern; print(current_season(today_eastern()))')" >> "$GITHUB_ENV"
 
       # pipeline.stats refetches the team rosters (30 requests) only when the
-      # saved ones are a day old, so start from the bucket's. sync, unlike cp,
-      # succeeds when there are none yet
+      # saved ones are a day old, so start from the bucket's, and builds
+      # rosters_daily from every saved day's. sync, unlike cp, succeeds when
+      # there are none yet
       - name: Download this season's rosters
-        run: aws s3 sync "s3://$BUCKET/nba/raw/stats/$SEASON/" "out/nba/raw/stats/$SEASON/" --exclude '*' --include team_rosters.json.gz --no-progress
+        run: aws s3 sync "s3://$BUCKET/nba/raw/stats/$SEASON/" "out/nba/raw/stats/$SEASON/" --exclude '*' --include team_rosters.json.gz --include 'team_rosters/*' --no-progress
         env: &spaces
           AWS_ACCESS_KEY_ID: ${{ secrets.DO_SPACES_ACCESS_KEY }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.DO_SPACES_SECRET }}

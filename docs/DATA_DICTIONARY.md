@@ -163,6 +163,7 @@ ORDER BY ppg DESC LIMIT 10;
 |------|------|-------------|
 | `team_game_logs`, `player_game_logs`, `player_season_stats`, `team_seasons`, `player_seasons`, `games` | view | Every season of each `nba/stats/` dataset |
 | `schedule` | view | Every game on the schedule, played or not, from 2027 |
+| `rosters_daily` | view | Every team's roster as of each day fetched, from 2027 |
 | `four_factors`, `player_box`, `team_box`, `player_details`, `net_pts_season` | view | Every season of each `nba/espn/` dataset |
 | `bbref_team_stats`, `bbref_salaries` | view | Every season of basketball-reference's team stats and player salaries (`nba/bbref/`) |
 | `ctg_team_summary` | view | Every season of Cleaning the Glass's team summary (`nba/ctg/`) |
@@ -236,8 +237,9 @@ and `game_events` (`pipeline/rotations.py`, below). Each run refetches the whole
 season (14 requests, plus 1 for `schedule`), so stat corrections the NBA makes after
 games are picked up. Raw responses are kept at
 `nba/raw/stats/<season>/<request>.json.gz`. Team rosters (30 requests, for
-`player_seasons`) are refetched once a day, into
-`nba/raw/stats/<season>/team_rosters.json.gz`.
+`player_seasons` and `rosters_daily`) are refetched once a day, into
+`nba/raw/stats/<season>/team_rosters.json.gz`, and each day's are kept at
+`nba/raw/stats/<season>/team_rosters/<date>.json.gz`.
 
 Columns are the NBA's names, lowercased. Names and abbreviations are dropped
 (use the lookup tables), as are the `*_rank` columns (use `rank() OVER
@@ -480,6 +482,41 @@ JOIN team_seasons a ON a.season = s.season AND a.team_id = s.away_team_id
 WHERE s.season = 2027 AND s.status = 'scheduled'
     AND s.game_date < current_date + 7
 ORDER BY s.start_time;
+```
+
+### `rosters_daily/season=<season>/data.parquet`
+
+Every NBA team's roster as of each day the rosters were fetched (once a
+day), from `commonteamroster`, from 2027 (November 2026 on): one row per
+`as_of_date`, `team_id` and `player_id`. It includes players who haven't
+played (injured, say), so it's the place to find a team's full roster;
+for a date, use the latest `as_of_date` on or before it. A day the fetch
+failed is missing. Each team has 13 to 21 players during the season, two-way
+contracts included; a fetch with fewer or more fails the run rather than
+being published. Every `player_id` is in `player_seasons`. The file isn't
+written until every rostered team has played a game that season (so is in
+`team_seasons`).
+
+| Column | Type | Description |
+|--------|------|-------------|
+| season, as_of_date, team_id, player_id | | Key. `as_of_date` is the day the rosters were fetched, US Eastern |
+| num | VARCHAR | Jersey number (`00` isn't `0`); NULL if the NBA has none |
+| position | VARCHAR | `G`, `F`, `C`, `G-F`, `F-C`, ... |
+| two_way | BOOLEAN | The NBA's `SUPPLEMENTAL_STATUS` is 1: about three players a team, almost all with no salary in `bbref_salaries` (or one paid by a team that waived them), so two-way contracts |
+| how_acquired | VARCHAR | The NBA's text: `Traded from OKC on 07/19/26`, `Signed on 09/14/26`, `#3 Pick in 2026 Draft` |
+
+Not kept: names (use `players`), height, weight, age and school (in
+`player_season_stats`), and the coaches.
+
+```sql
+-- each team's latest roster, with its two-way players last
+SELECT t.nba_abbrev AS team, p.name, r.position, r.two_way
+FROM rosters_daily r
+JOIN players p USING (player_id)
+JOIN team_seasons t USING (season, team_id)
+WHERE r.season = 2027
+    AND r.as_of_date = (SELECT max(as_of_date) FROM rosters_daily WHERE season = 2027)
+ORDER BY team, r.two_way, p.name;
 ```
 
 ---
