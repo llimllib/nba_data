@@ -1038,8 +1038,14 @@ def build_season(outdir: Path, season: int, url: str = URL) -> bool:
             evs["matches_box_score"].append(None if problems is None else not problems)
         for s in stints:
             # players with no NBA id (international teams in preseason)
-            # can't be keyed
-            if not s.player_id:
+            # can't be keyed, and neither can a preseason player the game
+            # logs have with no id, since player_seasons skips them
+            # (Stefano Mancinelli of Milano, 6005 in 0011000001's box score)
+            if not s.player_id or (
+                game_id.startswith("001")
+                and logged
+                and ids.get(s.player_id, s.player_id) not in logged
+            ):
                 continue
             rows["game_id"].append(game_id)
             rows["team_id"].append(str(s.team_id))

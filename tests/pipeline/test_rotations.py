@@ -680,6 +680,42 @@ def test_build_uses_the_game_logs_ids(tmp_path):
     assert flags == [(True,)]
 
 
+def logs_without_durant(tmp_path, game_id):
+    """
+    build the fixture as `game_id` with every player in the game logs but
+    Durant, and return the stints' player ids
+    """
+    save_fixture(tmp_path, game_id=game_id)
+    game = stats.read_raw(FIXTURE)
+    rows = ", ".join(
+        f"('{game_id}', '{p['personId']}', '{t['teamId']}', 0.0, 0, 0)"
+        for t in rotations.box_teams(game["boxscore"])
+        for p in t["players"]
+        if p["personId"] != 201142
+    )
+    write_parquet(
+        tmp_path,
+        "player_game_logs",
+        2026,
+        f"SELECT * FROM (VALUES {rows}) "
+        "t(game_id, player_id, team_id, min, pts, plus_minus)",
+    )
+    assert rotations.build_season(tmp_path, 2026)
+    path = dataset_path(tmp_path / stats.OUT_DIR, rotations.NAME, 2026)
+    return {r[0] for r in duckdb.sql(f"SELECT player_id FROM '{path}'").fetchall()}
+
+
+def test_build_skips_preseason_players_the_game_logs_cant_key(tmp_path):
+    """
+    A preseason player the game logs have with no id isn't in
+    player_seasons, so their stints are skipped; in any other game, they're
+    kept for the integrity check to find
+    """
+    ids = logs_without_durant(tmp_path / "preseason", "0012500001")
+    assert "201142" not in ids and ids
+    assert "201142" in logs_without_durant(tmp_path / "regular", GAME)
+
+
 def test_no_games(tmp_path):
     assert not rotations.build_season(tmp_path, 2026)
 
