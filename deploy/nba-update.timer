@@ -1,0 +1,13 @@
+[Unit]
+Description=Run nba_data update.yml on schedule
+
+[Timer]
+Unit=nba-dispatch@update.yml.service
+# every 4 hours
+OnCalendar=*-*-* 00/4:43:00 UTC
+# extra runs at 1am and 5am Eastern, so last night's games are in by morning
+OnCalendar=*-*-* 06,10:13:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

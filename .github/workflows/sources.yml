@@ -2,7 +2,9 @@ name: Update other sources (v2)
 
 # The sources other than stats.nba.com and ESPN (see docs/v2.md). They
 # change at most daily, and basketball-reference blocks frequent scrapers,
-# so they run once a day rather than with update.yml.
+# so they run once a day rather than with update.yml: 11:17 UTC, after the
+# night's games are final. There's no cron (GitHub's started it 7-9 hours
+# late); a systemd timer on billmill.org dispatches it, see deploy/.
 #
 # Each source is its own step with continue-on-error, so a markup change on
 # one site doesn't stop the others. A source that fails writes nothing (its
@@ -19,10 +21,6 @@ on:
         description: "Make this source's step fail, to test the failure issue (e.g. bbref)"
         required: false
         default: ""
-  schedule:
-    # 11:17 UTC: after the night's games are final, and off the hour, when
-    # GitHub delays and drops scheduled runs the most
-    - cron: "17 11 * * *"
 
 # shared with update.yml so the two never rebuild the catalog at once
 concurrency:

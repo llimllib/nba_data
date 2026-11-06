@@ -1,0 +1,11 @@
+[Unit]
+Description=Run nba_data sources.yml on schedule
+
+[Timer]
+Unit=nba-dispatch@sources.yml.service
+# after the night's games are final
+OnCalendar=*-*-* 11:17:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

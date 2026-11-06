@@ -3,11 +3,13 @@ name: Update data (v2)
 # Runs the v2 pipelines and publishes to the basketball-data Space; see
 # docs/v2.md. Runs alongside dl.yml (v1) until cutover, offset by 30 minutes
 # so the two don't hit stats.nba.com through the exit node at once
+#
+# There's no cron: GitHub's schedule dropped about 40% of runs, mostly
+# overnight. A systemd timer on billmill.org dispatches it instead, every 4
+# hours plus 06:13 and 10:13 UTC; the unit files are in deploy/
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "43 */4 * * *"
 
 concurrency:
   group: update-v2

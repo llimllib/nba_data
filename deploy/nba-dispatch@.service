@@ -1,0 +1,8 @@
+[Unit]
+Description=Dispatch nba_data %i
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'curl -fsS -X POST -H "Authorization: Bearer $(cat /etc/nba-dispatch-token)" -H "Accept: application/vnd.github+json" https://api.github.com/repos/llimllib/nba_data/actions/workflows/%i/dispatches -d "{\\"ref\\":\\"main\\"}"'
