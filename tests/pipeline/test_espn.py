@@ -286,3 +286,30 @@ def test_season_with_no_data_fails(tmp_path, monkeypatch):
     # early in the season, an empty result is normal
     monkeypatch.setattr(espn, "today_eastern", lambda: date(2025, 10, 20))
     espn.main(["--out", str(tmp_path)])
+
+
+def write_games(outdir, season, game_ids):
+    path = dataset_path(outdir / espn.STATS_DIR, "games", season)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    values = ", ".join(f"('{g}')" for g in game_ids)
+    duckdb.sql(f"COPY (FROM (VALUES {values}) v(game_id)) TO '{path}'")
+
+
+def test_games_not_in_games_are_held_back(tmp_path):
+    # ESPN has a game before the NBA's team game logs do
+    write_raw(tmp_path, 2026, "2025-11-05", day([player(1, "BRK", BKN)]))
+    write_raw(
+        tmp_path, 2026, "2025-11-06", day([player(2, "BRK", BKN)], game="0022500200")
+    )
+    write_games(tmp_path, 2026, [GAME])
+    assert espn.build_season(tmp_path, 2026, url="http://nowhere.invalid")
+    for dataset in espn.QUERIES:
+        games = read(tmp_path, dataset, 2026).select("game_id").distinct().fetchall()
+        assert games == [(GAME,)], dataset
+
+
+def test_unreadable_games_hold_back_everything(tmp_path):
+    # the bucket has no games for a season before its first is played
+    write_raw(tmp_path, 2026, "2025-11-05", day([player(1, "BRK", BKN)]))
+    assert espn.build_season(tmp_path, 2026, url="http://nowhere.invalid")
+    assert not (tmp_path / espn.OUT_DIR).exists()

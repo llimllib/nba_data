@@ -55,6 +55,12 @@ pipeline.rotations fetches after this runs: the season's game_events is
 read from --out if it's there, and the bucket otherwise. The update runs
 this again with --no-fetch after the rotations, so the night's games have it.
 
+The team game logs, which games is built from, can list a game hours after
+the player game logs (and ESPN) do, so a game's player_game_logs rows wait
+until it's in them; each run rebuilds the season, so they're added then. A
+game that's final in the schedule LATE_GAME after tip-off and still isn't
+in them is reported.
+
 usage: python -m pipeline.stats [--out out] [--season 2026 ...] [--no-fetch | --rosters-only] [--url URL]
 """
 
@@ -81,7 +87,7 @@ from nba_api.stats.endpoints import (
 
 from . import lookups, schedule
 from .catalog import URL
-from .output import check_keys, dataset_path, write_atomic, write_parquet
+from .output import check_keys, dataset_path, report, write_atomic, write_parquet
 from .seasons import EASTERN, current_season, season_window, today_eastern
 
 RAW_DIR = Path("nba/raw/stats")
@@ -112,6 +118,12 @@ ROSTERS_DAILY = "rosters_daily"
 ROSTERS_DAILY_KEYS = ["as_of_date", "team_id", "player_id"]
 
 SCHEDULE = "schedule"
+
+# The team game logs, which games is built from, can list a game hours after
+# it ends: up to about 4 hours after a late West Coast game. Other datasets
+# hold back their rows for it until then; a game that's final in the
+# schedule this long after tip-off and still isn't in games is reported
+LATE_GAME = timedelta(hours=12)
 
 # Columns we don't keep. Names and abbreviations come from the lookup tables;
 # ranks are a query away and would be wrong for per-mode stats
@@ -649,6 +661,18 @@ def build_player_game_logs(con: duckdb.DuckDBPyConnection, season: int) -> None:
             f"stats: dropping player {player_id}'s row for team {team_id} in "
             f"{game_id} ({minutes} min), they have another row in that game"
         )
+    # The player game logs can have a game hours before the team game logs,
+    # which games is built from (#105), so its rows wait for the team's; the
+    # next run rebuilds the season and adds them
+    waiting = con.execute(
+        "SELECT DISTINCT game_id FROM pgl "
+        "WHERE game_id NOT IN (SELECT game_id FROM team_game_logs) ORDER BY ALL"
+    ).fetchall()
+    if waiting:
+        print(
+            f"stats: holding back player_game_logs for {[g for (g,) in waiting]}, "
+            "not in the team game logs yet"
+        )
     # home and opponent come from the team's game log
     con.execute(
         f"""
@@ -664,6 +688,7 @@ def build_player_game_logs(con: duckdb.DuckDBPyConnection, season: int) -> None:
             ON x.game_id = p.game_id AND x.player_id = p.player_id
             AND x.team_id = p.team_id
         WHERE NOT (p.player_id IS NULL AND p.game_id LIKE '001%')
+            AND p.game_id IN (SELECT game_id FROM team_game_logs)
         ORDER BY game_date, game_id, team_id, player_id
         """
     )
@@ -756,12 +781,35 @@ def build_rosters_daily(
     con.unregister("arrow")
 
 
-def build_season(outdir: Path, season: int, url: str | None = None) -> bool:
+def report_late_games(con: duckdb.DuckDBPyConnection, now: datetime) -> None:
+    """report games final in the schedule more than LATE_GAME ago, not in games"""
+    late = con.execute(
+        f"""
+        SELECT game_id FROM {SCHEDULE}
+        WHERE status = 'final' AND start_time < ?
+            AND game_id NOT IN (SELECT game_id FROM games)
+        ORDER BY ALL
+        """,
+        [now - LATE_GAME],
+    ).fetchall()
+    if late:
+        report(
+            f"stats: {[g for (g,) in late]} final in the schedule but not in the "
+            f"team game logs {LATE_GAME.total_seconds() / 3600:g} hours after "
+            "tip-off; their rows are held back"
+        )
+
+
+def build_season(
+    outdir: Path, season: int, url: str | None = None, now: datetime | None = None
+) -> bool:
     """
     Build the parquet files for `season` from its raw responses. Returns
     False if there are none. A dataset with no rows (no games played yet) is
     not written. game_events, for team_oreb, is read from the bucket at
-    `url` if `outdir` doesn't have it
+    `url` if `outdir` doesn't have it. With `now`, when the responses were
+    fetched, games missing from the team game logs long after they ended
+    are reported
     """
     names = requests(season)
     if not all(raw_path(outdir, season, n).is_file() for n in names):
@@ -830,6 +878,10 @@ def build_season(outdir: Path, season: int, url: str | None = None) -> bool:
         path = dataset_path(outdir / OUT_DIR, ROSTERS_DAILY, season)
         write_parquet(con, ROSTERS_DAILY, path)
         print(f"stats: wrote {path}")
+
+    # last, since it raises outside the workflows
+    if now and raw_path(outdir, season, SCHEDULE).is_file():
+        report_late_games(con, now)
     return True
 
 
@@ -859,13 +911,15 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
 
     for season in args.season or [current_season(today_eastern())]:
+        fetched = None
         if args.rosters_only:
             fetch_rosters(args.out, season, force=True)
         elif not args.no_fetch:
             fetch_season(args.out, season)
             fetch_schedule(args.out, season)
             fetch_rosters(args.out, season)
-        if not build_season(args.out, season, args.url):
+            fetched = datetime.now(UTC)
+        if not build_season(args.out, season, args.url, fetched):
             raise SystemExit(f"stats: no raw data for season {season}")
 
 

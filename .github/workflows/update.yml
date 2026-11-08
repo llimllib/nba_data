@@ -24,8 +24,9 @@ env:
   # sometimes uv fails when downloading packages; increase its timeout
   UV_HTTP_TIMEOUT: 600
   # pipeline.output.check_keys drops rows with a duplicate or NULL key and
-  # lists them here rather than stopping the run; "Report dropped rows"
-  # fails the run after everything else is published
+  # lists them here rather than stopping the run, and pipeline.stats lists
+  # games still missing from the team game logs long after they ended;
+  # "Report dropped rows" fails the run after everything else is published
   PIPELINE_DROPPED: /tmp/pipeline-dropped.txt
   # browsers revalidate every file on every load (a 304 if it hasn't
   # changed) and the CDN caches it for an hour (purged after each upload).
@@ -165,15 +166,15 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.YARAPM_DISPATCH_TOKEN }}
 
-      # rows check_keys dropped: everything else was published, but the run
-      # fails so the notifier reports them
+      # rows check_keys dropped, and games held back too long: everything
+      # else was published, but the run fails so the notifier reports them
       - name: Report dropped rows
         id: dropped
         if: always()
         run: |
           if [ -s "$PIPELINE_DROPPED" ]; then
             cat "$PIPELINE_DROPPED"
-            echo "::error::rows with a duplicate or NULL key were dropped"
+            echo "::error::rows were dropped or held back"
             exit 1
           fi
 
@@ -195,7 +196,7 @@ jobs:
             const dropped = fs.existsSync(process.env.PIPELINE_DROPPED)
               ? fs.readFileSync(process.env.PIPELINE_DROPPED, 'utf8').trim() : '';
             const detail = dropped
-              ? `\n\nRows dropped for a duplicate or NULL key (everything else was published):\n\`\`\`\n${dropped}\n\`\`\``
+              ? `\n\nRows dropped for a duplicate or NULL key, or held back for a game missing from the team game logs (everything else was published):\n\`\`\`\n${dropped}\n\`\`\``
               : '';
             const issues = await github.rest.issues.listForRepo({
               owner: context.repo.owner,

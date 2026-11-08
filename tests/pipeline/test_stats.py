@@ -517,7 +517,7 @@ def test_unidentified_players(tmp_path):
     stats.build_season(tmp_path, 2026)
     assert len(read(tmp_path, "player_game_logs")) == 3
 
-    regular = player_log(None, None, 94, "0022500099", date, "MLN vs. NYK", "L", 5)
+    regular = player_log(None, None, 94, GAME, date, "MLN vs. NYK", "L", 5)
     write_raw(tmp_path, player_game_logs_base=response(PGL, player_logs() + [regular]))
     with pytest.raises(ValueError, match="NULL"):
         stats.build_season(tmp_path, 2026)
@@ -921,3 +921,15 @@ def test_rosters_daily_unknown_supplemental_status_fails(tmp_path):
     write_daily_rosters(tmp_path, date(2026, 1, 1), {BOS: data})
     with pytest.raises(ValueError, match="SUPPLEMENTAL_STATUS 2"):
         stats.build_season(tmp_path, 2026)
+
+
+def test_player_game_logs_wait_for_the_team_game_logs(tmp_path):
+    # the player game logs can have a game before the team game logs do
+    late = "0022500002"
+    logs = player_logs() + [
+        player_log(1, "A", BOS, late, "2025-10-23T00:00:00", "BOS vs. NYK", "W", 30)
+    ]
+    write_raw(tmp_path, player_game_logs_base=response(PGL, logs))
+    assert stats.build_season(tmp_path, 2026)
+    games = {r["game_id"] for r in read(tmp_path, "player_game_logs")}
+    assert games == {GAME, CUP_FINAL}

@@ -1,7 +1,7 @@
 import duckdb
 import pytest
 
-from pipeline.output import DROPPED_ENV, check_keys, write_parquet
+from pipeline.output import DROPPED_ENV, check_keys, report, write_parquet
 
 
 def test_write_parquet(tmp_path):
@@ -64,3 +64,14 @@ def test_check_keys_drops(tmp_path, monkeypatch):
     assert len(lines) == 2
     assert lines[0].startswith("test t: duplicate (game_id, player_id)")
     assert "1 rows with a NULL" in lines[1]
+
+
+def test_report(tmp_path, monkeypatch):
+    monkeypatch.delenv(DROPPED_ENV, raising=False)
+    with pytest.raises(ValueError, match="late"):
+        report("late")
+    dropped = tmp_path / "dropped.txt"
+    monkeypatch.setenv(DROPPED_ENV, str(dropped))
+    report("late")
+    report("later")
+    assert dropped.read_text().splitlines() == ["late", "later"]

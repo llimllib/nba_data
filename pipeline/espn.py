@@ -17,7 +17,13 @@ and build these from them, one file per season:
 Everything is relative to an output directory laid out like the
 basketball-data bucket; see docs/v2.md.
 
-usage: python -m pipeline.espn [--out out] [--season 2026 ...] [--no-fetch]
+ESPN has a game hours before stats.nba.com's team game logs, which `games`
+is built from, can list it, so a game's rows are held back until it's in
+`games`: pipeline.stats' file in the output directory if it's there, and
+the bucket's otherwise. Each run rebuilds the season from every saved day,
+so they're added then.
+
+usage: python -m pipeline.espn [--out out] [--season 2026 ...] [--no-fetch] [--url URL]
 """
 
 import argparse
@@ -29,6 +35,7 @@ from pathlib import Path
 
 import duckdb
 
+from .catalog import URL
 from .output import check_keys, dataset_path, write_atomic, write_parquet
 from .seasons import current_season, season_days, season_window, today_eastern
 from .teams import TEAM_ABBREVS_FILE, UnknownTeamAbbrev, load_team_abbrevs
@@ -38,6 +45,8 @@ COGNITO_IDENTITY = "us-east-1:bf788d54-d676-c9e0-049d-ef3e67cf0372"
 
 RAW_DIR = Path("nba/raw/espn")
 OUT_DIR = Path("nba/espn")
+# pipeline.stats' output, for games
+STATS_DIR = Path("nba/stats")
 
 # The parts of ESPN's daily file that we read. Fields missing from a file
 # (ESPN added teamId, WPA, possessions and more partway through) come back
@@ -254,13 +263,50 @@ def fetch_season(s3, outdir: Path, season: int, today: date) -> list[date]:
     return fetched
 
 
+def load_games(
+    con: duckdb.DuckDBPyConnection, outdir: Path, season: int, url: str | None
+) -> bool:
+    """
+    Load `games` (game_id) for `season` from pipeline.stats' file in `outdir`
+    if it's there, else from the bucket at `url`. Returns False, loading
+    nothing, if there's neither. A bucket that can't be read has no games
+    """
+    local = dataset_path(outdir / STATS_DIR, "games", season)
+    if local.is_file():
+        source = str(local)
+    elif url:
+        source = f"{url}/{STATS_DIR}/games/season={season}/data.parquet"
+    else:
+        return False
+    try:
+        con.execute(
+            "CREATE OR REPLACE TABLE games AS SELECT game_id "
+            "FROM read_parquet(?, hive_partitioning = false)",
+            [source],
+        )
+    except duckdb.IOException as e:
+        # the bucket answers 403, not 404, for a season with no games yet
+        if local.is_file():
+            raise
+        print(f"espn: couldn't read the bucket's games: {str(e).splitlines()[0]}")
+        con.execute("CREATE OR REPLACE TABLE games (game_id VARCHAR)")
+    return True
+
+
 def build_season(
-    outdir: Path, season: int, abbrevs_file: Path = TEAM_ABBREVS_FILE
+    outdir: Path,
+    season: int,
+    abbrevs_file: Path = TEAM_ABBREVS_FILE,
+    url: str | None = None,
 ) -> bool:
     """
     Build the four parquet files for `season` from its raw files. Returns
     False if there are no raw files. Raises if a team abbreviation doesn't
-    resolve, disagrees with ESPN's team id, or a key is duplicated
+    resolve, disagrees with ESPN's team id, or a key is duplicated.
+
+    Rows for games not in `games` (see load_games) are held back, and a
+    dataset left with no rows isn't written. With no games to read, every
+    row is kept
     """
     files = sorted((outdir / RAW_DIR / str(season)).glob("*.json.gz"))
     if not files:
@@ -288,6 +334,7 @@ def build_season(
         [[str(f) for f in files]],
     )
 
+    have_games = load_games(con, outdir, season, url)
     for dataset, query in QUERIES.items():
         con.execute(
             f"""
@@ -297,13 +344,34 @@ def build_season(
         )
         check_abbrevs(con, dataset)
         con.execute(f"CREATE OR REPLACE TABLE out AS {query}")
+        if have_games:
+            hold_back(con, dataset)
         drop_other_team(con, dataset)
         check_keys(con, "out", KEYS[dataset], f"espn {dataset}")
 
+        rows = con.execute("SELECT count(*) FROM out").fetchone()
+        if not (rows and rows[0]):
+            print(f"espn: no {dataset} for {season} yet")
+            continue
         path = dataset_path(outdir / OUT_DIR, dataset, season)
         write_parquet(con, "out", path)
         print(f"espn: wrote {path}")
     return True
+
+
+def hold_back(con, dataset: str) -> None:
+    """remove the rows of `out` for games that aren't in `games` yet"""
+    held = con.execute(
+        """
+        DELETE FROM out WHERE game_id NOT IN (SELECT game_id FROM games)
+        RETURNING game_id
+        """
+    ).fetchall()
+    if held:
+        print(
+            f"espn: holding back {dataset} for {sorted({g for (g,) in held})}, "
+            "not in games yet"
+        )
 
 
 def drop_other_team(con, dataset: str) -> None:
@@ -412,6 +480,11 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--no-fetch", action="store_true", help="only rebuild parquet from raw files"
     )
+    parser.add_argument(
+        "--url",
+        default=URL,
+        help=f"bucket URL for games if --out has none (default: {URL})",
+    )
     args = parser.parse_args(argv)
 
     today = today_eastern()
@@ -420,7 +493,7 @@ def main(argv: list[str] | None = None) -> None:
     for season in seasons:
         if s3:
             fetch_season(s3, args.out, season, today)
-        if build_season(args.out, season):
+        if build_season(args.out, season, url=args.url):
             continue
         # a missing day looks the same as being denied access, so a season
         # well underway with no data at all means something is wrong

@@ -7,6 +7,7 @@ import pytest
 from nba_api.stats.endpoints import ScheduleLeagueV2
 
 from pipeline import schedule, stats
+from pipeline.output import DROPPED_ENV
 from tests.pipeline.test_stats import read, write_raw
 
 BOS = 1610612738
@@ -180,3 +181,40 @@ def test_build_season_without_a_schedule(tmp_path):
     write_raw(tmp_path)
     stats.build_season(tmp_path, 2026)
     assert not (tmp_path / stats.OUT_DIR / "schedule").exists()
+
+
+def write_late_game(tmp_path):
+    """a season whose schedule has a final game the team game logs don't"""
+    write_raw(tmp_path)
+    stats.write_raw(
+        stats.raw_path(tmp_path, 2026, stats.SCHEDULE),
+        response(
+            game("0022500001", status=3, gameDateTimeUTC="2025-10-22T00:00:00Z"),
+            game("0022500002", status=3, gameDateTimeUTC="2025-10-23T00:00:00Z"),
+            # not played yet
+            game("0022500003", gameDateTimeUTC="2025-10-22T00:00:00Z"),
+        ),
+    )
+
+
+def test_late_game_reported(tmp_path, monkeypatch):
+    monkeypatch.delenv(DROPPED_ENV, raising=False)
+    write_late_game(tmp_path)
+    now = datetime(2025, 10, 23, 13, tzinfo=UTC)
+    with pytest.raises(ValueError, match=r"\['0022500002'\] final"):
+        stats.build_season(tmp_path, 2026, now=now)
+    dropped = tmp_path / "dropped.txt"
+    monkeypatch.setenv(DROPPED_ENV, str(dropped))
+    assert stats.build_season(tmp_path, 2026, now=now)
+    assert "0022500002" in dropped.read_text()
+
+
+def test_late_game_not_reported_yet(tmp_path, monkeypatch):
+    monkeypatch.delenv(DROPPED_ENV, raising=False)
+    write_late_game(tmp_path)
+    # within LATE_GAME of tip-off
+    assert stats.build_season(
+        tmp_path, 2026, now=datetime(2025, 10, 23, 11, tzinfo=UTC)
+    )
+    # a rebuild from saved responses doesn't know when they were fetched
+    assert stats.build_season(tmp_path, 2026)

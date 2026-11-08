@@ -58,10 +58,24 @@ def write_parquet(
     )
 
 
-# when set, a file that check_keys appends the rows it drops to, rather than
-# raising. The workflows set it so that one bad row doesn't stop the update,
-# and fail the run after publishing if the file isn't empty
+# when set, a file that check_keys appends the rows it drops to (and
+# report, other problems), rather than raising. The workflows set it so that
+# one bad row doesn't stop the update, and fail the run after publishing if
+# the file isn't empty
 DROPPED_ENV = "PIPELINE_DROPPED"
+
+
+def report(problem: str) -> None:
+    """
+    a problem that shouldn't stop the update: recorded in DROPPED_ENV's file
+    if it's set, so the workflow fails after publishing, and raised otherwise
+    """
+    dropped = os.environ.get(DROPPED_ENV)
+    if not dropped:
+        raise ValueError(problem)
+    print(problem)
+    with open(dropped, "a") as f:
+        f.write(f"{problem}\n")
 
 
 def check_keys(
