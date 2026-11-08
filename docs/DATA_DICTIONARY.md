@@ -65,7 +65,9 @@ Hornets and the Pelicans.
 - **Ingesting:** a source that identifies teams only by abbreviation is resolved
   through `pipeline/team_abbrevs.csv`, a hand-maintained
   `(source, abbrev, first_season, last_season) -> team_id` table. An unknown
-  `(source, abbrev, season)` fails the run.
+  `(source, abbrev, season)` fails the run. Sources with their own team ids
+  use it too, with the id as the abbreviation (`ctg`, and `espn_team_id`,
+  the ids in ESPN's site API).
 - **Players from other sources:** a source with its own player ids
   (basketball-reference's `jamesle01`) is resolved through
   `pipeline/player_ids.csv`, `(source, source_id) -> player_id`, with a
@@ -165,6 +167,7 @@ ORDER BY ppg DESC LIMIT 10;
 | `schedule` | view | Every game on the schedule, played or not, from 2027 |
 | `rosters_daily` | view | Every team's roster as of each day fetched, from 2027 |
 | `four_factors`, `player_box`, `team_box`, `player_details`, `net_pts_season` | view | Every season of each `nba/espn/` dataset |
+| `betting_lines` | view | Each game's opening and closing spread, total and moneylines by sportsbook, from ESPN, from 2027 (`nba/espn/`) |
 | `bbref_team_stats`, `bbref_salaries` | view | Every season of basketball-reference's team stats and player salaries (`nba/bbref/`) |
 | `ctg_team_summary` | view | Every season of Cleaning the Glass's team summary (`nba/ctg/`) |
 | `epm`, `epm_predictive` | view | dunksandthrees' season and predictive EPM, from 2026 (`nba/dunksandthrees/`) |
@@ -695,6 +698,51 @@ Per 100 possessions, as ESPN computes it: `o_net_pts / o_team_poss * 100`,
 the same for defense, and total as the sum of the two (not
 `t_net_pts / t_team_poss`).
 
+### `betting_lines/season=<season>/data.parquet`
+
+Betting lines for every game, one row per game and sportsbook, built by
+`pipeline/espn_odds.py` from ESPN's site API (not its net points data,
+like the rest of `nba/espn/`) in every `update.yml` run, from 2027
+([#99](https://github.com/llimllib/nba_data/issues/99)). Earlier seasons
+aren't backfilled yet. Since 2026 ESPN has had one book, DraftKings, with
+its opening and closing lines. Raw files:
+
+- `nba/raw/espn/<season>/scoreboard/<date>.json.gz`: each day's games
+  (ESPN's event ids and teams), refetched until the day is 2 days old
+- `nba/raw/espn/<season>/odds/<event_id>.json.gz`: the core API's odds for
+  each game (`sports.core.api.espn.com/.../events/<id>/competitions/<id>/odds`),
+  fetched once it's final. ESPN's scoreboard drops the odds when a game
+  starts, but the core API keeps them
+
+ESPN's games are matched to the NBA's by teams and date (a day either side
+is allowed, nearest first), against `team_game_logs`, so a game's lines
+appear in the run after it's in `games`. Preseason and All-Star games are
+left out. ESPN's in-game ("Live Odds") lines are dropped.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| season, game_id, provider_id | | Key. `provider_id` is ESPN's id for the book (`100` is DraftKings) |
+| provider | VARCHAR | The book's name |
+| home_team_id, away_team_id | VARCHAR | As ESPN designates them, at neutral sites too (where `games` has neither) |
+| open_spread, close_spread | DOUBLE | The home team's spread: negative when it's favored. The home team covers when `margin + spread > 0` |
+| open_total, close_total | DOUBLE | Over/under |
+| open_home_moneyline, open_away_moneyline, close_home_moneyline, close_away_moneyline | INTEGER | American odds (`-324`, `261`) |
+| open_home_spread_odds, open_away_spread_odds, close_home_spread_odds, close_away_spread_odds | INTEGER | The price of each side of the spread |
+| open_over_odds, open_under_odds, close_over_odds, close_under_odds | INTEGER | The price of each side of the total |
+| espn_event_id | VARCHAR | ESPN's id for the game |
+
+`close_*` is ESPN's closing line; where a book has none (ESPN only has
+open and close lines from about 2025), it's the book's last line, since the
+odds are fetched after the game. Lines ESPN doesn't have are NULL.
+
+```sql
+-- how often the closing favorite covered
+SELECT count(*) FILTER (WHERE (g.plus_minus + b.close_spread > 0) = (b.close_spread < 0)) / count(*)
+FROM betting_lines b JOIN team_game_logs g
+    ON g.season = b.season AND g.game_id = b.game_id AND g.team_id = b.home_team_id
+WHERE b.season = 2027 AND b.close_spread <> 0 AND g.plus_minus + b.close_spread <> 0;
+```
+
 ---
 
 ## v2 basketball-reference Data (`nba/bbref/`)
@@ -949,7 +997,7 @@ Men's college basketball, separate from the NBA data: its own prefix, and
 its own catalog, `ncaam/ncaam.duckdb`, with a view per dataset (torvik's
 `torvik_team_results`, `torvik_four_factors`, `torvik_ratings_daily`, and
 ESPN's `games`, `team_box`, `player_box`, `team_seasons`,
-`player_seasons`), and `players` and `metadata` tables like `nba.duckdb`'s:
+`player_seasons`, `betting_lines`), and `players` and `metadata` tables like `nba.duckdb`'s:
 
 ```sql
 ATTACH 'https://basketball-data.billmill.org/ncaam/ncaam.duckdb' AS ncaam;
@@ -1120,8 +1168,8 @@ national tournaments are `postseason`). About 4,300-6,300 games a season.
   every Division I game per day, and each finished game's summary, kept
   at `ncaam/raw/espn/<season>/scoreboard/<date>.json.gz` and
   `.../summary/<game_id>.json.gz`. Summaries keep the header, box score,
-  game info, play-by-play and win probability, without ESPN's news,
-  videos and betting odds. ESPN's and sportsdataverse's data agree
+  game info, play-by-play, win probability and (from November 2026)
+  betting lines (`pickcenter`), without ESPN's news and videos. ESPN's and sportsdataverse's data agree
   exactly where they overlap (checked on 2026 games, every column)
 - **Box score gaps:** a game in `games` can be missing from `team_box`
   and `player_box`, where ESPN has no box score: 681 games in 2005, about
@@ -1206,6 +1254,20 @@ One row per team that played a game that season, Division I or not.
 | season, player_id | | Key |
 | name, short_name, position | VARCHAR | As of the player's last game that season |
 | team_id | VARCHAR | The team of the player's last game |
+
+#### `betting_lines/season=<season>/data.parquet`
+
+One row per game and sportsbook, from the `pickcenter` in each game's
+summary, from November 2026: the summaries saved before then (the first
+days of 2027) and the seasons from sportsdataverse have none yet
+([#99](https://github.com/llimllib/nba_data/issues/99)). ESPN has
+DraftKings' lines for most Division I games, often without a moneyline.
+The columns are the NBA's [`betting_lines`](#betting_linesseasonseasondataparquet)
+without `espn_event_id`, since `game_id` is already ESPN's:
+`provider_id`, `provider`, `home_team_id`, `away_team_id`, and
+`open_`/`close_` `spread` (the home team's), `total`, `home_moneyline`,
+`away_moneyline`, `home_spread_odds`, `away_spread_odds`, `over_odds`,
+`under_odds`.
 
 ---
 

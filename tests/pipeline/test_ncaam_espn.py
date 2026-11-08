@@ -12,6 +12,8 @@ import pytest
 from pipeline import ncaam_espn as ne
 from pipeline.output import dataset_path
 
+from .test_odds import EXPECTED, pickcenter_item
+
 SEASON = 2026
 TODAY = date(2025, 11, 10)
 
@@ -264,6 +266,22 @@ def test_bad_summary_fails(data):
 
 def test_trim_summary():
     assert set(ne.trim_summary(summary())) == {"header", "boxscore", "plays"}
+    with_odds = summary() | {"pickcenter": [pickcenter_item()]}
+    assert "pickcenter" in ne.trim_summary(with_odds)
+
+
+def test_summary_lines():
+    data = summary("1") | {"pickcenter": [pickcenter_item()]}
+    assert ne.summary_lines(data, SEASON) == [
+        EXPECTED
+        | {
+            "season": SEASON,
+            "game_id": "1",
+            "home_team_id": "194",
+            "away_team_id": "2509",
+        }
+    ]
+    assert ne.summary_lines(summary("1"), SEASON) == []
 
 
 # ---------------------------------------------------------------- fetching
@@ -422,6 +440,20 @@ def test_build_season_from_espn(tmp_path):
         "INTEGER", "VARCHAR", "DATE",
     )  # fmt: skip
     assert str(games.types[games.columns.index("start_time")]).startswith("TIMESTAMP")
+
+
+def test_build_season_with_betting_lines(tmp_path):
+    espn = FakeESPN(
+        {date(2025, 11, 3): scoreboard(event("1"))},
+        {"1": summary("1") | {"pickcenter": [pickcenter_item()]}},
+    )
+    ne.update_season(espn, tmp_path, SEASON, SEASON, TODAY)
+    paths = ne.build_season(tmp_path, SEASON)
+    path = dataset_path(tmp_path / "ncaam/espn", "betting_lines", SEASON)
+    assert path in paths
+    assert read(path).select(
+        "game_id, provider, home_team_id, close_spread"
+    ).fetchall() == [("1", "DraftKings", "194", 8.5)]
 
 
 def test_nothing_to_build_before_the_season(tmp_path):

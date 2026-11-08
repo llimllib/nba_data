@@ -121,6 +121,15 @@ jobs:
       - name: Fetch ESPN data
         run: uv run python -m pipeline.espn --out out
 
+      # betting lines (#99): ESPN's site API, a scoreboard a day and each
+      # final game's odds once, kept with the ESPN files downloaded above,
+      # matched to the team game logs built this run. A failure here doesn't
+      # stop the rest from publishing; it's reported at the end
+      - name: Betting lines
+        id: betting_lines
+        continue-on-error: true
+        run: uv run python -m pipeline.espn_odds --out out
+
       # check this run's files before anything is published
       - name: Integrity check
         run: uv run python -m pipeline.catalog --out out --check
@@ -182,6 +191,12 @@ jobs:
         if: always() && steps.rotations.outcome == 'failure'
         run: |
           echo "::error::the rotations step failed; the other files were published"
+          exit 1
+
+      - name: Report a betting lines failure
+        if: always() && steps.betting_lines.outcome == 'failure'
+        run: |
+          echo "::error::the betting lines step failed; the other files were published"
           exit 1
 
       # if there's a failure, comment on the open failure issue or file one,

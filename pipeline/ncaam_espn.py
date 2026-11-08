@@ -6,6 +6,7 @@ Men's college basketball games and box scores from ESPN, built into
     ncaam/espn/player_box/season=<season>/data.parquet
     ncaam/espn/team_seasons/season=<season>/data.parquet
     ncaam/espn/player_seasons/season=<season>/data.parquet
+    ncaam/espn/betting_lines/season=<season>/data.parquet
 
 keyed by ESPN's ids. games, team_seasons and player_seasons are the college
 catalog's lookup tables, named like the NBA's so pipeline.integrity checks
@@ -32,10 +33,12 @@ finished game, kept gzipped at
 
 A day's scoreboard is fetched until it's REFETCH_DAYS old, then never again;
 a game's summary once, when it's final (again if it had no box score and
-it's recent). Summaries are kept without the news, videos and betting odds
-ESPN includes, which are more than half of each response and don't change
-the game. A season with saved scoreboards is built from them, and one
-without from sportsdataverse's files.
+it's recent). Summaries are kept without the news and videos ESPN includes,
+which are more than half of each response and don't change the game. Their
+betting lines (`pickcenter`) are kept for betting_lines, from November
+2026; summaries saved before then don't have them. A season with saved
+scoreboards is built from them, and one without from sportsdataverse's
+files.
 
 Only finished games are kept. Players who didn't play aren't in player_box.
 Teams are mapped to torvik's names in ncaam_teams.csv, so box scores join
@@ -59,6 +62,7 @@ from typing import Protocol
 import duckdb
 import pyarrow as pa
 
+from . import odds
 from .output import check_keys, dataset_path, write_atomic, write_parquet
 from .seasons import EASTERN, current_season, today_eastern
 
@@ -83,7 +87,14 @@ REFETCH_DAYS = 2
 RECENT_DAYS = 7
 
 # the parts of a summary that are kept
-SUMMARY_KEYS = ("header", "boxscore", "gameInfo", "plays", "winprobability")
+SUMMARY_KEYS = (
+    "header",
+    "boxscore",
+    "gameInfo",
+    "plays",
+    "winprobability",
+    "pickcenter",
+)
 
 # sportsdataverse's files for a season, and where they're kept
 SDV_FILES = {
@@ -222,6 +233,16 @@ PLAYER_BOX = [
     ("starter", "BOOLEAN"),
     ("ejected", "BOOLEAN"),
     *[(c, "INTEGER") for c in PLAYER_STAT_COLUMNS],
+]
+
+# each provider's lines for a game, from its summary's pickcenter
+BETTING_LINES = [
+    ("season", "INTEGER"),
+    ("game_id", "VARCHAR"),
+    *odds.PROVIDER,
+    ("home_team_id", "VARCHAR"),
+    ("away_team_id", "VARCHAR"),
+    *odds.LINES,
 ]
 
 # a team's names as of one game, collected into team_seasons
@@ -465,6 +486,23 @@ def summary_box(
     return team_rows, player_rows, player_info
 
 
+def summary_lines(data: dict, season: int) -> list[dict]:
+    """
+    A game's betting lines from its summary, one row per provider: none if
+    it has no pickcenter. Raises ValueError if they aren't as expected
+    """
+    header = data["header"]
+    sides = {
+        t["homeAway"]: str(t["id"]) for t in header["competitions"][0]["competitors"]
+    }
+    return [
+        {"season": season, "game_id": str(header["id"])}
+        | row
+        | {"home_team_id": sides["home"], "away_team_id": sides["away"]}
+        for row in odds.pickcenter_lines(data.get("pickcenter") or [])
+    ]
+
+
 def trim_summary(data: dict) -> dict:
     """the parts of a summary that are kept"""
     return {k: data[k] for k in SUMMARY_KEYS if k in data}
@@ -480,8 +518,15 @@ class Fetcher:
     (ESPN's CDN sends the odd 504) is retried once, after RETRY_DELAY
     """
 
-    def __init__(self, delay: float = REQUEST_DELAY, sleep=time.sleep, clock=time.time):
+    def __init__(
+        self,
+        delay: float = REQUEST_DELAY,
+        sleep=time.sleep,
+        clock=time.time,
+        label: str = "ncaam_espn",
+    ):
         self.delay = delay
+        self.label = label
         self.sleep = sleep
         self.clock = clock
         self.last = 0.0
@@ -493,7 +538,7 @@ class Fetcher:
         except urllib.error.HTTPError as e:
             if e.code < 500:
                 raise
-            print(f"ncaam_espn: HTTP {e.code}; retrying", flush=True)
+            print(f"{self.label}: HTTP {e.code}; retrying", flush=True)
             self.sleep(RETRY_DELAY)
             return self.fetch(url)
         except (
@@ -502,7 +547,7 @@ class Fetcher:
             ConnectionError,
             TimeoutError,
         ) as e:
-            print(f"ncaam_espn: {e!r}; retrying", flush=True)
+            print(f"{self.label}: {e!r}; retrying", flush=True)
             return self.fetch(url)
 
     def fetch(self, url: str) -> bytes | None:
@@ -523,7 +568,7 @@ class Fetcher:
             if e.code == 404:
                 return None
             body = e.read()[:500].decode("utf-8", "replace")
-            print(f"ncaam_espn: HTTP {e.code} for {url}: {body!r}", flush=True)
+            print(f"{self.label}: HTTP {e.code} for {url}: {body!r}", flush=True)
             raise
         finally:
             self.last = self.clock()
@@ -622,6 +667,7 @@ def fetch_summaries(
             continue
         data = trim_summary(data)
         summary_box(data, season)
+        summary_lines(data, season)
         save_json(path, data)
         count += 1
     return count
@@ -763,11 +809,13 @@ def load_espn(con: duckdb.DuckDBPyConnection, outdir: Path, season: int) -> None
 def load_summaries(con: duckdb.DuckDBPyConnection, outdir: Path, season: int) -> None:
     """
     The saved summaries' box scores, which replace any sportsdataverse has
-    for the same games
+    for the same games, and their betting lines
     """
-    team_rows, player_rows, players = [], [], []
+    team_rows, player_rows, players, lines = [], [], [], []
     for path in sorted((season_dir(outdir, season) / "summary").glob("*.json.gz")):
-        box = summary_box(load_json(path), season)
+        data = load_json(path)
+        lines += summary_lines(data, season)
+        box = summary_box(data, season)
         if box:
             team_rows += box[0]
             player_rows += box[1]
@@ -781,6 +829,8 @@ def load_summaries(con: duckdb.DuckDBPyConnection, outdir: Path, season: int) ->
         )
         con.execute(f"INSERT INTO {table} SELECT * FROM new_{table}")
     con.execute("INSERT INTO player_info SELECT * FROM new_players")
+    con.register("new_lines", arrow(lines, BETTING_LINES))
+    con.execute("INSERT INTO betting_lines SELECT * FROM new_lines")
 
 
 def has_scoreboards(outdir: Path, season: int) -> bool:
@@ -799,6 +849,7 @@ def load(outdir: Path, season: int) -> duckdb.DuckDBPyConnection:
     con.execute(f"CREATE TABLE player_box ({table_sql(PLAYER_BOX)})")
     con.execute(f"CREATE TABLE team_info ({table_sql(TEAM_INFO)})")
     con.execute(f"CREATE TABLE player_info ({table_sql(PLAYER_INFO)})")
+    con.execute(f"CREATE TABLE betting_lines ({table_sql(BETTING_LINES)})")
     if has_scoreboards(outdir, season):
         load_espn(con, outdir, season)
     elif sdv_path(outdir, season, "schedule").exists():
@@ -821,7 +872,7 @@ def build_season(outdir: Path, season: int) -> list[Path]:
         return []
 
     # box scores only for finished games ESPN lists that season
-    for table in ("team_box", "player_box", "player_info"):
+    for table in ("team_box", "player_box", "player_info", "betting_lines"):
         con.execute(
             f"DELETE FROM {table} WHERE game_id NOT IN (SELECT game_id FROM games)"
         )
@@ -870,6 +921,7 @@ def build_season(outdir: Path, season: int) -> list[Path]:
         "player_box": ["game_id", "player_id"],
         "team_seasons": ["team_id"],
         "player_seasons": ["player_id"],
+        "betting_lines": ["game_id", "provider_id"],
     }
     orders = {
         "games": "game_date, game_id",
@@ -877,7 +929,11 @@ def build_season(outdir: Path, season: int) -> list[Path]:
         "player_box": "game_date, game_id, team_id, player_id",
         "team_seasons": "team_id",
         "player_seasons": "player_id",
+        "betting_lines": "game_id, provider_id",
     }
+    # summaries only have betting lines from November 2026
+    if not con.execute("SELECT count(*) FROM betting_lines").fetchall()[0][0]:
+        del keys["betting_lines"]
     paths = []
     for dataset, key in keys.items():
         check_keys(con, dataset, key, f"ncaam_espn {season} {dataset}")
