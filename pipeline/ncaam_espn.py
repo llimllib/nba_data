@@ -72,6 +72,7 @@ USER_AGENT = "nba_data (https://github.com/llimllib/nba_data)"
 # ESPN doesn't publish a limit; one request a second is gentle for a CDN
 REQUEST_DELAY = 1
 RETRY_DELAY = 10
+CONNECTION_RETRIES = 3
 RAW_DIR = Path("ncaam/raw/espn")
 OUT_DIR = Path("ncaam/espn")
 TEAMS_CSV = Path(__file__).parent / "ncaam_teams.csv"
@@ -514,8 +515,9 @@ def trim_summary(data: dict) -> dict:
 class Fetcher:
     """
     GETs no faster than one per REQUEST_DELAY seconds, asking for gzip. A
-    404 is None. A dropped connection, truncated response or server error
-    (ESPN's CDN sends the odd 504) is retried once, after RETRY_DELAY
+    404 is None. A server error (ESPN's CDN sends the odd 504) is retried
+    once, after RETRY_DELAY, and a dropped connection or truncated response
+    up to CONNECTION_RETRIES times
     """
 
     def __init__(
@@ -534,21 +536,29 @@ class Fetcher:
 
     def get(self, url: str) -> bytes | None:
         try:
-            return self.fetch(url)
+            return self.fetch_retrying(url)
         except urllib.error.HTTPError as e:
             if e.code < 500:
                 raise
             print(f"{self.label}: HTTP {e.code}; retrying", flush=True)
             self.sleep(RETRY_DELAY)
-            return self.fetch(url)
-        except (
-            urllib.error.URLError,
-            http.client.IncompleteRead,
-            ConnectionError,
-            TimeoutError,
-        ) as e:
-            print(f"{self.label}: {e!r}; retrying", flush=True)
-            return self.fetch(url)
+            return self.fetch_retrying(url)
+
+    def fetch_retrying(self, url: str) -> bytes | None:
+        """fetch, retrying a dropped connection or truncated response"""
+        for _ in range(CONNECTION_RETRIES):
+            try:
+                return self.fetch(url)
+            except urllib.error.HTTPError:
+                raise
+            except (
+                urllib.error.URLError,
+                http.client.IncompleteRead,
+                ConnectionError,
+                TimeoutError,
+            ) as e:
+                print(f"{self.label}: {e!r}; retrying", flush=True)
+        return self.fetch(url)
 
     def fetch(self, url: str) -> bytes | None:
         wait = self.last + self.delay - self.clock()

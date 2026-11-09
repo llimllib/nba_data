@@ -405,6 +405,15 @@ def test_fetcher_404_and_retry(monkeypatch):
     )
 
 
+def test_fetcher_retries_a_dropped_connection_three_times(monkeypatch):
+    dropped = [Response(ConnectionResetError()) for _ in range(4)]
+    fetcher, _ = fetcher_with(monkeypatch, *dropped[:3], Response(b"ok"))
+    assert fetcher.get("https://espn.test/u") == b"ok"
+    fetcher, _ = fetcher_with(monkeypatch, *dropped)
+    with pytest.raises(ConnectionResetError):
+        fetcher.get("https://espn.test/u")
+
+
 # ---------------------------------------------------------------- building
 
 

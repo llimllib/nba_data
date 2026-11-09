@@ -167,7 +167,7 @@ ORDER BY ppg DESC LIMIT 10;
 | `schedule` | view | Every game on the schedule, played or not, from 2027 |
 | `rosters_daily` | view | Every team's roster as of each day fetched, from 2027 |
 | `four_factors`, `player_box`, `team_box`, `player_details`, `net_pts_season` | view | Every season of each `nba/espn/` dataset |
-| `betting_lines` | view | Each game's opening and closing spread, total and moneylines by sportsbook, from ESPN, from 2027 (`nba/espn/`) |
+| `betting_lines` | view | Each game's opening and closing spread, total and moneylines by sportsbook or archive, from 2012 (`nba/espn/`) |
 | `bbref_team_stats`, `bbref_salaries` | view | Every season of basketball-reference's team stats and player salaries (`nba/bbref/`) |
 | `ctg_team_summary` | view | Every season of Cleaning the Glass's team summary (`nba/ctg/`) |
 | `epm`, `epm_predictive` | view | dunksandthrees' season and predictive EPM, from 2026 (`nba/dunksandthrees/`) |
@@ -700,12 +700,33 @@ the same for defense, and total as the sum of the two (not
 
 ### `betting_lines/season=<season>/data.parquet`
 
-Betting lines for every game, one row per game and sportsbook, built by
-`pipeline/espn_odds.py` from ESPN's site API (not its net points data,
-like the rest of `nba/espn/`) in every `update.yml` run, from 2027
-([#99](https://github.com/llimllib/nba_data/issues/99)). Earlier seasons
-aren't backfilled yet. Since 2026 ESPN has had one book, DraftKings, with
-its opening and closing lines. Raw files:
+Betting lines for every game from 2012, one row per game and provider (a
+sportsbook, or an archive), built by `pipeline/espn_odds.py`
+([#99](https://github.com/llimllib/nba_data/issues/99)). Which providers a
+season has:
+
+| Seasons | `provider_id` | Lines |
+|---|---|---|
+| 2012-2022 | `sbr` | sportsbookreview.com's archive, as scraped by [flancast90/sportsbookreview-scraper](https://github.com/flancast90/sportsbookreview-scraper) (MIT): open and close spread and total, closing moneylines. Each season's last Finals game is missing (the scrape lost its home team) |
+| 2020 (the bubble) to 2026 | `odds_api_consensus` | The Odds API's consensus close, the median across 9-19 books at the last snapshot before tip-off, from [sportsdataverse/hoopR-nba-data](https://github.com/sportsdataverse/hoopR-nba-data): close spread and total only |
+| 2026 on | `100` (DraftKings), `58` (ESPN BET, until November 30, 2025) | ESPN's site API, every `update.yml` run: open and close spread, total, moneylines and all their prices |
+
+Where two overlap they agree closely: in 2020's bubble, sportsbookreview's
+and the Odds API's closing spreads were within a point in 168 of 172
+games, and ESPN's books and the consensus within a point in 99% of 2026's.
+Every game from 2012 to 2026 has a line except the last Finals game of
+2012-2019 and one 2023 game (0022200219). For one closing line per game, prefer ESPN's book, then
+the consensus, then `sbr`. ESPN's own odds for earlier seasons (many books,
+2013 on) are missing for about half the games, so they weren't fetched.
+
+The archives are kept as downloaded, from a pinned commit, at
+`nba/raw/sbr/nba_archive_10Y.json.gz` and
+`nba/raw/sportsdataverse/closing_lines_odds_api.parquet`.
+sportsbookreview's has errors that are fixed on the way in: in about 7%
+of games the closing spread and total are swapped (the favorite comes
+from the moneylines), 2019-20's bubble games are dated a year early, and
+impossible values (a 1955.5 total, a 0 moneyline) are NULL. ESPN's raw
+files:
 
 - `nba/raw/espn/<season>/scoreboard/<date>.json.gz`: each day's games
   (ESPN's event ids and teams), refetched until the day is 2 days old
@@ -714,33 +735,35 @@ its opening and closing lines. Raw files:
   fetched once it's final. ESPN's scoreboard drops the odds when a game
   starts, but the core API keeps them
 
-ESPN's games are matched to the NBA's by teams and date (a day either side
-is allowed, nearest first), against `team_game_logs`, so a game's lines
-appear in the run after it's in `games`. Preseason and All-Star games are
-left out. ESPN's in-game ("Live Odds") lines are dropped.
+ESPN's and sportsbookreview's games are matched to the NBA's by teams and
+date (a day either side is allowed, nearest first), against
+`team_game_logs`, so a game's lines appear in the run after it's in
+`games`. The Odds API's, keyed by ESPN event id, are matched through
+ESPN's scoreboards. Preseason and All-Star games are left out. ESPN's
+in-game ("Live Odds") lines are dropped.
 
 | Column | Type | Description |
 |--------|------|-------------|
-| season, game_id, provider_id | | Key. `provider_id` is ESPN's id for the book (`100` is DraftKings) |
-| provider | VARCHAR | The book's name |
-| home_team_id, away_team_id | VARCHAR | As ESPN designates them, at neutral sites too (where `games` has neither) |
+| season, game_id, provider_id | | Key. `provider_id` is ESPN's id for the book (`100` is DraftKings), or `sbr` or `odds_api_consensus` |
+| provider | VARCHAR | The book's or archive's name |
+| home_team_id, away_team_id | VARCHAR | As the source designates them, at neutral sites too (where `games` has neither) |
 | open_spread, close_spread | DOUBLE | The home team's spread: negative when it's favored. The home team covers when `margin + spread > 0` |
 | open_total, close_total | DOUBLE | Over/under |
 | open_home_moneyline, open_away_moneyline, close_home_moneyline, close_away_moneyline | INTEGER | American odds (`-324`, `261`) |
 | open_home_spread_odds, open_away_spread_odds, close_home_spread_odds, close_away_spread_odds | INTEGER | The price of each side of the spread |
 | open_over_odds, open_under_odds, close_over_odds, close_under_odds | INTEGER | The price of each side of the total |
-| espn_event_id | VARCHAR | ESPN's id for the game |
+| espn_event_id | VARCHAR | ESPN's id for the game; NULL for `sbr` |
 
 `close_*` is ESPN's closing line; where a book has none (ESPN only has
 open and close lines from about 2025), it's the book's last line, since the
-odds are fetched after the game. Lines ESPN doesn't have are NULL.
+odds are fetched after the game. Lines a source doesn't have are NULL.
 
 ```sql
 -- how often the closing favorite covered
 SELECT count(*) FILTER (WHERE (g.plus_minus + b.close_spread > 0) = (b.close_spread < 0)) / count(*)
 FROM betting_lines b JOIN team_game_logs g
     ON g.season = b.season AND g.game_id = b.game_id AND g.team_id = b.home_team_id
-WHERE b.season = 2027 AND b.close_spread <> 0 AND g.plus_minus + b.close_spread <> 0;
+WHERE b.season = 2027 AND b.provider_id = '100' AND b.close_spread <> 0 AND g.plus_minus + b.close_spread <> 0;
 ```
 
 ---

@@ -14,12 +14,21 @@ keeps them for each game after it's played. Saved gzipped at
 A day's scoreboard is fetched until it's REFETCH_DAYS old, then never again;
 a game's odds once it's final (again while it's recent if ESPN had none).
 
-ESPN's games are matched to the NBA's by date and teams in pipeline.stats'
-team_game_logs (in the output directory, else the bucket), since only
-those games are in `games`. A game that isn't there yet is left out until
-a later run, and one still unmatched a day after tip-off is reported.
+Past seasons also get the lines in the archives pipeline.odds_archives
+downloads, each as its own provider: The Odds API's consensus close for
+2020-2026 (keyed by ESPN event id, so matched through the scoreboards) and
+sportsbookreview.com's for 2012-2022. ESPN's own odds before 2026 are
+missing for about half the games, so a backfill can skip them with
+--no-espn-odds, which still fetches the scoreboards the Odds API archive
+needs.
 
-usage: python -m pipeline.espn_odds [--out out] [--season 2026 ...] [--no-fetch] [--url URL]
+ESPN's games (and sportsbookreview's) are matched to the NBA's by date and
+teams in pipeline.stats' team_game_logs (in the output directory, else the
+bucket), since only those games are in `games`. A game that isn't there
+yet is left out until a later run, and one still unmatched a day after
+tip-off is reported.
+
+usage: python -m pipeline.espn_odds [--out out] [--season 2026 ...] [--no-fetch] [--no-espn-odds] [--url URL]
 """
 
 import argparse
@@ -31,7 +40,7 @@ from pathlib import Path
 import duckdb
 import pyarrow as pa
 
-from . import odds
+from . import odds, odds_archives
 from .catalog import URL
 from .ncaam_espn import TYPES, Fetcher, Getter, arrow, save_json
 from .output import check_keys, dataset_path, report, write_parquet
@@ -65,6 +74,15 @@ COLUMNS = [
     ("espn_event_id", "VARCHAR"),
 ]
 KEYS = ["game_id", "provider_id"]
+# a game in one source, which build_season matches to an NBA game
+EVENT_COLUMNS = [
+    ("key", "VARCHAR"),
+    ("espn_event_id", "VARCHAR"),
+    ("game_date", "DATE"),
+    ("start_time", "TIMESTAMPTZ"),
+    ("home_team_id", "VARCHAR"),
+    ("away_team_id", "VARCHAR"),
+]
 
 
 def season_dir(outdir: Path, season: int) -> Path:
@@ -233,24 +251,29 @@ def build_season(
     abbrevs_file: Path = TEAM_ABBREVS_FILE,
 ) -> Path | None:
     """
-    Write the season's betting_lines from its saved scoreboards and odds.
-    Returns the path, or None if there's nothing to write. Final games not
-    matched to an NBA game LATE after tip-off are reported
+    Write the season's betting_lines from its saved scoreboards and odds,
+    and the archives' lines (pipeline.odds_archives) for the seasons they
+    have. Returns the path, or None if there's nothing to write. Final games
+    with lines not matched to an NBA game LATE after tip-off are reported,
+    as are an archive's games that aren't matched at all
     """
     now = now or datetime.now(UTC)
     teams = espn_team_ids(season, abbrevs_file)
-    rows, events = [], []
+    # events are games in a source, keyed by `key`; lines refer to them
+    events, lines = [], []
     for e in saved_events(outdir, season):
-        path = odds_path(outdir, season, e["event_id"])
-        if not e["completed"] or not path.exists():
+        if not e["completed"]:
             continue
+        path = odds_path(outdir, season, e["event_id"])
         home, away = teams.get(e["home_espn_id"]), teams.get(e["away_espn_id"])
         if home is None or away is None:
             # the All-Star game's teams aren't franchises
-            print(f"espn_odds: skipping game {e['event_id']}, not two NBA teams")
+            if path.exists():
+                print(f"espn_odds: skipping game {e['event_id']}, not two NBA teams")
             continue
         events.append(
             {
+                "key": e["event_id"],
                 "espn_event_id": e["event_id"],
                 "game_date": e["game_date"],
                 "start_time": e["start_time"],
@@ -258,38 +281,39 @@ def build_season(
                 "away_team_id": away,
             }
         )
-        rows += [
-            r | {"espn_event_id": e["event_id"]}
-            for r in odds.core_lines(load_json(path))
+        if path.exists():
+            lines += [
+                r | {"key": e["event_id"], "espn_event_id": e["event_id"]}
+                for r in odds.core_lines(load_json(path))
+            ]
+
+    odds_archives.require(outdir, season)
+    if season in odds_archives.ODDS_API.seasons:
+        lines += [
+            r | {"key": r["espn_event_id"]}
+            for r in odds_archives.odds_api_lines(outdir, {e["key"] for e in events})
         ]
-    if not rows:
+    if season in odds_archives.SBR.seasons:
+        sbr_events, sbr_lines = odds_archives.sbr_lines(outdir, season)
+        events += [e | {"espn_event_id": None, "start_time": None} for e in sbr_events]
+        lines += [r | {"espn_event_id": None} for r in sbr_lines]
+    if not lines:
         print(f"espn_odds: no betting lines for {season} yet")
         return None
 
     con = duckdb.connect()
-    con.register(
-        "events_arrow",
-        arrow(
-            events,
-            [
-                ("espn_event_id", "VARCHAR"),
-                ("game_date", "DATE"),
-                ("start_time", "TIMESTAMPTZ"),
-                ("home_team_id", "VARCHAR"),
-                ("away_team_id", "VARCHAR"),
-            ],
-        ),
-    )
-    line_columns = [*odds.COLUMNS, ("espn_event_id", "VARCHAR")]
+    con.register("events_arrow", arrow(events, EVENT_COLUMNS))
+    line_columns = [*odds.COLUMNS, ("key", "VARCHAR"), ("espn_event_id", "VARCHAR")]
     con.register(
         "lines",
         pa.table(
-            {n: pa.array([r[n] for r in rows], TYPES[t]) for n, t in line_columns}
+            {n: pa.array([r[n] for r in lines], TYPES[t]) for n, t in line_columns}
         ),
     )
     load_team_games(con, outdir, season, url)
     # the same teams on the same date, or a day either side (a game abroad
-    # can be on a different date in the two sources); the nearest wins
+    # can be on a different date in the two sources, and sportsbookreview
+    # has some a day off); the nearest wins
     con.execute(
         """
         CREATE TABLE matched AS
@@ -298,32 +322,33 @@ def build_season(
             ON g.teams = list_sort([e.home_team_id, e.away_team_id])
             AND abs(g.game_date - e.game_date) <= 1
         QUALIFY row_number() OVER (
-            PARTITION BY e.espn_event_id ORDER BY abs(g.game_date - e.game_date)) = 1
+            PARTITION BY e.key ORDER BY abs(g.game_date - e.game_date)) = 1
         """
     )
     late = con.execute(
         """
-        SELECT espn_event_id FROM events_arrow
-        WHERE espn_event_id NOT IN (SELECT espn_event_id FROM matched)
-            AND start_time < ?
+        SELECT key FROM events_arrow
+        WHERE key IN (SELECT key FROM lines)
+            AND key NOT IN (SELECT key FROM matched)
+            AND (start_time IS NULL OR start_time < ?)
         ORDER BY ALL
         """,
         [now - LATE],
     ).fetchall()
     if late:
         report(
-            f"espn_odds: ESPN games {[e for (e,) in late]} aren't in the NBA's team "
-            f"game logs {LATE.total_seconds() / 3600:g} hours after tip-off; "
-            "their betting lines are left out"
+            f"espn_odds: games {[e for (e,) in late]} aren't in the NBA's team "
+            f"game logs (ESPN's, {LATE.total_seconds() / 3600:g} hours after "
+            "tip-off); their betting lines are left out"
         )
     columns = ", ".join(name for name, _ in COLUMNS)
     con.execute(
         f"""
         CREATE TABLE out AS
         SELECT {columns} FROM (
-            SELECT {season}::INTEGER AS season, m.game_id, l.*,
+            SELECT {season}::INTEGER AS season, m.game_id, l.* EXCLUDE (key),
                 m.home_team_id, m.away_team_id
-            FROM lines l JOIN matched m USING (espn_event_id)
+            FROM lines l JOIN matched m USING (key)
         )
         ORDER BY game_id, provider_id
         """
@@ -352,6 +377,12 @@ def main(argv: list[str] | None = None) -> None:
         "--no-fetch", action="store_true", help="only rebuild from saved files"
     )
     parser.add_argument(
+        "--no-espn-odds",
+        action="store_true",
+        help="don't fetch each game's ESPN odds, only the archives and, for "
+        "the Odds API archive's seasons, the scoreboards that match it",
+    )
+    parser.add_argument(
         "--url",
         default=URL,
         help=f"bucket URL for team_game_logs if --out has none (default: {URL})",
@@ -362,10 +393,13 @@ def main(argv: list[str] | None = None) -> None:
     fetcher = None if args.no_fetch else Fetcher(label="espn_odds")
     for season in args.season or [current_season(today)]:
         if fetcher:
-            n = fetch_scoreboards(fetcher, args.out, season, today)
-            print(f"espn_odds: {season}: fetched {n} scoreboards")
-            n = fetch_odds(fetcher, args.out, season, today)
-            print(f"espn_odds: {season}: fetched odds for {n} games")
+            odds_archives.fetch(fetcher, args.out, season)
+            if not args.no_espn_odds or season in odds_archives.ODDS_API.seasons:
+                n = fetch_scoreboards(fetcher, args.out, season, today)
+                print(f"espn_odds: {season}: fetched {n} scoreboards")
+            if not args.no_espn_odds:
+                n = fetch_odds(fetcher, args.out, season, today)
+                print(f"espn_odds: {season}: fetched odds for {n} games")
         build_season(args.out, season, url=args.url)
 
 
