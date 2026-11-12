@@ -130,6 +130,16 @@ jobs:
         continue-on-error: true
         run: uv run python -m pipeline.espn_odds --out out
 
+      # ESPN's injury list (#108), saved every run, since ESPN keeps no
+      # history, with the ESPN files downloaded above, and its players
+      # matched to this run's rosters and player_seasons. Players it can't
+      # match are reported like dropped rows; a failure doesn't stop the
+      # rest from publishing, and is reported at the end
+      - name: Injuries
+        id: injuries
+        continue-on-error: true
+        run: uv run python -m pipeline.espn_injuries --out out
+
       # check this run's files before anything is published
       - name: Integrity check
         run: uv run python -m pipeline.catalog --out out --check
@@ -197,6 +207,12 @@ jobs:
         if: always() && steps.betting_lines.outcome == 'failure'
         run: |
           echo "::error::the betting lines step failed; the other files were published"
+          exit 1
+
+      - name: Report an injuries failure
+        if: always() && steps.injuries.outcome == 'failure'
+        run: |
+          echo "::error::the injuries step failed; the other files were published"
           exit 1
 
       # if there's a failure, comment on the open failure issue or file one,

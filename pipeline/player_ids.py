@@ -2,8 +2,9 @@
 Map other sources' player ids to NBA player ids.
 
 This module matches basketball-reference players. ESPN's season net points
-files use ESPN ids too, but pipeline.espn_net_pts matches those by name as
-it builds, using only the hand-made espn rows here. The mapping lives in
+files and injury list use ESPN ids too, but pipeline.espn_net_pts and
+pipeline.espn_injuries match those by name as they build, using only the
+hand-made espn rows here. The mapping lives in
 player_ids.csv, one row per (source, source_id):
 
     source,source_id,player_id,method

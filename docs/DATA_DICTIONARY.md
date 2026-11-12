@@ -168,6 +168,7 @@ ORDER BY ppg DESC LIMIT 10;
 | `rosters_daily` | view | Every team's roster as of each day fetched, from 2027 |
 | `game_rotations`, `game_events`, `player_game_status` | view | Each game's player stints, play-by-play, and every player in its box score with why they didn't play, for seasons with play-by-play |
 | `four_factors`, `player_box`, `team_box`, `player_details`, `net_pts_season` | view | Every season of each `nba/espn/` dataset |
+| `espn_injuries` | view | ESPN's injury list as of every fetch, from 2027 (`nba/espn/`) |
 | `betting_lines` | view | Each game's opening and closing spread, total and moneylines by sportsbook or archive, from 2012 (`nba/espn/`) |
 | `bbref_team_stats`, `bbref_salaries` | view | Every season of basketball-reference's team stats and player salaries (`nba/bbref/`) |
 | `ctg_team_summary` | view | Every season of Cleaning the Glass's team summary (`nba/ctg/`) |
@@ -808,6 +809,53 @@ SELECT count(*) FILTER (WHERE (g.plus_minus + b.close_spread > 0) = (b.close_spr
 FROM betting_lines b JOIN team_game_logs g
     ON g.season = b.season AND g.game_id = b.game_id AND g.team_id = b.home_team_id
 WHERE b.season = 2027 AND b.provider_id = '100' AND b.close_spread <> 0 AND g.plus_minus + b.close_spread <> 0;
+```
+
+### `espn_injuries/season=<season>/data.parquet`
+
+ESPN's NBA injury list
+([site API](https://site.api.espn.com/apis/site/v2/sports/basketball/nba/injuries)),
+as of every time it was fetched: one row per fetch and listed player. ESPN
+only publishes the current list, so the history is what we saved: every
+`update.yml` run (every 4 hours, plus 06:13 and 10:13 UTC) from November
+12, 2026 (season 2027) on, with nothing earlier. Each fetch is kept at
+`nba/raw/espn/<season>/injuries/<fetched_at>.json.gz`. Built by
+`pipeline/espn_injuries.py`.
+
+It's ESPN's reporting, not the league's official injury report, and it's
+known before a game, so it's what a prediction of who plays can use;
+`player_game_status` is what happened. For a game, use the last fetch
+before tip-off. A player who isn't listed in a fetch wasn't on ESPN's list
+then, which is not the same as healthy if that fetch is missing.
+
+ESPN's players are matched to NBA ids by name: on that day's saved team
+rosters (`rosters_daily`'s source), on the player's team, else by a name
+only one player in that season's `player_seasons` has (a player traded
+since). Players whose names don't match are in `pipeline/player_ids.csv`
+(source `espn`); a player that matches neither is left out and reported.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| season, team_id, player_id | | Key: `(fetched_at, player_id)`. `team_id` is ESPN's team for the player |
+| fetched_at | TIMESTAMPTZ | When the list was fetched (the response's timestamp) |
+| as_of_date | DATE | `fetched_at`'s US Eastern date |
+| status | VARCHAR | `out` or `day_to_day` (ESPN's `INJURY_STATUS_*`; others would appear the same way) |
+| fantasy_status | VARCHAR | ESPN's fantasy designation: `OUT`, `GTD` (game-time decision), `OFS` (out for season) |
+| injury_type, location, side, detail | VARCHAR | The injury: body part (`Toe`, `Knee`, `Illness`), region (`Leg`), `Left`/`Right`, and what it is (`Sprain`, `Fracture`, `Soreness`). Null where ESPN has none |
+| return_date | DATE | ESPN's expected return date |
+| updated_at | TIMESTAMPTZ | When ESPN last updated the player's entry |
+| short_comment, long_comment | VARCHAR | ESPN's news blurb about the injury |
+| espn_athlete_id, espn_injury_id | VARCHAR | ESPN's ids for the player and the entry |
+
+```sql
+-- each team's injured players in the latest list
+SELECT t.nba_abbrev, p.name, i.status, i.injury_type, i.detail, i.return_date
+FROM espn_injuries i
+JOIN players p USING (player_id)
+JOIN team_seasons t USING (season, team_id)
+WHERE i.season = 2027
+  AND i.fetched_at = (SELECT max(fetched_at) FROM espn_injuries WHERE season = 2027)
+ORDER BY 1, 2;
 ```
 
 ---
