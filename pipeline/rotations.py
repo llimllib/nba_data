@@ -127,16 +127,20 @@ COMMENT = re.compile(r"(DNP|DND|NWT|Inactive)\s*[-_]\s*(.+)", re.IGNORECASE)
 # the reason after the status, lowercased with _ as spaces -> its name
 REASONS = {
     "coach's decision": "coach",
+    "coach": "coach",
     "injury/illness": "injury",
     "concussion protocol": "concussion_protocol",
     "return to competition reconditioning": "reconditioning",
     "health and safety protocols": "health_and_safety",
+    "self isolating": "health_and_safety",
     "rest": "rest",
     "personal": "personal",
     "not with team": "not_with_team",
     "g league - two-way": "g_league_two_way",
     "league suspension": "league_suspension",
     "team suspension": "team_suspension",
+    # 2018-2019, without saying whose
+    "suspended": "suspension",
     "ineligible to play": "ineligible",
     "trade pending": "trade",
     "trade": "trade",

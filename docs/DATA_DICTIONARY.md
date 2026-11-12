@@ -452,8 +452,8 @@ necessarily off the team; use `rosters_daily` (2027 on) for the roster.
 Players who didn't play and aren't in that season's `player_seasons` are
 left out: before 2027 `player_seasons` only has players who got on the
 floor that season, so a player who never did (2021-22's hardship
-signings, say) would fail the integrity check. That's 37 rows in
-2022-2026; the build lists them.
+signings, say) would fail the integrity check. That's 50 rows in
+2018-2026; the build lists them.
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -461,7 +461,7 @@ signings, say) would fail the integrity check. That's 37 rows in
 | starter | BOOLEAN | Started the game (the box score gives starters a position) |
 | played | BOOLEAN | Got on the floor: has minutes, or has no comment. A few players in for no time (`0:00`, on for a free throw or the last second) have no comment, and count; they have no stint in `game_rotations`, since a stint with no time is folded away. From the minutes rather than the comment because a few 2027 box scores say `DNP - Coach's Decision` for a player with minutes |
 | status | VARCHAR | `played`, or for players who didn't: `dnp` (active, didn't play), `dnd` (didn't dress), `nwt` (not with the team), `inactive` (2027 on). Null for a comment the build doesn't know (it lists them) |
-| reason | VARCHAR | Null for players who played. Otherwise `coach` (coach's decision), `injury` (injury or illness), `concussion_protocol`, `reconditioning` (return to competition reconditioning), `health_and_safety` (2021-22's COVID protocols), `rest`, `personal`, `not_with_team`, `g_league_two_way` (2027 on), `league_suspension`, `team_suspension`, `ineligible` (ineligible to play), `trade` (a trade pending or just made). Null for a comment the build doesn't know |
+| reason | VARCHAR | Null for players who played. Otherwise `coach` (coach's decision), `injury` (injury or illness), `concussion_protocol`, `reconditioning` (return to competition reconditioning), `health_and_safety` (COVID protocols and self-isolation, 2020-2022), `rest`, `personal`, `not_with_team`, `g_league_two_way` (2027 on), `league_suspension`, `team_suspension`, `suspension` (2018-2019, which don't say whose), `ineligible` (ineligible to play), `trade` (a trade pending or just made). Null for a comment the build doesn't know |
 | comment | VARCHAR | The box score's comment as written, which the NBA writes several ways (`DND - Injury/Illness`, `DND-Return to Competition Reconditioning`, `DND_LEAGUE_SUSPENSION`). Null if empty |
 
 ```sql
