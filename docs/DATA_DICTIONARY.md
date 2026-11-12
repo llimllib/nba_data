@@ -166,6 +166,7 @@ ORDER BY ppg DESC LIMIT 10;
 | `team_game_logs`, `player_game_logs`, `player_season_stats`, `team_seasons`, `player_seasons`, `games` | view | Every season of each `nba/stats/` dataset |
 | `schedule` | view | Every game on the schedule, played or not, from 2027 |
 | `rosters_daily` | view | Every team's roster as of each day fetched, from 2027 |
+| `game_rotations`, `game_events`, `player_game_status` | view | Each game's player stints, play-by-play, and every player in its box score with why they didn't play, for seasons with play-by-play |
 | `four_factors`, `player_box`, `team_box`, `player_details`, `net_pts_season` | view | Every season of each `nba/espn/` dataset |
 | `betting_lines` | view | Each game's opening and closing spread, total and moneylines by sportsbook or archive, from 2012 (`nba/espn/`) |
 | `bbref_team_stats`, `bbref_salaries` | view | Every season of basketball-reference's team stats and player salaries (`nba/bbref/`) |
@@ -237,8 +238,8 @@ they've played.
 
 ## v2 NBA Stats Data (`nba/stats/`)
 
-Built by `pipeline/stats.py` from stats.nba.com, except `game_rotations`
-and `game_events` (`pipeline/rotations.py`, below). Each run refetches the whole current
+Built by `pipeline/stats.py` from stats.nba.com, except `game_rotations`,
+`game_events` and `player_game_status` (`pipeline/rotations.py`, below). Each run refetches the whole current
 season (14 requests, plus 1 for `schedule`), so stat corrections the NBA makes after
 games are picked up. Raw responses are kept at
 `nba/raw/stats/<season>/<request>.json.gz`. Team rosters (30 requests, for
@@ -431,6 +432,47 @@ Sorted by `game_id` and `action_id`, in row groups of 16,384 rows (about
 rows. In hyparquet the filter must use an operator (`{game_id: {$eq: id}}`)
 to skip row groups, and its default first read is the file's last 512KB,
 so pass a smaller `initialFetchSize` (128KB) to read only the footer.
+
+### `player_game_status/season=<season>/data.parquet`
+
+Every player in each game's box score, whether they started and played,
+and, for those who didn't play, why: the box score's comment (`DNP -
+Coach's Decision`, `Inactive - Injury/Illness`), split into a status and
+a reason. It's what happened, known after the game, not the pre-game
+injury report. Built with `game_rotations`, from the same saved box
+scores (`boxscoretraditionalv3`), for the same games.
+
+The box scores list more players from 2027 (2026-27) on. Before, players
+on the inactive list weren't in them at all, only players who were
+active and didn't play (`DNP`), didn't dress (`DND`) or weren't with the
+team (`NWT`). From 2027 inactive players are listed, as `inactive`, with
+a reason. So before 2027, a player missing from a game's rows isn't
+necessarily off the team; use `rosters_daily` (2027 on) for the roster.
+
+Players who didn't play and aren't in that season's `player_seasons` are
+left out: before 2027 `player_seasons` only has players who got on the
+floor that season, so a player who never did (2021-22's hardship
+signings, say) would fail the integrity check. That's 37 rows in
+2022-2026; the build lists them.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| season, game_id, team_id, player_id | | Key: `(game_id, player_id)` |
+| starter | BOOLEAN | Started the game (the box score gives starters a position) |
+| played | BOOLEAN | Got on the floor: has minutes, or has no comment. A few players in for no time (`0:00`, on for a free throw or the last second) have no comment, and count; they have no stint in `game_rotations`, since a stint with no time is folded away. From the minutes rather than the comment because a few 2027 box scores say `DNP - Coach's Decision` for a player with minutes |
+| status | VARCHAR | `played`, or for players who didn't: `dnp` (active, didn't play), `dnd` (didn't dress), `nwt` (not with the team), `inactive` (2027 on). Null for a comment the build doesn't know (it lists them) |
+| reason | VARCHAR | Null for players who played. Otherwise `coach` (coach's decision), `injury` (injury or illness), `concussion_protocol`, `reconditioning` (return to competition reconditioning), `health_and_safety` (2021-22's COVID protocols), `rest`, `personal`, `not_with_team`, `g_league_two_way` (2027 on), `league_suspension`, `team_suspension`, `ineligible` (ineligible to play), `trade` (a trade pending or just made). Null for a comment the build doesn't know |
+| comment | VARCHAR | The box score's comment as written, which the NBA writes several ways (`DND - Injury/Illness`, `DND-Return to Competition Reconditioning`, `DND_LEAGUE_SUSPENSION`). Null if empty |
+
+```sql
+-- why a team's players missed games this season
+SELECT p.name, s.reason, count(*) AS games
+FROM player_game_status s
+JOIN players p USING (player_id)
+JOIN team_seasons t USING (season, team_id)
+WHERE s.season = 2027 AND t.nba_abbrev = 'BOS' AND NOT s.played
+GROUP BY ALL ORDER BY games DESC;
+```
 
 ### `schedule/season=<season>/data.parquet`
 

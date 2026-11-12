@@ -7,8 +7,9 @@
 #
 # With --rotations, it first fetches the season's missing play-by-play
 # (pipeline.rotations: two requests a game, only for games the bucket
-# doesn't have) and publishes it with game_events and game_rotations. That's
-# the whole play-by-play backfill of a season: a few hours, ~2,700 requests.
+# doesn't have) and publishes it with game_events, game_rotations and
+# player_game_status. That's the whole play-by-play backfill of a season: a
+# few hours, ~2,700 requests.
 # If stats.nba.com keeps failing, or any games are still missing at the end,
 # it stops before uploading; run it again to fetch the rest (or pass
 # --allow-missing to publish without them).
@@ -262,7 +263,7 @@ for season in "$@"; do
   if $rotations; then
     # sync only uploads the games that are new
     upload sync "$out/$raw/playbyplay/" "s3://$BUCKET/$raw/playbyplay/"
-    for dataset in game_events game_rotations; do
+    for dataset in game_events game_rotations player_game_status; do
       k="nba/stats/$dataset/season=$season/data.parquet"
       upload cp "$out/$k" "s3://$BUCKET/$k"
     done

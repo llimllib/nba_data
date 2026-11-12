@@ -612,6 +612,143 @@ def test_build(tmp_path):
     assert scoring.filter("NOT matches_box_score").count("*").fetchone() == (0,)
 
 
+@pytest.mark.parametrize(
+    "comment,expected",
+    [
+        ("DNP - Coach's Decision", ("dnp", "coach")),
+        ("DND - Injury/Illness", ("dnd", "injury")),
+        ("DND-Return to Competition Reconditioning", ("dnd", "reconditioning")),
+        ("DND_LEAGUE_SUSPENSION", ("dnd", "league_suspension")),
+        ("DNP_TEAM_SUSPENSION", ("dnp", "team_suspension")),
+        ("DNP_TRADE", ("dnp", "trade")),
+        ("NWT - Trade Pending", ("nwt", "trade")),
+        ("NWT_CONCUSSION_PROTOCOL ", ("nwt", "concussion_protocol")),
+        ("NWT_INELIGIBLE_TO_PLAY", ("nwt", "ineligible")),
+        ("NWT - Health and Safety Protocols", ("nwt", "health_and_safety")),
+        ("NWT - Not With Team", ("nwt", "not_with_team")),
+        ("Inactive - G League - Two-Way", ("inactive", "g_league_two_way")),
+        ("Inactive - Coach’s Decision", ("inactive", "coach")),
+        ("DNP - Something New", ("dnp", None)),
+        ("Suspended", (None, None)),
+    ],
+)
+def test_comment_status(comment, expected):
+    assert rotations.comment_status(comment) == expected
+
+
+def status_rows(tmp_path, season=2026):
+    path = dataset_path(tmp_path / stats.OUT_DIR, rotations.STATUS, season)
+    return duckdb.read_parquet(str(path), hive_partitioning=False)
+
+
+def test_build_player_game_status(tmp_path, capsys):
+    save_fixture(tmp_path)
+    assert rotations.build_season(tmp_path, 2026, url="http://nowhere.invalid")
+    table = status_rows(tmp_path)
+    types = dict(zip(table.columns, map(str, table.types)))
+    assert types == {
+        "season": "INTEGER",
+        "game_id": "VARCHAR",
+        "team_id": "VARCHAR",
+        "player_id": "VARCHAR",
+        "starter": "BOOLEAN",
+        "played": "BOOLEAN",
+        "status": "VARCHAR",
+        "reason": "VARCHAR",
+        "comment": "VARCHAR",
+    }
+    # everyone in the box score, five starters a side
+    assert table.count("*").fetchone() == (27,)
+    assert sorted(
+        table.filter("starter").aggregate("team_id, count(*)").fetchall()
+    ) == [
+        (str(HOU), 5),
+        (str(OKC), 5),
+    ]
+    assert table.filter("player_id = '1627827'").fetchone() == (
+        2026,
+        GAME,
+        str(HOU),
+        "1627827",
+        False,
+        False,
+        "dnd",
+        "injury",
+        "DND - Injury/Illness",
+    )
+    assert table.filter("player_id = '201142'").project(
+        "starter, played, status, reason, comment"
+    ).fetchone() == (True, True, "played", None, None)
+    assert dict(
+        table.filter("NOT played").aggregate("status, count(*)").fetchall()
+    ) == {"dnp": 5, "dnd": 2}
+    # whoever played has stints, and nobody else
+    path = dataset_path(tmp_path / stats.OUT_DIR, rotations.NAME, 2026)
+    stinted = {r[0] for r in duckdb.sql(f"SELECT player_id FROM '{path}'").fetchall()}
+    played = {r[0] for r in table.filter("played").project("player_id").fetchall()}
+    assert played == stinted
+    out = capsys.readouterr().out
+    assert "don't know" not in out and "disagrees" not in out
+
+
+def test_build_player_game_status_odd_comments(tmp_path, capsys):
+    """
+    Played comes from the minutes, not the comment; a player in for no time
+    with no comment played; a comment we don't know is kept, and listed
+    """
+    game = stats.read_raw(FIXTURE)
+    for t in rotations.box_teams(game["boxscore"]):
+        for p in t["players"]:
+            if p["personId"] == 201142:  # Durant played
+                p["comment"] = "DNP - Coach's Decision"
+            elif p["personId"] == 1631172:  # Dieng, in for no time
+                p["comment"] = ""
+                p["statistics"]["minutes"] = "0:00"
+            elif p["personId"] == 1630256:
+                p["comment"] = "DNP - Abducted By Aliens"
+    stats.write_raw(rotations.raw_path(tmp_path, 2026, GAME), game)
+    assert rotations.build_season(tmp_path, 2026, url="http://nowhere.invalid")
+    rows = {
+        r[0]: r[1:]
+        for r in status_rows(tmp_path)
+        .project("player_id, played, status, reason, comment")
+        .fetchall()
+    }
+    assert rows["201142"] == (True, "played", None, "DNP - Coach's Decision")
+    assert rows["1631172"] == (True, "played", None, None)
+    assert rows["1630256"] == (False, "dnp", None, "DNP - Abducted By Aliens")
+    out = capsys.readouterr().out
+    assert "'DNP - Abducted By Aliens' (1)" in out
+    assert "disagrees" not in out
+
+
+def test_build_drops_statuses_of_players_not_in_player_seasons(tmp_path, capsys):
+    """
+    A player who didn't play and isn't in player_seasons (a season before
+    saved rosters) would fail the integrity check, so they're dropped, and
+    listed. One who played is kept, for the integrity check to find
+    """
+    save_fixture(tmp_path)
+    game = stats.read_raw(FIXTURE)
+    everyone = {
+        str(p["personId"])
+        for t in rotations.box_teams(game["boxscore"])
+        for p in t["players"]
+    }
+    # Finney-Smith didn't play, Durant did
+    rows = ", ".join(f"('{p}')" for p in everyone - {"1627827", "201142"})
+    write_parquet(
+        tmp_path,
+        "player_seasons",
+        2026,
+        f"SELECT * FROM (VALUES {rows}) t(player_id)",
+    )
+    assert rotations.build_season(tmp_path, 2026, url="http://nowhere.invalid")
+    ids = {r[0] for r in status_rows(tmp_path).project("player_id").fetchall()}
+    assert ids == everyone - {"1627827"}
+    assert f"dropped 1 {rotations.STATUS} rows" in capsys.readouterr().out
+
+
 def durant_matches(tmp_path, logged, box):
     """
     build the fixture with Durant's plus-minus in the game logs and the box
@@ -713,7 +850,11 @@ def test_build_skips_preseason_players_the_game_logs_cant_key(tmp_path):
     """
     ids = logs_without_durant(tmp_path / "preseason", "0012500001")
     assert "201142" not in ids and ids
+    statuses = status_rows(tmp_path / "preseason").project("player_id").fetchall()
+    assert ("201142",) not in statuses and statuses
     assert "201142" in logs_without_durant(tmp_path / "regular", GAME)
+    statuses = status_rows(tmp_path / "regular").project("player_id").fetchall()
+    assert ("201142",) in statuses
 
 
 def test_no_games(tmp_path):

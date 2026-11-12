@@ -29,6 +29,15 @@ score-margin (worm) charts and anything else that needs the plays:
 
     nba/stats/game_events/season=<season>/data.parquet
 
+and every player in each game's box score, with whether they started and
+played and, if they didn't play, why (the box score's comment: "DNP -
+Coach's Decision", "Inactive - Injury/Illness"):
+
+    nba/stats/player_game_status/season=<season>/data.parquet
+
+(players who didn't play and aren't in player_seasons are left out: before
+2027 it only has players who got on the floor that season)
+
 Games are fetched WORKERS at a time, newest first. Games that fail are
 tried again once at the end of the run, after a pause, and left for the
 next run if they fail again. stats.nba.com throttles after ~600 requests, so when
@@ -81,7 +90,7 @@ import math
 import re
 import time
 import unicodedata
-from collections import defaultdict, deque
+from collections import Counter, defaultdict, deque
 from collections.abc import Callable, Collection
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass
@@ -108,6 +117,30 @@ EVENTS_KEYS = ["game_id", "action_id"]
 # game of 2026's worm columns, 8192 reads a 212KB footer and 24KB of rows,
 # 16384 106KB and 43KB, 32768 55KB and 92KB, 65536 28KB and 180KB
 EVENTS_ROW_GROUP = 16384
+STATUS = "player_game_status"
+STATUS_KEYS = ["game_id", "player_id"]
+
+# a box score comment for a player who didn't play. The NBA writes them a
+# few ways: "DNP - Coach's Decision", "DND-Return to Competition
+# Reconditioning", "NWT_TEAM_SUSPENSION", "Inactive - G League - Two-Way"
+COMMENT = re.compile(r"(DNP|DND|NWT|Inactive)\s*[-_]\s*(.+)", re.IGNORECASE)
+# the reason after the status, lowercased with _ as spaces -> its name
+REASONS = {
+    "coach's decision": "coach",
+    "injury/illness": "injury",
+    "concussion protocol": "concussion_protocol",
+    "return to competition reconditioning": "reconditioning",
+    "health and safety protocols": "health_and_safety",
+    "rest": "rest",
+    "personal": "personal",
+    "not with team": "not_with_team",
+    "g league - two-way": "g_league_two_way",
+    "league suspension": "league_suspension",
+    "team suspension": "team_suspension",
+    "ineligible to play": "ineligible",
+    "trade pending": "trade",
+    "trade": "trade",
+}
 
 # games this recent are refetched every run, for the NBA's corrections
 RECENT = timedelta(days=2)
@@ -221,6 +254,21 @@ def game_logs(
     return found
 
 
+def season_players(outdir: Path, season: int, url: str = URL) -> set[str]:
+    """
+    The season's player ids in player_seasons, for dropping box score
+    players who didn't play and aren't in it. Empty if it can't be read
+    """
+    try:
+        rows = read_stats(
+            outdir, season, "player_seasons", "SELECT player_id FROM t", url
+        )
+    except duckdb.IOException as e:
+        print(f"rotations: keeping every player's status; no player_seasons: {e}")
+        rows = []
+    return {str(pid) for (pid,) in rows}
+
+
 def logged_ids(game: dict, logged: dict[int, Logged]) -> dict[int, int]:
     """
     box score id -> game log id, for players the game logs have under
@@ -253,6 +301,20 @@ def logged_ids(game: dict, logged: dict[int, Logged]) -> dict[int, int]:
                 ids[pid] = same[0]
                 del unmatched[same[0]]
     return ids
+
+
+def keyable(
+    game_id: str, pid: int, logged: dict[int, Logged], ids: dict[int, int]
+) -> bool:
+    """
+    whether a box score player can be keyed. Players with no NBA id
+    (international teams in preseason) can't, and neither can a preseason
+    player the game logs have with no id, since player_seasons skips them
+    (Stefano Mancinelli of Milano, 6005 in 0011000001's box score)
+    """
+    return bool(pid) and not (
+        game_id.startswith("001") and bool(logged) and ids.get(pid, pid) not in logged
+    )
 
 
 # --- time
@@ -303,6 +365,18 @@ def played(box: dict, team_id: int) -> dict[int, float]:
         for p in t["players"]
         if (secs := minutes_seconds(p["statistics"]["minutes"]))
     }
+
+
+def comment_status(comment: str) -> tuple[str | None, str | None]:
+    """
+    (status, reason) from a box score comment: "DND - Injury/Illness" ->
+    ("dnd", "injury"). Either is None if it isn't one we know
+    """
+    m = COMMENT.fullmatch(comment.strip().replace("’", "'"))
+    if not m:
+        return None, None
+    reason = " ".join(m[2].replace("_", " ").split()).lower()
+    return m[1].lower(), REASONS.get(reason)
 
 
 def norm(name: str) -> str:
@@ -975,9 +1049,10 @@ def write_table(
 
 def build_season(outdir: Path, season: int, url: str = URL) -> bool:
     """
-    Build the season's parquet files, the stints and the events, from its
-    saved games. Returns False if there are none. Games whose stints don't
-    match their box score are kept, and listed
+    Build the season's parquet files, the stints, the events and the
+    players' statuses, from its saved games. Returns False if there are
+    none. Games whose stints don't match their box score are kept, and
+    listed, as are box score comments we don't know
     """
     paths = saved_games(outdir, season)
     if not paths:
@@ -985,7 +1060,18 @@ def build_season(outdir: Path, season: int, url: str = URL) -> bool:
     logs = game_logs(outdir, season, url)
     rows: dict[str, list] = defaultdict(list)
     evs: dict[str, list] = defaultdict(list)
+    sts: dict[str, list] = defaultdict(list)
     flagged, untimed = [], []
+    unknown: Counter[str] = Counter()
+    # (game_id, box score id) for players whose status disagrees with their
+    # stints: played with none, or didn't with some
+    disagree: list[tuple[str, int]] = []
+    # player_seasons only has players who didn't play all season if they
+    # were on a saved roster (2027 on), so in earlier seasons a player who
+    # never got on the floor would fail the integrity check. Their rows are
+    # dropped, and listed
+    known = season_players(outdir, season, url)
+    dropped: list[tuple[str, str]] = []
     for path in paths:
         game = stats.read_raw(path)
         game_id = path.name.removesuffix(".json.gz")
@@ -1036,16 +1122,49 @@ def build_season(outdir: Path, season: int, url: str = URL) -> bool:
             evs["home_score"].append(ev.home_score)
             evs["away_score"].append(ev.away_score)
             evs["matches_box_score"].append(None if problems is None else not problems)
+
+        on_floor = {s.player_id for s in stints}
+        for t in box_teams(game["boxscore"]):
+            for p in t["players"]:
+                pid = p["personId"]
+                if not keyable(game_id, pid, logged, ids):
+                    continue
+                player_id = str(ids.get(pid, pid))
+                comment = (p.get("comment") or "").strip()
+                # from the minutes, not the comment: a few 2027 box scores
+                # say "DNP - Coach's Decision" for a player with minutes.
+                # A player with no comment played, even with "0:00" (on
+                # the floor for a free throw, or the last second; they're
+                # subbed in and out in the play-by-play)
+                seconds = minutes_seconds(p["statistics"]["minutes"])
+                appeared = bool(seconds) or not comment
+                status, reason = "played", None
+                if not appeared:
+                    status, reason = comment_status(comment)
+                    if status is None or reason is None:
+                        unknown[comment] += 1
+                # a player in for no time has no stint (joined folds it)
+                if (
+                    timed(game)
+                    and (seconds or not appeared)
+                    and appeared != (pid in on_floor)
+                ):
+                    disagree.append((game_id, pid))
+                # a player who played and isn't in player_seasons is kept,
+                # for the integrity check to find
+                if known and not appeared and player_id not in known:
+                    dropped.append((game_id, player_id))
+                    continue
+                sts["game_id"].append(game_id)
+                sts["team_id"].append(str(t["teamId"]))
+                sts["player_id"].append(player_id)
+                sts["starter"].append(bool(p.get("position")))
+                sts["played"].append(appeared)
+                sts["status"].append(status)
+                sts["reason"].append(reason)
+                sts["comment"].append(comment or None)
         for s in stints:
-            # players with no NBA id (international teams in preseason)
-            # can't be keyed, and neither can a preseason player the game
-            # logs have with no id, since player_seasons skips them
-            # (Stefano Mancinelli of Milano, 6005 in 0011000001's box score)
-            if not s.player_id or (
-                game_id.startswith("001")
-                and logged
-                and ids.get(s.player_id, s.player_id) not in logged
-            ):
+            if not keyable(game_id, s.player_id, logged, ids):
                 continue
             rows["game_id"].append(game_id)
             rows["team_id"].append(str(s.team_id))
@@ -1113,6 +1232,42 @@ def build_season(outdir: Path, season: int, url: str = URL) -> bool:
         EVENTS_ROW_GROUP,
     )
     print(f"rotations: wrote {path}")
+    path = write_table(
+        outdir,
+        season,
+        STATUS,
+        STATUS_KEYS,
+        {
+            "game_id": pa.array(sts["game_id"], pa.string()),
+            "team_id": pa.array(sts["team_id"], pa.string()),
+            "player_id": pa.array(sts["player_id"], pa.string()),
+            "starter": pa.array(sts["starter"], pa.bool_()),
+            "played": pa.array(sts["played"], pa.bool_()),
+            "status": pa.array(sts["status"], pa.string()),
+            "reason": pa.array(sts["reason"], pa.string()),
+            "comment": pa.array(sts["comment"], pa.string()),
+        },
+        "game_id, team_id, player_id",
+    )
+    print(f"rotations: wrote {path}")
+    if unknown:
+        print(
+            "rotations: box score comments we don't know, so their status "
+            "or reason is NULL: "
+            + "; ".join(f"{c!r} ({n})" for c, n in unknown.most_common())
+        )
+    if dropped:
+        print(
+            f"rotations: dropped {len(dropped)} {STATUS} rows for players who "
+            "didn't play and aren't in player_seasons: "
+            + ", ".join(f"{g} {p}" for g, p in dropped)
+        )
+    if disagree:
+        print(
+            f"rotations: {len(disagree)} players' box score status disagrees "
+            "with their stints (played with none, or didn't with some): "
+            + ", ".join(f"{g} {p}" for g, p in disagree[:20])
+        )
     if untimed:
         print(f"rotations: no game clock, so no stints, for {', '.join(untimed)}")
     if flagged:
