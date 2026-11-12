@@ -165,6 +165,37 @@ def test_a_game_abroad_can_be_a_day_off(tmp_path):
     assert read(path).select("game_id").fetchall() == [("0022600010",)]
 
 
+def test_back_to_back_games_dont_share_a_game(tmp_path):
+    # the same teams the next night, final at ESPN before the NBA's game
+    # logs have it: it isn't matched to the night before's game
+    espn = FakeESPN(
+        {
+            date(2026, 10, 23): scoreboard(event("401")),
+            date(2026, 10, 24): scoreboard(event("402", start="2026-10-24T23:00Z")),
+        },
+        {"401": core(core_item()), "402": core(core_item())},
+    )
+    fetch(espn, tmp_path)
+    write_team_game_logs(tmp_path, [("0022600010", "2026-10-23", [IND, DEN])])
+    path = eo.build_season(tmp_path, SEASON, now=NOW)
+    assert read(path).select("game_id, espn_event_id").fetchall() == [
+        ("0022600010", "401")
+    ]
+    # once it's there, each night's lines go to its own game
+    write_team_game_logs(
+        tmp_path,
+        [
+            ("0022600010", "2026-10-23", [IND, DEN]),
+            ("0022600020", "2026-10-24", [IND, DEN]),
+        ],
+    )
+    path = eo.build_season(tmp_path, SEASON, now=NOW)
+    assert read(path).select("game_id, espn_event_id").fetchall() == [
+        ("0022600010", "401"),
+        ("0022600020", "402"),
+    ]
+
+
 def test_games_not_in_the_game_logs_are_held_back(tmp_path, monkeypatch):
     espn = FakeESPN(
         {date(2026, 10, 23): scoreboard(event("401"))}, {"401": core(core_item())}

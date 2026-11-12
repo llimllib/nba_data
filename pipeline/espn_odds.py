@@ -313,16 +313,25 @@ def build_season(
     load_team_games(con, outdir, season, url)
     # the same teams on the same date, or a day either side (a game abroad
     # can be on a different date in the two sources, and sportsbookreview
-    # has some a day off); the nearest wins
+    # has some a day off); the nearest wins. A game goes to only one of a
+    # source's events, the nearest: when the same teams play on consecutive
+    # nights, the second night's game is final at ESPN before it's in the
+    # NBA's game logs, and would otherwise take the first night's game.
+    # ESPN's and sportsbookreview's events for a game both match it
     con.execute(
         """
         CREATE TABLE matched AS
-        SELECT e.*, g.game_id
-        FROM events_arrow e JOIN team_games g
-            ON g.teams = list_sort([e.home_team_id, e.away_team_id])
-            AND abs(g.game_date - e.game_date) <= 1
+        SELECT * EXCLUDE (days_off) FROM (
+            SELECT e.*, g.game_id, abs(g.game_date - e.game_date) AS days_off
+            FROM events_arrow e JOIN team_games g
+                ON g.teams = list_sort([e.home_team_id, e.away_team_id])
+                AND abs(g.game_date - e.game_date) <= 1
+            QUALIFY row_number() OVER (
+                PARTITION BY e.key ORDER BY days_off) = 1
+        )
         QUALIFY row_number() OVER (
-            PARTITION BY e.key ORDER BY abs(g.game_date - e.game_date)) = 1
+            PARTITION BY game_id, espn_event_id IS NULL
+            ORDER BY days_off, key) = 1
         """
     )
     late = con.execute(
