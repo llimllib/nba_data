@@ -174,6 +174,7 @@ ORDER BY ppg DESC LIMIT 10;
 | `epm_daily`, `epm_predictive_daily` | view | The same as of every day fetched, from 2027 |
 | `team_epm`, `team_epm_daily` | view | dunksandthrees' team ratings, the latest day and every day fetched, from 2027 |
 | `openrapm` | view | OpenRAPM player ratings, from 2010 (`nba/openrapm/`) |
+| `team_openrapm`, `team_openrapm_daily` | view | OpenRAPM's team power ratings, the latest day and every day, from 2027 |
 | `players` | table | One row per `player_id`: `name` (the latest one known), `first_season`, `last_season` (seasons on a roster count, even without games). A table, so joining it reads no parquet files |
 | `player_season_stats_per_game`, `player_season_stats_per_36`, `player_season_stats_per_100` | view | `player_season_stats` with counting stats scaled; see below |
 | `metadata` | table | Per dataset: `source`, `first_season`, `last_season`, `seasons`, and `updated`, when its newest file was uploaded |
@@ -1057,6 +1058,49 @@ different version of the ratings, the pieces are NULL.
 
 Not kept: names, and the decomposition's team abbreviations (teams are in
 `player_game_logs`).
+
+### `team_openrapm/season=<season>/data.parquet`
+
+OpenRAPM's [Power Ratings](https://openrapm.com/power.html), built by
+`pipeline/openrapm_power.py` from `docs/data/power.json` in its repo: one
+row per team as of `through_date`. A team's rating is its players'
+OpenRAPM weighted by the share of possessions each is expected to play
+(a forecast), plus a correction from its recent games, "Last 10
+Performance Over Expected". So, unlike `team_epm`, it's partly
+results-based: `rating - recent` is the players' part alone. The 30
+teams' ratings average 0 each day, so they need no centering.
+Recomputed daily; the file holds the latest day. Current season only,
+from 2027.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| season, team_id | | Key |
+| through_date | DATE | The date of the last games counted |
+| built | DATE | The date OpenRAPM built the file, usually the day after `through_date` |
+| ready | BOOLEAN | Whether OpenRAPM marks the ratings as ready (every team has played enough games for the site to show them; 8, as of 2026-11-09). NULL if the file doesn't say |
+| games | INTEGER | The team's games in the recent-games correction: its last 10, or fewer early in the season |
+| o_rating, d_rating, rating | DOUBLE | Offensive, defensive and total rating, points per 100 possessions, positive is good. Two decimals, as published; `rating = o_rating + d_rating` within 0.01 |
+| o_recent, d_recent, recent | DOUBLE | The recent-games correction included in the rating: how much better the team played in its last 10 games than its players' ratings expected |
+
+Not kept: names, and each team's players with their expected shares of
+possessions, which are in the raw files.
+
+### `team_openrapm_daily/season=<season>/data.parquet`
+
+`team_openrapm` for every day, keyed by `through_date` and `team_id`, from
+games through 2026-11-08, the first day of OpenRAPM's current method (the
+files before it had no recent-games correction and aren't kept). Every
+day's file is in OpenRAPM's git history, so a day a run missed is filled in
+by the next; a day OpenRAPM rebuilt keeps its newest build. Raw files are
+at `nba/raw/openrapm/power/<season>/<through_date>.json.gz`.
+
+```sql
+-- a team's power rating through the season, with the players' part
+SELECT d.through_date, d.rating, d.rating - d.recent AS players, d.recent
+FROM team_openrapm_daily d JOIN team_seasons t USING (season, team_id)
+WHERE d.season = 2027 AND t.nba_abbrev = 'SAS'
+ORDER BY d.through_date;
+```
 
 ---
 
