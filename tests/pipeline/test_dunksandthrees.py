@@ -332,7 +332,117 @@ def test_build_predictive_before_anyone_plays(tmp_path):
     assert not (tmp_path / "nba").exists()
 
 
+def team(team_id, season=SEASON, as_of="2026-06-13", **kw):
+    row = {
+        "team_name": "Celtics", "team_record": "10-2", "season": season,
+        "game_dt": as_of, "asof_dt": as_of, "is_projection": 0,
+        "team_id": team_id, "team_alias": "BOS", "team_epm": 9.5,
+        "team_oepm": 5.5, "team_depm": 4.0, "team_epm_rk": 1, "sos": -2.0,
+        "sos_opp_oepm": -1.25, "sos_opp_depm": -0.75, "sos_games": 12,
+        "players": [{"player_id": 1, "player_name": "P. One", "inj": 0}],
+        "series": [9.0, 9.5], "trend_chg": 0.5,
+    }  # fmt: skip
+    row.update(kw)
+    return row
+
+
+def team_page(teams, season=SEASON, as_of="2026-06-13", has_access=1):
+    data = {
+        "date": as_of,
+        "ratings": teams,
+        "season": season,
+        "seasons": [season, season - 1],
+        "has_access": has_access,
+        "next_access": 0,
+    }
+    return (
+        "<script>kit.start(app, element, {node_ids: [0, 39], data: ["
+        '{type:"data",data:{user:void 0,scores:[{game_dt:"2026-06-12"}]},uses:{}},'
+        f'{{type:"data",data:{js(data)},uses:{{search_params:["date"]}}}}],'
+        "form: null});</script>"
+    )
+
+
+def team_rows(teams, **kw):
+    return d.team_rows(d.team_data(team_page(teams, **kw)))
+
+
+def test_team_rows():
+    [row] = team_rows([team(1610612738)])
+    assert row == {
+        "season": SEASON,
+        "as_of_date": date(2026, 6, 13),
+        "team_id": "1610612738",
+        "is_projection": False,
+        "epm": 9.5,
+        "o_epm": 5.5,
+        "d_epm": 4.0,
+        "epm_change_10g": 0.5,
+        "sos": -2.0,
+        "o_sos": -1.25,
+        "d_sos": -0.75,
+        "sos_games": 12,
+    }
+
+
+def test_subscriber_only_team_ratings_fail():
+    with pytest.raises(ValueError, match="'2026-06-13' are for subscribers"):
+        d.team_data(team_page([team(1)], has_access=0))
+
+
+def test_no_team_data_fails():
+    with pytest.raises(ValueError, match='no `{type:"data",data:{date:`'):
+        d.team_data(page([player(1)]))
+
+
+def test_team_missing_required_column_fails():
+    row = team(1)
+    del row["team_depm"]
+    with pytest.raises(ValueError, match=r"no \['team_depm'\] column"):
+        team_rows([row])
+
+
+def test_team_missing_key_value_fails():
+    with pytest.raises(ValueError, match=r"row with no \['team_id'\]"):
+        team_rows([team(None)])
+
+
+def test_team_row_from_another_day_fails():
+    with pytest.raises(ValueError, match="as of 2026-06-12 on the page for"):
+        team_rows([team(1, as_of="2026-06-12")])
+
+
+def test_too_many_teams_fails():
+    with pytest.raises(ValueError, match="expected 1 to 32 teams, got 33"):
+        team_rows([team(i) for i in range(33)])
+
+
+def test_bad_boolean_fails():
+    with pytest.raises(ValueError, match="is_projection 2 isn't a boolean"):
+        team_rows([team(1, is_projection=2)])
+
+
+def test_build_team_epm(tmp_path):
+    data = d.team_data(team_page([team(2), team(1)]))
+    path = d.build_team_epm(tmp_path, SEASON, data)
+    assert path == dataset_path(tmp_path / d.OUT_DIR, "team_epm", SEASON)
+    rel = read(path)
+    assert rel.select("team_id").fetchall() == [("1",), ("2",)]
+    schema = {c: str(t) for c, t in zip(rel.columns, rel.types, strict=True)}
+    assert schema["as_of_date"] == "DATE"
+    assert schema["is_projection"] == "BOOLEAN"
+    assert schema["sos_games"] == "INTEGER"
+
+
+def test_build_team_epm_with_a_duplicate_team_fails(tmp_path):
+    data = d.team_data(team_page([team(1), team(1)]))
+    with pytest.raises(ValueError):
+        d.build_team_epm(tmp_path, SEASON, data)
+    assert not (tmp_path / "nba").exists()
+
+
 def fake_fetch(monkeypatch, pages):
+    pages = {"team_ratings": team_page([team(1)]), **pages}
     monkeypatch.setattr(d, "fetch", lambda page: pages[page])
 
 
@@ -367,6 +477,9 @@ def test_main(tmp_path, monkeypatch):
         ("regular_season",),
     ]
     assert read(predictive).select("player_id").fetchall() == [("1",), ("2",)]
+    teams = dataset_path(tmp_path / d.OUT_DIR, "team_epm", SEASON)
+    assert read(teams).select("team_id").fetchall() == [("1",)]
+    assert d.daily_raw_path(tmp_path, SEASON, "team_ratings", "2026-06-13").is_file()
     for season_type in d.SEASON_TYPES:
         assert d.raw_path(tmp_path, SEASON, season_type).is_file()
     assert d.daily_raw_path(tmp_path, SEASON, "predictive", "2026-06-13").is_file()
@@ -376,8 +489,10 @@ def test_main(tmp_path, monkeypatch):
     d.save_raw(d.daily_raw_path(tmp_path, SEASON, "predictive", "2026-06-14"), later)
     epm.unlink()
     predictive.unlink()
+    teams.unlink()
     d.main(["--out", str(tmp_path), "--no-fetch"])
     assert len(read(epm).fetchall()) == 2
+    assert read(teams).select("team_id").fetchall() == [("1",)]
     assert read(predictive).select("as_of_date::VARCHAR, epm").fetchall() == [
         ("2026-06-14", 5.0)
     ]
@@ -436,6 +551,10 @@ def test_main_builds_the_daily_datasets(tmp_path, monkeypatch):
                 "predictive": predictive_page(
                     [predicted(1, tot=tot), predicted(2)], as_of=today.isoformat()
                 ),
+                "team_ratings": team_page(
+                    [team(1, as_of=today.isoformat(), team_epm=tot)],
+                    as_of=today.isoformat(),
+                ),
             },
         )
         d.main(["--out", str(tmp_path)])
@@ -445,8 +564,17 @@ def test_main_builds_the_daily_datasets(tmp_path, monkeypatch):
 
     epm = dataset_path(tmp_path / d.OUT_DIR, "epm_daily", SEASON)
     predictive = dataset_path(tmp_path / d.OUT_DIR, "epm_predictive_daily", SEASON)
+    teams = dataset_path(tmp_path / d.OUT_DIR, "team_epm_daily", SEASON)
 
     def check():
+        assert read(teams).select("as_of_date::VARCHAR, team_id, epm").fetchall() == [
+            ("2026-03-01", "1", 1.0),
+            ("2026-03-02", "1", 2.0),
+        ]
+        latest = dataset_path(tmp_path / d.OUT_DIR, "team_epm", SEASON)
+        assert read(latest).select("as_of_date::VARCHAR, epm").fetchall() == [
+            ("2026-03-02", 2.0)
+        ]
         assert read(epm).select(
             "as_of_date::VARCHAR, season_type, player_id"
         ).fetchall() == [
@@ -468,6 +596,7 @@ def test_main_builds_the_daily_datasets(tmp_path, monkeypatch):
     # and the same from the saved pages
     epm.unlink()
     predictive.unlink()
+    teams.unlink()
     d.main(["--out", str(tmp_path), "--no-fetch"])
     check()
 
@@ -486,6 +615,8 @@ def test_main_keeps_no_daily_history_for_a_past_season(tmp_path, monkeypatch):
     assert not d.saved_days(tmp_path, SEASON, "regular_season")
     assert not (tmp_path / d.OUT_DIR / "epm_daily").exists()
     assert not (tmp_path / d.OUT_DIR / "epm_predictive_daily").exists()
+    assert dataset_path(tmp_path / d.OUT_DIR, "team_epm", SEASON).is_file()
+    assert not (tmp_path / d.OUT_DIR / "team_epm_daily").exists()
 
 
 def test_main_keeps_a_page_it_cant_parse(tmp_path, monkeypatch):
@@ -494,7 +625,27 @@ def test_main_keeps_a_page_it_cant_parse(tmp_path, monkeypatch):
         d.main(["--out", str(tmp_path)])
     [raw] = (tmp_path / d.RAW_DIR).glob("unparsed-*/epm_regular_season.html.gz")
     assert raw.is_file()
-    assert not (tmp_path / d.OUT_DIR).exists()
+    # the team ratings don't depend on the player pages
+    assert [p.name for p in (tmp_path / d.OUT_DIR).iterdir()] == ["team_epm"]
+
+
+def test_a_bad_team_ratings_page_still_writes_epm(tmp_path, monkeypatch):
+    fake_fetch(
+        monkeypatch,
+        {
+            **season_pages(),
+            "predictive": predictive_page([predicted(1)]),
+            "team_ratings": team_page([team(1)], has_access=0),
+        },
+    )
+    write_player_seasons(tmp_path, ["1"])
+    with pytest.raises(ValueError, match="are for subscribers"):
+        d.main(["--out", str(tmp_path)])
+    assert dataset_path(tmp_path / d.OUT_DIR, "epm", SEASON).is_file()
+    assert dataset_path(tmp_path / d.OUT_DIR, "epm_predictive", SEASON).is_file()
+    [raw] = (tmp_path / d.RAW_DIR).glob("unparsed-*/epm_team_ratings.html.gz")
+    assert raw.is_file()
+    assert not (tmp_path / d.OUT_DIR / "team_epm").exists()
 
 
 def test_a_bad_predictive_page_still_writes_epm(tmp_path, monkeypatch):

@@ -172,6 +172,7 @@ ORDER BY ppg DESC LIMIT 10;
 | `ctg_team_summary` | view | Every season of Cleaning the Glass's team summary (`nba/ctg/`) |
 | `epm`, `epm_predictive` | view | dunksandthrees' season and predictive EPM, from 2026 (`nba/dunksandthrees/`) |
 | `epm_daily`, `epm_predictive_daily` | view | The same as of every day fetched, from 2027 |
+| `team_epm`, `team_epm_daily` | view | dunksandthrees' team ratings, the latest day and every day fetched, from 2027 |
 | `openrapm` | view | OpenRAPM player ratings, from 2010 (`nba/openrapm/`) |
 | `players` | table | One row per `player_id`: `name` (the latest one known), `first_season`, `last_season` (seasons on a roster count, even without games). A table, so joining it reads no parquet files |
 | `player_season_stats_per_game`, `player_season_stats_per_36`, `player_season_stats_per_100` | view | `player_season_stats` with counting stats scaled; see below |
@@ -885,7 +886,8 @@ current season is public, so there is no backfill: the data starts with
 2026, and a season's file keeps the values from the last day the site
 showed that season. EPM is recomputed daily, so the current season's file is
 a snapshot; `metadata.updated` says when it was fetched. `epm_daily` and
-`epm_predictive_daily` keep every day's values for the current season. Raw
+`epm_predictive_daily` keep every day's values for the current season;
+`team_epm` and `team_epm_daily` are the site's team ratings. Raw
 pages are kept at `nba/raw/dunksandthrees/<season>/epm_<season_type>.html.gz`
 (the latest) and `epm_<season_type>/<date>.html.gz` (every day, current
 season only).
@@ -966,6 +968,50 @@ SELECT d.as_of_date, round(d.epm, 2) AS epm, round(d.o_epm, 2) AS o_epm,
   round(d.d_epm, 2) AS d_epm
 FROM epm_predictive_daily d JOIN players p USING (player_id)
 WHERE d.season = 2027 AND p.name = 'Jayson Tatum'
+ORDER BY d.as_of_date;
+```
+
+### `team_epm/season=<season>/data.parquet`
+
+The site's team ratings, from
+[dunksandthrees.com/ratings](https://dunksandthrees.com/ratings): one row
+per team as of `as_of_date`. A rating is the team's players' EPM weighted
+by their expected minutes per game over the rest of the season (the site's
+"Typical Rotation"; expected missed games from known injuries lower a
+player's minutes), so it's predictive, not a record of games played.
+Ratings are relative to a season average, so a day's ratings needn't
+average 0. Recomputed daily; the file holds the latest day, and every
+day's raw page is kept at
+`nba/raw/dunksandthrees/<season>/epm_team_ratings/<date>.html.gz`. Starts with
+2027: only today's ratings are free (other dates, past seasons and the
+site's "Next Game" ratings are for subscribers), so there's no backfill.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| season, team_id | | Key |
+| as_of_date | DATE | The date of the ratings |
+| is_projection | BOOLEAN | Whether the site marks the ratings as a projection (false on every page so far) |
+| o_epm, d_epm, epm | DOUBLE | Offensive, defensive and net rating, points per 100 possessions; `epm = o_epm + d_epm` |
+| epm_change_10g | DOUBLE | Change in `epm` over the team's last 10 games; until the season's first game, its last 10 of last season, so it includes the offseason |
+| o_sos, d_sos, sos | DOUBLE | Strength of schedule so far: the EPM of the opponents' players weighted by the possessions they actually played. Higher is tougher; `sos = o_sos + d_sos` |
+| sos_games | INTEGER | Games behind the strength of schedule |
+
+Not kept: names, records, ranks and z-scores, the next game, the trend's
+line, the players behind each rating with their expected minutes, and
+`team_*_season` ratings, which the page doesn't show or explain.
+
+### `team_epm_daily/season=<season>/data.parquet`
+
+`team_epm` for every day fetched, from 2027 (November 12, 2026, the first
+saved page): the same columns, keyed by `as_of_date` and `team_id`. A day
+the fetch failed is missing.
+
+```sql
+-- a team's rating through the season
+SELECT d.as_of_date, round(d.epm, 1) AS epm, round(d.o_epm, 1) AS o_epm,
+  round(d.d_epm, 1) AS d_epm
+FROM team_epm_daily d JOIN team_seasons t USING (season, team_id)
+WHERE d.season = 2027 AND t.nba_abbrev = 'BOS'
 ORDER BY d.as_of_date;
 ```
 

@@ -5,6 +5,8 @@ Fetch and parse dunksandthrees.com's public EPM tables, and build
     nba/dunksandthrees/epm_predictive/season=<season>/data.parquet
     nba/dunksandthrees/epm_daily/season=<season>/data.parquet
     nba/dunksandthrees/epm_predictive_daily/season=<season>/data.parquet
+    nba/dunksandthrees/team_epm/season=<season>/data.parquet
+    nba/dunksandthrees/team_epm_daily/season=<season>/data.parquet
 
 `epm` is season ("actual") EPM, one row per player and season type, from
 /epm/actual for the regular season and ?seasontype=4 for the playoffs.
@@ -16,7 +18,9 @@ in the season's player_seasons, which includes rostered players who haven't
 played, read from out/ or else from the bucket. `epm_daily` and
 `epm_predictive_daily` are the same with a row for every day we fetched
 the page, for the current season only, so a player's EPM can be followed
-through the season.
+through the season. `team_epm` is the site's team ratings, from /ratings:
+EPM weighted by each team's expected minutes, one row per team as of the
+latest day, and `team_epm_daily` the same for every day fetched.
 
 usage: python -m pipeline.dunksandthrees [--out out] [--no-fetch]
 
@@ -43,6 +47,14 @@ when parsing fails (under unparsed-<date>/), at
     nba/raw/dunksandthrees/<season>/epm_<season_type>.html.gz
     nba/raw/dunksandthrees/<season>/epm_<season_type>/<date>.html.gz
     nba/raw/dunksandthrees/<season>/epm_predictive/<date>.html.gz
+    nba/raw/dunksandthrees/<season>/epm_team_ratings/<date>.html.gz
+
+The ratings page embeds other dates' and seasons' ratings when asked for
+them (?date=, ?season=), but shows them only to subscribers, and the
+site's terms forbid scraping subscriber-only content. So we fetch only
+the default page, today's ratings, which is free, and refuse a page
+without `has_access:1`. Its "Next Game" ratings are subscriber-only too
+(the `*_next` columns, absent without `next_access`).
 
 The daily datasets are built from every saved day, so CI downloads the
 season's raw pages first. The season pages have no date of their own, so
@@ -53,6 +65,7 @@ have the site's date.
 import argparse
 import gzip
 import re
+import traceback
 import urllib.request
 from datetime import date
 from pathlib import Path
@@ -297,6 +310,11 @@ def convert(value, type_: str):
                 raise ValueError(f"{value!r} isn't an id")
             value = int(value)
         return str(value)
+    if type_ == "BOOLEAN":
+        # devalue writes booleans as !0/!1, the site's database as 0/1
+        if value not in (0, 1):
+            raise ValueError(f"{value!r} isn't a boolean")
+        return bool(value)
     if type_ == "INTEGER":
         if isinstance(value, float) and not value.is_integer():
             raise ValueError(f"{value!r} isn't an integer")
@@ -489,12 +507,122 @@ def predictive_rows(data: dict) -> list[dict]:
     return rows
 
 
+# --- team ratings ------------------------------------------------------------
+
+TEAM_START = '{type:"data",data:{date:'
+
+# the ratings page's columns we keep -> our name and type: its "Typical
+# Rotation" ratings, which are free. Names, records, ranks, z-scores, the
+# next game, the trend's line and the players behind each rating are left
+# out, as are team_*_season, which the page doesn't show or explain
+TEAM_COLUMNS = {
+    "team_id": ("team_id", "VARCHAR"),
+    "is_projection": ("is_projection", "BOOLEAN"),
+    "team_epm": ("epm", "DOUBLE"),
+    "team_oepm": ("o_epm", "DOUBLE"),
+    "team_depm": ("d_epm", "DOUBLE"),
+    "trend_chg": ("epm_change_10g", "DOUBLE"),
+    "sos": ("sos", "DOUBLE"),
+    "sos_opp_oepm": ("o_sos", "DOUBLE"),
+    "sos_opp_depm": ("d_sos", "DOUBLE"),
+    "sos_games": ("sos_games", "INTEGER"),
+}
+TEAM_REQUIRED = {"season", "asof_dt", "team_id", "team_epm", "team_oepm", "team_depm"}
+TEAM_NOT_NULL = TEAM_REQUIRED
+
+TEAM_EPM_COLUMNS = [
+    ("season", "INTEGER"),
+    ("as_of_date", "DATE"),
+    *TEAM_COLUMNS.values(),
+]
+
+# there have been 29 or 30 teams; more means we're not reading what we
+# think we are
+MAX_TEAMS = 32
+
+
+def team_data(html: str) -> dict:
+    """
+    The ratings page's data: the object holding `date`, `season` and
+    `ratings`. Raises ValueError if it isn't there, or isn't the free page
+    """
+    start = html.find(TEAM_START)
+    if start == -1:
+        raise ValueError(f"dunksandthrees: no `{TEAM_START}` in the page")
+    data = JSLiteral(html, start + len('{type:"data",data:')).object()
+    missing = {"date", "season", "ratings", "has_access"} - data.keys()
+    if missing:
+        raise ValueError(f"dunksandthrees: team ratings data has no {sorted(missing)}")
+    # the page carries subscriber-only dates' ratings too, with has_access:0
+    if data["has_access"] != 1:
+        raise ValueError(
+            f"dunksandthrees: team ratings for {data['date']!r} are for subscribers"
+        )
+    try:
+        date.fromisoformat(data["date"])
+    except (TypeError, ValueError) as e:
+        raise ValueError(f"dunksandthrees: team ratings date {data['date']!r}") from e
+    return data
+
+
+def team_rows(data: dict) -> list[dict]:
+    """
+    The ratings page's rows as dicts of our columns. Raises ValueError if the
+    data isn't as expected
+    """
+    ratings = data["ratings"]
+    if not isinstance(ratings, list) or not 0 < len(ratings) <= MAX_TEAMS:
+        raise ValueError(
+            f"dunksandthrees team ratings: expected 1 to {MAX_TEAMS} teams, got "
+            f"{len(ratings) if isinstance(ratings, list) else type(ratings).__name__}"
+        )
+    malformed = [r for r in ratings if not isinstance(r, dict)]
+    if malformed:
+        raise ValueError(
+            f"dunksandthrees team ratings: malformed row {malformed[0]!r:.200}"
+        )
+    absent = sorted(c for c in TEAM_COLUMNS if not any(c in r for r in ratings))
+    if absent:
+        print(f"dunksandthrees: team ratings: columns missing, left NULL: {absent}")
+
+    as_of = date.fromisoformat(data["date"])
+    rows = []
+    for raw in ratings:
+        missing = TEAM_REQUIRED - raw.keys()
+        if missing:
+            raise ValueError(
+                f"dunksandthrees team ratings: no {sorted(missing)} column"
+            )
+        nulls = [c for c in TEAM_NOT_NULL if raw[c] is None]
+        if nulls:
+            raise ValueError(
+                f"dunksandthrees team ratings: row with no {sorted(nulls)}: {raw!r:.200}"
+            )
+        if (raw["season"], raw["asof_dt"]) != (data["season"], data["date"]):
+            raise ValueError(
+                f"dunksandthrees team ratings: row for {raw['season']} as of "
+                f"{raw['asof_dt']} on the page for {data['season']} as of {data['date']}"
+            )
+        row = {"season": data["season"], "as_of_date": as_of}
+        for col, (name, type_) in TEAM_COLUMNS.items():
+            try:
+                row[name] = convert(raw.get(col), type_)
+            except ValueError as e:
+                raise ValueError(
+                    f"dunksandthrees team ratings team {raw['team_id']}: {col} {e}"
+                ) from e
+        rows.append(row)
+    return rows
+
+
 # --- fetching and building ---------------------------------------------------
 
 PAGES = {
     "regular_season": "/epm/actual",
     "playoffs": f"/epm/actual?seasontype={SEASON_TYPES['playoffs']}",
     "predictive": "/epm",
+    # today's ratings only: other dates are for subscribers
+    "team_ratings": "/ratings",
 }
 
 PA_TYPES = {
@@ -502,6 +630,7 @@ PA_TYPES = {
     "DOUBLE": pa.float64(),
     "VARCHAR": pa.string(),
     "DATE": pa.date32(),
+    "BOOLEAN": pa.bool_(),
 }
 
 
@@ -733,11 +862,84 @@ def known_rows(
     return kept
 
 
+def build_team_epm(outdir: Path, season: int, data: dict) -> Path:
+    """Write a season's team ratings from the ratings page's data"""
+    if data["season"] != season:
+        raise ValueError(
+            f"dunksandthrees: team ratings page is for {data['season']}, not {season}"
+        )
+    return write_table(
+        outdir, "team_epm", TEAM_EPM_COLUMNS, team_rows(data), ["team_id"]
+    )
+
+
+def build_team_epm_daily(outdir: Path, season: int) -> Path | None:
+    """
+    Write a season's team ratings as of each day, from every saved day's
+    ratings page. Returns the path, or None if there's no saved page
+    """
+    rows = []
+    for _, path in saved_days(outdir, season, "team_ratings"):
+        data = team_data(read_raw(path))
+        if data["season"] != season:
+            raise ValueError(f"dunksandthrees: {path} is for {data['season']}")
+        rows += team_rows(data)
+    if not rows:
+        return None
+    return write_table(
+        outdir,
+        "team_epm_daily",
+        TEAM_EPM_COLUMNS,
+        rows,
+        ["as_of_date", "team_id"],
+    )
+
+
+def latest_team_ratings(outdir: Path, season: int) -> dict | None:
+    """the newest saved ratings page's data for `season`, if any"""
+    saved = saved_days(outdir, season, "team_ratings")
+    return team_data(read_raw(saved[-1][1])) if saved else None
+
+
+def update_teams(outdir: Path, today: date) -> None:
+    """
+    Fetch today's team ratings and build `team_epm` for the season they're
+    for, and `team_epm_daily` if that's the current season (a run in CI
+    downloads only the current season's saved days)
+    """
+    data = fetch_page(outdir, "team_ratings", today, team_data)
+    season = data["season"]
+    save_raw(
+        daily_raw_path(outdir, season, "team_ratings", data["date"]), data.pop("html")
+    )
+    build_team_epm(outdir, season, data)
+    if season == current_season(today):
+        build_team_epm_daily(outdir, season)
+
+
 def update(outdir: Path, today: date) -> None:
     """
-    Fetch every page and build the datasets for the season the site is on.
-    The season pages come first: they decide the season, and a failure on
-    the predictive page leaves the season's EPM written.
+    Fetch every page and build every dataset. The players' and the teams'
+    pages are independent, so a failure in one still writes the other; the
+    first error is raised once both have run
+    """
+    errors = []
+    for part in (update_players, update_teams):
+        try:
+            part(outdir, today)
+        # fetching, parsing and validating, and writing
+        except (OSError, ValueError, duckdb.Error) as e:
+            traceback.print_exception(e)
+            errors.append(e)
+    if errors:
+        raise errors[0]
+
+
+def update_players(outdir: Path, today: date) -> None:
+    """
+    Fetch the player pages and build their datasets for the season the site
+    is on. The season pages come first: they decide the season, and a
+    failure on the predictive page leaves the season's EPM written.
 
     The daily datasets are only built for the current season: a run in CI
     downloads only its saved days, so an older season's would be rebuilt
@@ -811,6 +1013,9 @@ def main(argv: list[str] | None = None) -> None:
             known = known_players(args.out, season)
             build_predictive(args.out, season, predictive, known)
             build_predictive_daily(args.out, season, known)
+        if ratings := latest_team_ratings(args.out, season):
+            build_team_epm(args.out, season, ratings)
+            build_team_epm_daily(args.out, season)
 
 
 if __name__ == "__main__":
