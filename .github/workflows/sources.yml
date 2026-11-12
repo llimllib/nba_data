@@ -2,8 +2,8 @@ name: Update other sources (v2)
 
 # The sources other than stats.nba.com and ESPN (see docs/v2.md). They
 # change at most daily, and basketball-reference blocks frequent scrapers,
-# so they run once a day rather than with update.yml: 11:17 UTC, after the
-# night's games are final. There's no cron (GitHub's started it 7-9 hours
+# so they run once a day rather than with update.yml: 12:03 UTC, after the
+# night's games are final and OpenRAPM's daily commit. There's no cron (GitHub's started it 7-9 hours
 # late); a systemd timer on billmill.org dispatches it, see deploy/.
 #
 # Each source is its own step with continue-on-error, so a markup change on

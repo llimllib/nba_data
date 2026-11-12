@@ -6,7 +6,7 @@ systemd units on billmill.org that start the GitHub workflows through the
 given (`nba-dispatch@update.yml.service`), and each workflow has a timer:
 
 - `nba-update.timer`: `update.yml`, every 4 hours at :43 plus 06:13 and 10:13 UTC
-- `nba-sources.timer`: `sources.yml`, 11:17 UTC
+- `nba-sources.timer`: `sources.yml`, 12:03 UTC
 
 To install them on a new server, as root:
 
