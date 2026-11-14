@@ -305,7 +305,7 @@ def reader(con: duckdb.DuckDBPyConnection, dataset: str, urls: list[str]) -> str
     every file to merge their columns, which defeats the season pruning, so
     it's only used if the seasons' columns differ
     """
-    options = "hive_partitioning = true, hive_types = {'season': INTEGER}"
+    options = "hive_partitioning = true, hive_types = {'season': 'INTEGER'}"
     if not same_columns(con, urls):
         print(
             f"catalog: {dataset}'s seasons have different columns; using union_by_name"
