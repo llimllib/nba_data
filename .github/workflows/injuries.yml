@@ -13,6 +13,11 @@ name: Injuries before tip-off
 
 on:
   workflow_dispatch:
+    inputs:
+      force:
+        description: Fetch even if no game is soon
+        type: boolean
+        default: false
 
 concurrency:
   group: injuries
@@ -56,7 +61,14 @@ jobs:
 
       - name: Fetch ESPN's injury list
         id: fetch
-        run: uv run python -m pipeline.espn_injuries --out out --before-games 75
+        run: |
+          if [ "$FORCE" = "true" ]; then
+            uv run python -m pipeline.espn_injuries --out out
+          else
+            uv run python -m pipeline.espn_injuries --out out --before-games 75
+          fi
+        env:
+          FORCE: ${{ inputs.force }}
 
       # nothing was built if no game was soon
       - name: Built anything?
