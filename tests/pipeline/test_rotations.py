@@ -659,6 +659,7 @@ def test_build_player_game_status(tmp_path, capsys):
         "status": "VARCHAR",
         "reason": "VARCHAR",
         "comment": "VARCHAR",
+        "in_box_score": "BOOLEAN",
     }
     # everyone in the box score, five starters a side
     assert table.count("*").fetchone() == (27,)
@@ -678,6 +679,7 @@ def test_build_player_game_status(tmp_path, capsys):
         "dnd",
         "injury",
         "DND - Injury/Illness",
+        True,
     )
     assert table.filter("player_id = '201142'").project(
         "starter, played, status, reason, comment"
@@ -723,6 +725,49 @@ def test_build_player_game_status_odd_comments(tmp_path, capsys):
     out = capsys.readouterr().out
     assert "'DNP - Abducted By Aliens' (1)" in out
     assert "disagrees" not in out
+
+
+def test_build_adds_inactive_players_from_the_rosters(tmp_path):
+    """
+    Box scores leave out inactive players (since late October 2026), so a
+    player on the team's roster that day who isn't in the box score is
+    inactive, with no reason. A roster from after the game isn't used, and
+    a player in either team's box score isn't added
+    """
+    save_fixture(tmp_path)
+    game = stats.read_raw(FIXTURE)
+    box = {
+        t["teamId"]: [str(p["personId"]) for p in t["players"]]
+        for t in rotations.box_teams(game["boxscore"])
+    }
+    write_parquet(
+        tmp_path,
+        "games",
+        2026,
+        f"SELECT '{GAME}' AS game_id, DATE '2025-10-21' AS game_date",
+    )
+    rows = [
+        # the day before: everyone in the box score, an injured player, and
+        # Durant, who's in the box score for Houston
+        *[("2025-10-20", HOU, pid) for pid in box[HOU]],
+        ("2025-10-20", HOU, "999"),
+        ("2025-10-20", OKC, "201142"),
+        # the day after: a player signed since
+        ("2025-10-22", HOU, "998"),
+    ]
+    values = ", ".join(f"(DATE '{d}', '{t}', '{p}')" for d, t, p in rows)
+    write_parquet(
+        tmp_path,
+        "rosters_daily",
+        2026,
+        f"SELECT * FROM (VALUES {values}) t(as_of_date, team_id, player_id)",
+    )
+    assert rotations.build_season(tmp_path, 2026, url="http://nowhere.invalid")
+    table = status_rows(tmp_path)
+    assert table.filter("NOT in_box_score").project(
+        "team_id, player_id, starter, played, status, reason, comment"
+    ).fetchall() == [(str(HOU), "999", False, False, "inactive", None, None)]
+    assert table.count("*").fetchone() == (28,)
 
 
 def test_build_drops_statuses_of_players_not_in_player_seasons(tmp_path, capsys):

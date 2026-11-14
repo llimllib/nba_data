@@ -31,7 +31,9 @@ score-margin (worm) charts and anything else that needs the plays:
 
 and every player in each game's box score, with whether they started and
 played and, if they didn't play, why (the box score's comment: "DNP -
-Coach's Decision", "Inactive - Injury/Illness"):
+Coach's Decision", "Inactive - Injury/Illness"), plus, since the box
+scores leave out inactive players, the players on the team's roster that
+day (rosters_daily, from November 5, 2026) who aren't in it:
 
     nba/stats/player_game_status/season=<season>/data.parquet
 
@@ -271,6 +273,49 @@ def season_players(outdir: Path, season: int, url: str = URL) -> set[str]:
         print(f"rotations: keeping every player's status; no player_seasons: {e}")
         rows = []
     return {str(pid) for (pid,) in rows}
+
+
+Rosters = list[tuple[date, dict[str, set[str]]]]
+
+
+def season_rosters(outdir: Path, season: int, url: str = URL) -> Rosters:
+    """
+    [(as_of_date, team_id -> player ids)] from the season's rosters_daily,
+    oldest first, for the players a game's box score leaves out. Empty if
+    there's none (seasons before 2027)
+    """
+    try:
+        rows = read_stats(
+            outdir,
+            season,
+            "rosters_daily",
+            "SELECT as_of_date, team_id, player_id FROM t",
+            url,
+        )
+    except duckdb.IOException as e:
+        print(f"rotations: no inactive players from rosters; no rosters_daily: {e}")
+        rows = []
+    days: dict[date, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
+    for day, team_id, player_id in rows:
+        days[day][str(team_id)].add(str(player_id))
+    return sorted(days.items())
+
+
+def roster_on(rosters: Rosters, day: date | None) -> dict[str, set[str]]:
+    """the latest rosters on or before `day`; empty if there are none"""
+    if day is None:
+        return {}
+    before = [players for d, players in rosters if d <= day]
+    return before[-1] if before else {}
+
+
+def game_dates(outdir: Path, season: int, url: str = URL) -> dict[str, date]:
+    """game_id -> game_date from the season's games; empty if it can't be read"""
+    try:
+        return dict(season_games(outdir, season, url))
+    except duckdb.IOException as e:
+        print(f"rotations: no inactive players from rosters; no games: {e}")
+        return {}
 
 
 def logged_ids(game: dict, logged: dict[int, Logged]) -> dict[int, int]:
@@ -1076,6 +1121,10 @@ def build_season(outdir: Path, season: int, url: str = URL) -> bool:
     # dropped, and listed
     known = season_players(outdir, season, url)
     dropped: list[tuple[str, str]] = []
+    # since late October 2026 the box scores leave out inactive players, so
+    # they're the players on the team's roster that day who aren't in it
+    rosters = season_rosters(outdir, season, url)
+    dates = game_dates(outdir, season, url) if rosters else {}
     for path in paths:
         game = stats.read_raw(path)
         game_id = path.name.removesuffix(".json.gz")
@@ -1128,7 +1177,25 @@ def build_season(outdir: Path, season: int, url: str = URL) -> bool:
             evs["matches_box_score"].append(None if problems is None else not problems)
 
         on_floor = {s.player_id for s in stints}
+        roster = roster_on(rosters, dates.get(game_id))
+        # either team's: a player traded that day can be on one's roster
+        # and in the other's box score
+        in_box = {
+            str(ids.get(p["personId"], p["personId"]))
+            for t in box_teams(game["boxscore"])
+            for p in t["players"]
+        }
         for t in box_teams(game["boxscore"]):
+            for player_id in sorted(roster.get(str(t["teamId"]), set()) - in_box):
+                sts["game_id"].append(game_id)
+                sts["team_id"].append(str(t["teamId"]))
+                sts["player_id"].append(player_id)
+                sts["starter"].append(False)
+                sts["played"].append(False)
+                sts["status"].append("inactive")
+                sts["reason"].append(None)
+                sts["comment"].append(None)
+                sts["in_box_score"].append(False)
             for p in t["players"]:
                 pid = p["personId"]
                 if not keyable(game_id, pid, logged, ids):
@@ -1167,6 +1234,7 @@ def build_season(outdir: Path, season: int, url: str = URL) -> bool:
                 sts["status"].append(status)
                 sts["reason"].append(reason)
                 sts["comment"].append(comment or None)
+                sts["in_box_score"].append(True)
         for s in stints:
             if not keyable(game_id, s.player_id, logged, ids):
                 continue
@@ -1250,6 +1318,7 @@ def build_season(outdir: Path, season: int, url: str = URL) -> bool:
             "status": pa.array(sts["status"], pa.string()),
             "reason": pa.array(sts["reason"], pa.string()),
             "comment": pa.array(sts["comment"], pa.string()),
+            "in_box_score": pa.array(sts["in_box_score"], pa.bool_()),
         },
         "game_id, team_id, player_id",
     )

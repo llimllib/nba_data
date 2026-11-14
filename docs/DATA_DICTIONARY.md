@@ -166,7 +166,7 @@ ORDER BY ppg DESC LIMIT 10;
 | `team_game_logs`, `player_game_logs`, `player_season_stats`, `team_seasons`, `player_seasons`, `games` | view | Every season of each `nba/stats/` dataset |
 | `schedule` | view | Every game on the schedule, played or not, from 2027 |
 | `rosters_daily` | view | Every team's roster as of each day fetched, from 2027 |
-| `game_rotations`, `game_events`, `player_game_status` | view | Each game's player stints, play-by-play, and every player in its box score with why they didn't play, for seasons with play-by-play |
+| `game_rotations`, `game_events`, `player_game_status` | view | Each game's player stints, play-by-play, and every player in its box score (and, from November 5, 2026, its inactive players) with why they didn't play, for seasons with play-by-play |
 | `four_factors`, `player_box`, `team_box`, `player_details`, `net_pts_season` | view | Every season of each `nba/espn/` dataset |
 | `espn_injuries` | view | ESPN's injury list as of every fetch, from 2027 (`nba/espn/`) |
 | `betting_lines` | view | Each game's opening and closing spread, total and moneylines by sportsbook or archive, from 2012 (`nba/espn/`) |
@@ -439,16 +439,27 @@ so pass a smaller `initialFetchSize` (128KB) to read only the footer.
 Every player in each game's box score, whether they started and played,
 and, for those who didn't play, why: the box score's comment (`DNP -
 Coach's Decision`, `Inactive - Injury/Illness`), split into a status and
-a reason. It's what happened, known after the game, not the pre-game
-injury report. Built with `game_rotations`, from the same saved box
-scores (`boxscoretraditionalv3`), for the same games.
+a reason. From November 5, 2026 on, it also has the players on each
+team's roster that day who aren't in the box score, as `inactive`. It's
+what happened, known after the game, not the pre-game injury report
+(that's `espn_injuries`). Built from the box scores saved with
+`game_rotations` (`boxscoretraditionalv3`), for the same games.
 
-The box scores list more players from 2027 (2026-27) on. Before, players
-on the inactive list weren't in them at all, only players who were
-active and didn't play (`DNP`), didn't dress (`DND`) or weren't with the
-team (`NWT`). From 2027 inactive players are listed, as `inactive`, with
-a reason. So before 2027, a player missing from a game's rows isn't
-necessarily off the team; use `rosters_daily` (2027 on) for the roster.
+The box scores usually leave out the players on the inactive list. They
+list players who were active and didn't play (`DNP`), didn't dress
+(`DND`) or weren't with the team (`NWT`). For one week, the 2027 games
+from October 20 to 26, 2026, they listed inactive players too, with a
+reason (`Inactive - Injury/Illness`). The NBA stopped on about October
+27, and dropped them from those games' box scores as well when they were
+fetched again. So since then, inactive players come from
+`rosters_daily`: a player on the team's roster that day (the latest saved
+rosters on or before the game's date) who isn't in either team's box
+score is `inactive`, with a NULL `reason` and `in_box_score` false. The
+reason, when there is one, is in `espn_injuries`. Rosters were first
+saved on November 5, 2026, so 2027 games from October 27 to November 4
+(69 regular-season games) and every earlier season have no inactive
+players: a player missing from a game's rows isn't necessarily off the
+team.
 
 Players who didn't play and aren't in that season's `player_seasons` are
 left out: before 2027 `player_seasons` only has players who got on the
@@ -461,9 +472,10 @@ signings, say) would fail the integrity check. That's 50 rows in
 | season, game_id, team_id, player_id | | Key: `(game_id, player_id)` |
 | starter | BOOLEAN | Started the game (the box score gives starters a position) |
 | played | BOOLEAN | Got on the floor: has minutes, or has no comment. A few players in for no time (`0:00`, on for a free throw or the last second) have no comment, and count; they have no stint in `game_rotations`, since a stint with no time is folded away. From the minutes rather than the comment because a few 2027 box scores say `DNP - Coach's Decision` for a player with minutes |
-| status | VARCHAR | `played`, or for players who didn't: `dnp` (active, didn't play), `dnd` (didn't dress), `nwt` (not with the team), `inactive` (2027 on). Null for a comment the build doesn't know (it lists them) |
-| reason | VARCHAR | Null for players who played. Otherwise `coach` (coach's decision), `injury` (injury or illness), `concussion_protocol`, `reconditioning` (return to competition reconditioning), `health_and_safety` (COVID protocols and self-isolation, 2020-2022), `rest`, `personal`, `not_with_team`, `g_league_two_way` (2027 on), `league_suspension`, `team_suspension`, `suspension` (2018-2019, which don't say whose), `ineligible` (ineligible to play), `trade` (a trade pending or just made). Null for a comment the build doesn't know |
+| status | VARCHAR | `played`, or for players who didn't: `dnp` (active, didn't play), `dnd` (didn't dress), `nwt` (not with the team), `inactive` (on the inactive list: in the box score October 20-26, 2026, and from the rosters from November 5, 2026). Null for a comment the build doesn't know (it lists them) |
+| reason | VARCHAR | Null for players who played, and for inactive players from the rosters. Otherwise `coach` (coach's decision), `injury` (injury or illness), `concussion_protocol`, `reconditioning` (return to competition reconditioning), `health_and_safety` (COVID protocols and self-isolation, 2020-2022), `rest`, `personal`, `not_with_team`, `g_league_two_way` (only October 20-26, 2026), `league_suspension`, `team_suspension`, `suspension` (2018-2019, which don't say whose), `ineligible` (ineligible to play), `trade` (a trade pending or just made). Null for a comment the build doesn't know |
 | comment | VARCHAR | The box score's comment as written, which the NBA writes several ways (`DND - Injury/Illness`, `DND-Return to Competition Reconditioning`, `DND_LEAGUE_SUSPENSION`). Null if empty |
+| in_box_score | BOOLEAN | False for inactive players from the rosters |
 
 ```sql
 -- why a team's players missed games this season
@@ -843,7 +855,10 @@ only publishes the current list, so the history is what we saved: every
 
 It's ESPN's reporting, not the league's official injury report, and it's
 known before a game, so it's what a prediction of who plays can use;
-`player_game_status` is what happened. For a game, use the last fetch
+`player_game_status` is what happened. In the first 13 games (November
+12-13, 2026), 80 of 81 players ESPN listed `out` didn't play, 8 of 10
+`day_to_day` did, and of the rostered players ESPN didn't list who sat
+as inactive, 32 of 38 were on two-way contracts (`rosters_daily.two_way`). For a game, use the last fetch
 before tip-off. A player who isn't listed in a fetch wasn't on ESPN's list
 then, which is not the same as healthy if that fetch is missing.
 
@@ -858,8 +873,8 @@ since). Players whose names don't match are in `pipeline/player_ids.csv`
 | season, team_id, player_id | | Key: `(fetched_at, player_id)`. `team_id` is ESPN's team for the player |
 | fetched_at | TIMESTAMPTZ | When the list was fetched (the response's timestamp) |
 | as_of_date | DATE | `fetched_at`'s US Eastern date |
-| status | VARCHAR | `out` or `day_to_day` (ESPN's `INJURY_STATUS_*`; others would appear the same way) |
-| fantasy_status | VARCHAR | ESPN's fantasy designation: `OUT`, `GTD` (game-time decision), `OFS` (out for season) |
+| status | VARCHAR | ESPN's `INJURY_STATUS_*`, lowercased: `out`, `day_to_day`, `suspension`. ESPN's `out` can lag its news: a player still listed `out` with a `GTD` `fantasy_status` may play |
+| fantasy_status | VARCHAR | ESPN's fantasy designation: `OUT`, `GTD` (game-time decision), `OFS` (out for season). Of the first 13 games' 81 `out` players, the one who played was `GTD` here |
 | injury_type, location, side, detail | VARCHAR | The injury: body part (`Toe`, `Knee`, `Illness`), region (`Leg`), `Left`/`Right`, and what it is (`Sprain`, `Fracture`, `Soreness`). Null where ESPN has none |
 | return_date | DATE | ESPN's expected return date |
 | updated_at | TIMESTAMPTZ | When ESPN last updated the player's entry |
