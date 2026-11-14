@@ -4,7 +4,11 @@ from datetime import UTC, date, datetime, timedelta
 
 import duckdb
 import pytest
-from nba_api.stats.endpoints import LeagueDashPlayerStats, LeagueStandingsV3
+from nba_api.stats.endpoints import (
+    ISTStandings,
+    LeagueDashPlayerStats,
+    LeagueStandingsV3,
+)
 
 from pipeline import stats
 from pipeline.output import dataset_path
@@ -536,6 +540,7 @@ def test_team_seasons(tmp_path):
         # no saved standings
         "conference": None,
         "division": None,
+        "cup_group": None,
     }
     assert set(rows) == {str(BOS), str(NYK)}
 
@@ -596,6 +601,76 @@ def test_fetch_standings(tmp_path):
     empty = response(["TeamID", "Conference", "Division"], [])
     with pytest.raises(ValueError, match="0 teams"):
         stats.check_standings(empty)
+
+
+def cup_standings(group=None):
+    """
+    Cup standings for every NBA team: Boston in East Group A, the rest in
+    six groups of five. `group(team_id)` overrides each team's group
+    """
+    ids = sorted(stats.lookups.NBA_TEAM_IDS, key=lambda t: t != BOS)
+    default = {t: f"{'East' if i < 15 else 'West'} Group {'ABC'[i // 5 % 3]}" for i, t in enumerate(ids)}  # fmt: skip
+    teams = [
+        {"teamId": t, "istGroup": group(t) if group else default[t], "games": []}
+        for t in ids
+    ]
+    return {"leagueId": "00", "seasonYear": "2025-26", "teams": teams}
+
+
+def test_team_seasons_cup_group(tmp_path):
+    write_raw(tmp_path)
+    stats.write_raw(
+        stats.raw_path(tmp_path, 2026, stats.CUP_STANDINGS), cup_standings()
+    )
+    stats.build_season(tmp_path, 2026)
+    rows = {r["team_id"]: r for r in read(tmp_path, "team_seasons")}
+    assert rows[str(BOS)]["cup_group"] == "East Group A"
+    assert types(tmp_path, "team_seasons")["cup_group"] == "VARCHAR"
+
+
+def test_undrawn_cup_groups_are_null(tmp_path):
+    write_raw(tmp_path)
+    stats.write_raw(
+        stats.raw_path(tmp_path, 2026, stats.CUP_STANDINGS),
+        cup_standings(lambda t: ""),
+    )
+    stats.build_season(tmp_path, 2026)
+    assert {r["cup_group"] for r in read(tmp_path, "team_seasons")} == {None}
+
+
+def test_bad_cup_groups_fail():
+    # one team missing its group
+    with pytest.raises(ValueError, match="aren't 6 of 5"):
+        stats.cup_groups(cup_standings(lambda t: "" if t == BOS else "East Group A"))
+    # all in one group
+    with pytest.raises(ValueError, match="aren't 6 of 5"):
+        stats.cup_groups(cup_standings(lambda t: "East Group A"))
+    data = cup_standings()
+    data["teams"].pop()
+    with pytest.raises(ValueError, match="29 teams"):
+        stats.cup_groups(data)
+
+
+def test_fetch_cup_standings(tmp_path):
+    calls = []
+
+    def fake_fetch(endpoint, kwargs, check):
+        calls.append((endpoint, kwargs))
+        data = cup_standings()
+        check(data)
+        return data
+
+    # no Cup before 2023-24
+    stats.fetch_cup_standings(tmp_path, 2023, fetch=fake_fetch)
+    assert calls == []
+    stats.fetch_cup_standings(tmp_path, 2027, fetch=fake_fetch)
+    assert calls == [
+        (
+            ISTStandings,
+            {"league_id": "00", "season": "2026-27", "section": "group"},
+        )
+    ]
+    assert stats.raw_path(tmp_path, 2027, stats.CUP_STANDINGS).is_file()
 
 
 def melbourne(game_id):

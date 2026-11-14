@@ -44,6 +44,11 @@ division that season, for team_seasons:
 
 Optional too: without them, team_seasons' conference and division are NULL.
 
+From 2024, the first NBA Cup, the Cup standings (one request, every run)
+give each team's Cup group, for team_seasons, and are optional as well:
+
+    nba/raw/stats/<season>/cup_standings.json.gz
+
 and these are built from them, one file per season:
 
     nba/stats/team_game_logs/season=<season>/data.parquet  (and team_oreb, from game_events)
@@ -84,6 +89,7 @@ import duckdb
 import pyarrow as pa
 from nba_api.stats.endpoints import (
     CommonTeamRoster,
+    ISTStandings,
     LeagueDashPlayerBioStats,
     LeagueDashPlayerPtShot,
     LeagueDashPlayerStats,
@@ -128,6 +134,12 @@ ROSTERS_DAILY_KEYS = ["as_of_date", "team_id", "player_id"]
 SCHEDULE = "schedule"
 
 STANDINGS = "standings"
+
+CUP_STANDINGS = "cup_standings"
+# the first season with an NBA Cup (2023-24)
+CUP_FIRST_SEASON = 2024
+# six groups (East Group A to West Group C) of five teams
+CUP_GROUPS = 6
 
 # The team game logs, which games is built from, can list a game hours after
 # it ends: up to about 4 hours after a late West Coast game. Other datasets
@@ -320,6 +332,63 @@ def load_standings(con: duckdb.DuckDBPyConnection, outdir: Path, season: int) ->
             "NULL::VARCHAR AS division WHERE false"
         )
     con.execute(f"CREATE OR REPLACE TABLE standings AS {query}")
+
+
+def cup_groups(data: dict) -> dict[str, str]:
+    """
+    team_id -> Cup group ("East Group A") from the Cup standings, empty
+    before the season's groups are drawn. Raises unless every NBA team is
+    there, in six groups of five or none
+    """
+    teams = {str(t["teamId"]): t["istGroup"] or None for t in data["teams"]}
+    if set(teams) != {str(t) for t in lookups.NBA_TEAM_IDS}:
+        raise ValueError(
+            f"the Cup standings have {len(teams)} teams, not the "
+            f"{len(lookups.NBA_TEAM_IDS)} in NBA_TEAM_IDS"
+        )
+    sizes = {g: list(teams.values()).count(g) for g in set(teams.values())}
+    if sizes == {None: len(teams)}:
+        return {}
+    size = len(teams) // CUP_GROUPS
+    if None in sizes or sizes != dict.fromkeys(sizes, size) or len(sizes) != CUP_GROUPS:
+        raise ValueError(f"the Cup groups aren't {CUP_GROUPS} of {size}: {sizes}")
+    return {t: g for t, g in teams.items() if g}
+
+
+def fetch_cup_standings(
+    outdir: Path, season: int, fetch: Callable[..., dict] = fetch
+) -> None:
+    if season < CUP_FIRST_SEASON:
+        return
+    data = fetch(
+        ISTStandings,
+        {"league_id": "00", "season": season_string(season), "section": "group"},
+        check=cup_groups,
+    )
+    write_raw(raw_path(outdir, season, CUP_STANDINGS), data)
+    print(f"stats: fetched {CUP_STANDINGS}")
+
+
+def load_cup_groups(con: duckdb.DuckDBPyConnection, outdir: Path, season: int) -> None:
+    """
+    Load `cup_groups` (team_id, cup_group) from the saved Cup standings,
+    empty if there are none or the groups haven't been drawn
+    """
+    path = raw_path(outdir, season, CUP_STANDINGS)
+    groups = cup_groups(read_raw(path)) if path.is_file() else {}
+    if season >= CUP_FIRST_SEASON and not groups:
+        print(f"stats: no Cup groups for {season}")
+    con.register(
+        "arrow",
+        pa.table(
+            {
+                "team_id": pa.array(list(groups), pa.string()),
+                "cup_group": pa.array(list(groups.values()), pa.string()),
+            }
+        ),
+    )
+    con.execute("CREATE OR REPLACE TABLE cup_groups AS SELECT * FROM arrow")
+    con.unregister("arrow")
 
 
 def daily_rosters_path(outdir: Path, season: int, day: date) -> Path:
@@ -894,6 +963,7 @@ def build_season(
         load_raw(con, raw_path(outdir, season, name), table)
     load_rosters(con, outdir, season)
     load_standings(con, outdir, season)
+    load_cup_groups(con, outdir, season)
     load_team_orebs(con, outdir, season, url)
 
     # the lookups read team_game_logs, so they're built after it
@@ -982,6 +1052,7 @@ def main(argv: list[str] | None = None) -> None:
             fetch_season(args.out, season)
             fetch_schedule(args.out, season)
             fetch_standings(args.out, season)
+            fetch_cup_standings(args.out, season)
             fetch_rosters(args.out, season)
             fetched = datetime.now(UTC)
         if not build_season(args.out, season, args.url, fetched):

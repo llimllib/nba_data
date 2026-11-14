@@ -591,7 +591,9 @@ Conference and division come from `leaguestandingsv3` (one request,
 refetched every run; raw response at
 `nba/raw/stats/<season>/standings.json.gz`). They're per season, so a team
 that changed division is in its old one for the seasons before the change.
-None changed between 2009-10 and 2026-27.
+None changed between 2009-10 and 2026-27. The NBA Cup group comes from
+`iststandings` (one request, refetched every run, from 2024; raw response at
+`nba/raw/stats/<season>/cup_standings.json.gz`).
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -601,6 +603,7 @@ None changed between 2009-10 and 2026-27.
 | is_nba | BOOLEAN | One of the 30 franchises. False for All-Star teams (Team LeBron, Rising Stars) and international preseason opponents (Melbourne United, Real Madrid) |
 | conference | VARCHAR | `East` or `West`. NULL for teams that aren't NBA teams |
 | division | VARCHAR | `Atlantic`, `Central`, `Southeast`, `Northwest`, `Pacific` or `Southwest`. NULL for teams that aren't NBA teams |
+| cup_group | VARCHAR | NBA Cup group, `East Group A` to `West Group C`, five teams each; the same text as a group game's `schedule.sub_label`. NULL before 2024 (2023-24, the first Cup), until the season's groups are drawn, and for teams that aren't NBA teams |
 
 ```sql
 -- this season's conference standings, from the game logs

@@ -2,13 +2,14 @@
 Lookup tables built from a season's raw stats.nba.com responses, which carry
 the names and abbreviations the other tables leave out:
 
-    team_seasons    team_id -> abbreviation, name, conference and division
-                    that season
+    team_seasons    team_id -> abbreviation, name, conference, division and
+                    NBA Cup group that season
     player_seasons  player_id -> name that season, and whether they played
     games           game_id -> date, teams, and what the game id encodes
 
 Called from pipeline.stats.build_season, which has loaded the raw responses
-(tgl_base, pgl_base, ps_*_base, rosters, standings) and built team_game_logs.
+(tgl_base, pgl_base, ps_*_base, rosters, standings, cup_groups) and built
+team_game_logs.
 """
 
 import duckdb
@@ -39,11 +40,12 @@ def build_team_seasons(con: duckdb.DuckDBPyConnection, season: int) -> None:
     # a team's name can't change mid-season, but if a source ever disagrees,
     # use what it was called in its latest game. Conference and division
     # come from the standings (NULL for All-Star and international teams, and
-    # for seasons without saved standings)
+    # for seasons without saved standings), and the Cup group from the Cup
+    # standings (NULL before 2024 and until the groups are drawn)
     con.execute(
         f"""
         CREATE OR REPLACE TABLE team_seasons AS
-        SELECT t.*, s.conference, s.division
+        SELECT t.*, s.conference, s.division, c.cup_group
         FROM (
             SELECT {season}::INTEGER AS season, team_id::VARCHAR AS team_id,
                 arg_max(team_abbreviation, game_date) AS nba_abbrev,
@@ -57,6 +59,7 @@ def build_team_seasons(con: duckdb.DuckDBPyConnection, season: int) -> None:
             GROUP BY team_id
         ) t
         LEFT JOIN standings s USING (team_id)
+        LEFT JOIN cup_groups c USING (team_id)
         ORDER BY team_id
         """
     )
