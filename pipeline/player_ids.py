@@ -129,7 +129,7 @@ def nba_players(outdir: Path) -> list[tuple[int, str, str, str]]:
     """
     files = outdir / "nba" / "stats"
     read = "read_parquet('{}', hive_partitioning = false)"
-    rows = duckdb.sql(
+    rows = duckdb.execute(
         f"""
         WITH teams AS (
             SELECT DISTINCT season, team_id, player_id

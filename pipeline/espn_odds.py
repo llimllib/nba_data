@@ -43,7 +43,7 @@ import pyarrow as pa
 from . import odds, odds_archives
 from .catalog import URL
 from .ncaam_espn import TYPES, Fetcher, Getter, arrow, save_json
-from .output import check_keys, dataset_path, report, write_parquet
+from .output import check_keys, dataset_path, report, scalar, write_parquet
 from .seasons import EASTERN, current_season, season_days, today_eastern
 from .teams import TEAM_ABBREVS_FILE, load_team_abbrevs
 
@@ -363,13 +363,13 @@ def build_season(
         """
     )
     check_keys(con, "out", KEYS, f"espn_odds {season} {DATASET}")
-    count = con.execute("SELECT count(*) FROM out").fetchone()
-    if not count or not count[0]:
+    rows = scalar(con, "SELECT count(*) FROM out")
+    if not rows:
         print(f"espn_odds: no betting lines for {season} matched NBA games yet")
         return None
     path = dataset_path(outdir / OUT_DIR, DATASET, season)
     write_parquet(con, "out", path)
-    print(f"espn_odds: wrote {path} ({count[0]} rows)")
+    print(f"espn_odds: wrote {path} ({rows} rows)")
     return path
 
 

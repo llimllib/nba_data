@@ -27,7 +27,7 @@ def test_write_parquet_row_groups(tmp_path):
     write_parquet(con, "t", path, row_group_size=4096)
     groups = con.execute(
         f"SELECT num_row_groups FROM parquet_file_metadata('{path}')"
-    ).fetchone()
+    ).fetchall()[0]
     assert groups == (3,)
 
 

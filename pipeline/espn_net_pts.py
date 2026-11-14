@@ -137,7 +137,7 @@ def known_players(outdir: Path, season: int, url: str = URL) -> list[tuple[str, 
         if local.is_file()
         else f"{url}/{STATS_DIR}/player_seasons/season={season}/data.parquet"
     )
-    return duckdb.sql(
+    return duckdb.execute(
         f"SELECT player_id, name FROM read_parquet('{source}', hive_partitioning = false) "
         "WHERE name IS NOT NULL"
     ).fetchall()

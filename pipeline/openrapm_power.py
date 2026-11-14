@@ -221,7 +221,7 @@ def team_ids_for(outdir: Path, season: int, url: str = URL) -> dict[str, str]:
         else f"{url}/{STATS_DIR}/team_seasons/season={season}/data.parquet"
     )
     try:
-        rows = duckdb.sql(
+        rows = duckdb.execute(
             f"SELECT nba_abbrev, team_id FROM read_parquet('{source}', "
             "hive_partitioning = false) WHERE is_nba"
         ).fetchall()

@@ -174,7 +174,7 @@ def test_coaches_with_a_game_and_no_minutes_are_dropped():
 
 
 def read(path):
-    return duckdb.sql(
+    return duckdb.default_connection().sql(
         f"SELECT * FROM read_parquet('{path}', hive_partitioning = false) ORDER BY ALL"
     )
 
@@ -312,7 +312,7 @@ def write_player_seasons(outdir, player_ids, season=SEASON):
     path = dataset_path(outdir / d.STATS_DIR, "player_seasons", season)
     path.parent.mkdir(parents=True, exist_ok=True)
     ids = ", ".join(f"('{i}')" for i in player_ids)
-    duckdb.sql(
+    duckdb.default_connection().sql(
         f"COPY (SELECT {season} AS season, i AS player_id FROM (VALUES {ids}) v(i)) "
         f"TO '{path}' (FORMAT parquet)"
     )

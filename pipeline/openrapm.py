@@ -253,7 +253,7 @@ def known_players(outdir: Path, season: int, url: str = URL) -> set[str] | None:
         else f"{url}/{STATS_DIR}/player_seasons/season={season}/data.parquet"
     )
     try:
-        rows = duckdb.sql(
+        rows = duckdb.execute(
             f"SELECT player_id FROM read_parquet('{source}', hive_partitioning = false)"
         ).fetchall()
     except duckdb.HTTPException as e:
@@ -382,14 +382,14 @@ def published_built(outdir: Path, season: int, url: str = URL) -> date | None:
         else f"{url}/{OUT_DIR}/{DATASET}/season={season}/data.parquet"
     )
     try:
-        row = duckdb.sql(
+        row = duckdb.execute(
             f"SELECT max(built) FROM read_parquet('{source}', hive_partitioning = false)"
-        ).fetchone()
+        ).fetchall()
     except duckdb.HTTPException as e:
         if getattr(e, "status_code", None) in (403, 404):
             return None
         raise
-    return row[0] if row else None
+    return row[0][0] if row else None
 
 
 def update(outdir: Path) -> None:

@@ -13,7 +13,7 @@ CUP_FINAL = "0062500001"
 def write(outdir, dataset, query, season=2026, source="stats"):
     path = dataset_path(outdir / "nba" / source, dataset, season)
     path.parent.mkdir(parents=True, exist_ok=True)
-    duckdb.sql(f"COPY ({query}) TO '{path}' (FORMAT parquet)")
+    duckdb.default_connection().sql(f"COPY ({query}) TO '{path}' (FORMAT parquet)")
 
 
 @pytest.fixture

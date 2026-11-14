@@ -515,7 +515,7 @@ def save_fixture(tmp_path, season=2026, game_id=GAME):
 def write_parquet(tmp_path, dataset, season, sql):
     path = dataset_path(tmp_path / stats.OUT_DIR, dataset, season)
     path.parent.mkdir(parents=True)
-    duckdb.sql(sql).write_parquet(str(path))
+    duckdb.default_connection().sql(sql).write_parquet(str(path))
 
 
 def test_build(tmp_path):
@@ -536,9 +536,9 @@ def test_build(tmp_path):
         "plus_minus": "INTEGER",
         "matches_box_score": "BOOLEAN",
     }
-    assert table.count("*").fetchone() == (94,)
-    assert table.filter("NOT matches_box_score").count("*").fetchone() == (0,)
-    row = table.filter("player_id = '201142' AND in_time = 949").fetchone()
+    assert table.count("*").fetchall()[0] == (94,)
+    assert table.filter("NOT matches_box_score").count("*").fetchall()[0] == (0,)
+    row = table.filter("player_id = '201142' AND in_time = 949").fetchall()[0]
     assert row == (2026, GAME, str(HOU), "201142", 2, 949.0, 1439.3, 6, 4, True)
 
     path = dataset_path(tmp_path / stats.OUT_DIR, rotations.EVENTS, 2026)
@@ -573,23 +573,23 @@ def test_build(tmp_path):
     # every action in the play-by-play
     game = stats.read_raw(FIXTURE)
     actions = game["playbyplay"]["game"]["actions"]
-    assert events.count("*").fetchone() == (len(actions),)
+    assert events.count("*").fetchall()[0] == (len(actions),)
     # fouls, with who committed them
     fouls = events.filter("action_type = 'Foul'")
-    assert fouls.count("*").fetchone() == (
+    assert fouls.count("*").fetchall()[0] == (
         sum(a["actionType"] == "Foul" for a in actions),
     )
     # team actions have the team, and no person
     teams = events.filter("action_type = 'Timeout'")
     assert teams.filter("team_id IS NULL OR person_id IS NOT NULL").count(
         "*"
-    ).fetchone() == (0,)
+    ).fetchall()[0] == (0,)
     # shots have a result and a location; free throws a result
     assert events.filter("is_field_goal AND (shot_result IS NULL OR x IS NULL)").count(
         "*"
-    ).fetchone() == (0,)
+    ).fetchall()[0] == (0,)
     made = events.filter("action_type = 'Free Throw' AND shot_result = 'Made'")
-    assert made.filter("pts <> 1").count("*").fetchone() == (0,)
+    assert made.filter("pts <> 1").count("*").fetchall()[0] == (0,)
     scoring = events.filter("pts > 0")
     # the final score is the box score's, and each team's stints' points
     box = game["boxscore"]["boxScoreTraditional"]
@@ -598,18 +598,21 @@ def test_build(tmp_path):
         for t in rotations.box_teams(game["boxscore"])
     }
     last = scoring.order("action_id DESC").limit(1)
-    assert last.project("home_score, away_score").fetchone() == (
+    assert last.project("home_score, away_score").fetchall()[0] == (
         final[box["homeTeamId"]],
         final[box["awayTeamId"]],
     )
-    assert last.project("home_team_id, away_team_id").fetchone() == (str(OKC), str(HOU))
+    assert last.project("home_team_id, away_team_id").fetchall()[0] == (
+        str(OKC),
+        str(HOU),
+    )
     pts = dict(scoring.aggregate("team_id, sum(pts)::INTEGER").fetchall())
     assert pts == dict(table.aggregate("team_id, sum(pts)::INTEGER").fetchall())
     # in time order, on the stints' clock: two overtimes, to 3480
     times = [t for (t,) in scoring.order("action_id").project("time").fetchall()]
     assert times == sorted(times) and 3180 < times[-1] <= 3480
-    assert table.aggregate("max(out_time)").fetchone() == (3480,)
-    assert scoring.filter("NOT matches_box_score").count("*").fetchone() == (0,)
+    assert table.aggregate("max(out_time)").fetchall()[0] == (3480,)
+    assert scoring.filter("NOT matches_box_score").count("*").fetchall()[0] == (0,)
 
 
 @pytest.mark.parametrize(
@@ -662,14 +665,14 @@ def test_build_player_game_status(tmp_path, capsys):
         "in_box_score": "BOOLEAN",
     }
     # everyone in the box score, five starters a side
-    assert table.count("*").fetchone() == (27,)
+    assert table.count("*").fetchall()[0] == (27,)
     assert sorted(
         table.filter("starter").aggregate("team_id, count(*)").fetchall()
     ) == [
         (str(HOU), 5),
         (str(OKC), 5),
     ]
-    assert table.filter("player_id = '1627827'").fetchone() == (
+    assert table.filter("player_id = '1627827'").fetchall()[0] == (
         2026,
         GAME,
         str(HOU),
@@ -683,13 +686,15 @@ def test_build_player_game_status(tmp_path, capsys):
     )
     assert table.filter("player_id = '201142'").project(
         "starter, played, status, reason, comment"
-    ).fetchone() == (True, True, "played", None, None)
+    ).fetchall()[0] == (True, True, "played", None, None)
     assert dict(
         table.filter("NOT played").aggregate("status, count(*)").fetchall()
     ) == {"dnp": 5, "dnd": 2}
     # whoever played has stints, and nobody else
     path = dataset_path(tmp_path / stats.OUT_DIR, rotations.NAME, 2026)
-    stinted = {r[0] for r in duckdb.sql(f"SELECT player_id FROM '{path}'").fetchall()}
+    stinted = {
+        r[0] for r in duckdb.execute(f"SELECT player_id FROM '{path}'").fetchall()
+    }
     played = {r[0] for r in table.filter("played").project("player_id").fetchall()}
     assert played == stinted
     out = capsys.readouterr().out
@@ -767,7 +772,7 @@ def test_build_adds_inactive_players_from_the_rosters(tmp_path):
     assert table.filter("NOT in_box_score").project(
         "team_id, player_id, starter, played, status, reason, comment"
     ).fetchall() == [(str(HOU), "999", False, False, "inactive", None, None)]
-    assert table.count("*").fetchone() == (28,)
+    assert table.count("*").fetchall()[0] == (28,)
 
 
 def test_build_drops_statuses_of_players_not_in_player_seasons(tmp_path, capsys):
@@ -810,13 +815,15 @@ def durant_matches(tmp_path, logged, box):
     stats.write_raw(rotations.raw_path(tmp_path, 2026, GAME), game)
     logs = dataset_path(tmp_path / stats.OUT_DIR, "player_game_logs", 2026)
     logs.parent.mkdir(parents=True, exist_ok=True)
-    duckdb.sql(
+    duckdb.default_connection().sql(
         f"SELECT '{GAME}' AS game_id, '201142' AS player_id, '{HOU}' AS team_id, "
         f"0.0 AS min, 0 AS pts, {logged} AS plus_minus"
     ).write_parquet(str(logs))
     assert rotations.build_season(tmp_path, 2026)
     path = dataset_path(tmp_path / stats.OUT_DIR, rotations.NAME, 2026)
-    flags = duckdb.sql(f"SELECT DISTINCT matches_box_score FROM '{path}'").fetchall()
+    flags = duckdb.execute(
+        f"SELECT DISTINCT matches_box_score FROM '{path}'"
+    ).fetchall()
     assert len(flags) == 1
     return flags[0][0]
 
@@ -858,10 +865,12 @@ def test_build_uses_the_game_logs_ids(tmp_path):
     )
     assert rotations.build_season(tmp_path, 2026)
     path = dataset_path(tmp_path / stats.OUT_DIR, rotations.NAME, 2026)
-    ids = {r[0] for r in duckdb.sql(f"SELECT player_id FROM '{path}'").fetchall()}
+    ids = {r[0] for r in duckdb.execute(f"SELECT player_id FROM '{path}'").fetchall()}
     assert "999" in ids
     assert not ids & {"201142", "998"}
-    flags = duckdb.sql(f"SELECT DISTINCT matches_box_score FROM '{path}'").fetchall()
+    flags = duckdb.execute(
+        f"SELECT DISTINCT matches_box_score FROM '{path}'"
+    ).fetchall()
     assert flags == [(True,)]
 
 
@@ -887,7 +896,7 @@ def logs_without_durant(tmp_path, game_id):
     )
     assert rotations.build_season(tmp_path, 2026)
     path = dataset_path(tmp_path / stats.OUT_DIR, rotations.NAME, 2026)
-    return {r[0] for r in duckdb.sql(f"SELECT player_id FROM '{path}'").fetchall()}
+    return {r[0] for r in duckdb.execute(f"SELECT player_id FROM '{path}'").fetchall()}
 
 
 def test_build_skips_preseason_players_the_game_logs_cant_key(tmp_path):

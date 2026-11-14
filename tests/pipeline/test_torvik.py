@@ -265,10 +265,10 @@ def test_build_season(tmp_path):
         dataset_path(tmp_path / "ncaam/torvik", "torvik_team_results", SEASON),
         dataset_path(tmp_path / "ncaam/torvik", "torvik_four_factors", SEASON),
     ]
-    rel = duckdb.sql(
+    rel = duckdb.default_connection().sql(
         f"SELECT * FROM read_parquet('{paths[1]}', hive_partitioning = false)"
     )
-    assert rel.count("*").fetchone() == (341,)
+    assert rel.count("*").fetchall()[0] == (341,)
     assert rel.select("as_of_date::VARCHAR").distinct().fetchall() == [("2026-04-07",)]
     types = {c: str(t) for c, t in zip(rel.columns, rel.types, strict=True)}
     assert types["season"] == "INTEGER"
@@ -490,8 +490,10 @@ def test_build_daily(tmp_path):
     assert path == dataset_path(
         tmp_path / "ncaam/torvik", "torvik_ratings_daily", SEASON
     )
-    rel = duckdb.sql(f"SELECT * FROM read_parquet('{path}', hive_partitioning = false)")
-    assert rel.count("*").fetchone() == (682,)
+    rel = duckdb.default_connection().sql(
+        f"SELECT * FROM read_parquet('{path}', hive_partitioning = false)"
+    )
+    assert rel.count("*").fetchall()[0] == (682,)
     assert rel.columns[:4] == ["season", "date", "team", "conf"]
     types = {c: str(t) for c, t in zip(rel.columns, rel.types, strict=True)}
     assert types["date"] == "DATE"
@@ -530,7 +532,7 @@ def test_next_seasons_preseason_is_dropped(tmp_path):
         snapshot(record="0-0", **{"Con Rec.": "0-0"})
     )
     path = torvik.build_daily(tmp_path, SEASON)
-    dates = duckdb.sql(
+    dates = duckdb.execute(
         f"SELECT DISTINCT date::VARCHAR FROM read_parquet('{path}') ORDER BY 1"
     ).fetchall()
     assert dates == [("2025-11-01",), ("2026-04-06",)]

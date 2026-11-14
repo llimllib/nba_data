@@ -128,13 +128,15 @@ def test_build_season(tmp_path):
     save(tmp_path, [total(100, "Jayson Tatum")], [per_100(100)])
     ps = dataset_path(tmp_path / n.STATS_DIR, "player_seasons", SEASON)
     ps.parent.mkdir(parents=True)
-    duckdb.sql(
+    duckdb.default_connection().sql(
         f"COPY (SELECT {SEASON} AS season, '1' AS player_id, 'Jayson Tatum' AS name) "
         f"TO '{ps}' (FORMAT parquet)"
     )
     path = n.build_season(tmp_path, SEASON)
     assert path == dataset_path(tmp_path / n.OUT_DIR, n.DATASET, SEASON)
-    rel = duckdb.sql(f"SELECT * FROM read_parquet('{path}', hive_partitioning = false)")
+    rel = duckdb.default_connection().sql(
+        f"SELECT * FROM read_parquet('{path}', hive_partitioning = false)"
+    )
     types = {c: str(t) for c, t in zip(rel.columns, rel.types, strict=True)}
     assert types["season"] == "INTEGER" and types["gp"] == "INTEGER"
     assert types["player_id"] == "VARCHAR" and types["t_net_pts"] == "DOUBLE"

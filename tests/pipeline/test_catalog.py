@@ -14,7 +14,7 @@ T0 = datetime(2026, 1, 1, tzinfo=UTC)
 def write(outdir, dataset, season, query, source="stats"):
     path = dataset_path(outdir / "nba" / source, dataset, season)
     path.parent.mkdir(parents=True, exist_ok=True)
-    duckdb.sql(f"COPY ({query}) TO '{path}' (FORMAT parquet)")
+    duckdb.default_connection().sql(f"COPY ({query}) TO '{path}' (FORMAT parquet)")
 
 
 def write_season_stats(outdir, gp, min, poss, value, def_ws_raw="NULL"):
@@ -108,10 +108,10 @@ def test_per_mode_stats(tmp_path):
     write_season_stats(tmp_path, 10, 720, 1000, 200)
     con = build(tmp_path)
     row = "SELECT pts, fg2m, min, gp, ts_pct, def_ws FROM nba.player_season_stats_{}"
-    assert con.sql(row.format("per_game")).fetchone() == (20, 20, 72, 10, 0.5, 0.025)
+    assert con.sql(row.format("per_game")).fetchall()[0] == (20, 20, 72, 10, 0.5, 0.025)
     # the NBA's per-36 and per-100 stats keep total minutes
-    assert con.sql(row.format("per_36")).fetchone() == (10, 10, 720, 10, 0.5, 0.0125)
-    assert con.sql(row.format("per_100")).fetchone() == (20, 20, 720, 10, 0.5, 0.025)
+    assert con.sql(row.format("per_36")).fetchall()[0] == (10, 10, 720, 10, 0.5, 0.0125)
+    assert con.sql(row.format("per_100")).fetchall()[0] == (20, 20, 720, 10, 0.5, 0.025)
 
 
 def test_per_mode_def_ws_uses_unrounded_value(tmp_path):
@@ -119,14 +119,14 @@ def test_per_mode_def_ws_uses_unrounded_value(tmp_path):
     con = build(tmp_path)
     row = con.sql(
         "SELECT def_ws, def_ws_raw FROM nba.player_season_stats_per_game"
-    ).fetchone()
+    ).fetchall()[0]
     assert row == (pytest.approx(0.0254), pytest.approx(0.0254))
 
 
 def test_per_mode_with_no_minutes(tmp_path):
     write_season_stats(tmp_path, 1, 0, 0, 0)
     con = build(tmp_path)
-    assert con.sql("SELECT pts FROM nba.player_season_stats_per_36").fetchone() == (
+    assert con.sql("SELECT pts FROM nba.player_season_stats_per_36").fetchall()[0] == (
         None,
     )
 
@@ -145,7 +145,7 @@ def test_metadata(tmp_path):
     ]
     updated = con.sql(
         "SELECT updated FROM nba.metadata WHERE dataset = 'games'"
-    ).fetchone()
+    ).fetchall()[0]
     assert updated and abs((datetime.now(UTC) - updated[0]).total_seconds()) < 60
 
 
@@ -175,7 +175,7 @@ def test_metadata_json_matches_the_table(tmp_path):
     assert con.sql(
         "SELECT comment FROM duckdb_tables() "
         "WHERE database_name = 'nba' AND table_name = 'metadata'"
-    ).fetchone() == ("also published as nba/metadata.json",)
+    ).fetchall()[0] == ("also published as nba/metadata.json",)
 
 
 def test_local_catalog_has_no_metadata_json(tmp_path):
@@ -209,7 +209,7 @@ def test_new_seasons_appear_on_rebuild(tmp_path):
     build(tmp_path).close()
     write(tmp_path, "games", 2026, "SELECT 2026 AS season")
     con = build(tmp_path)
-    assert con.sql("SELECT count(*) FROM nba.games").fetchone() == (2,)
+    assert con.sql("SELECT count(*) FROM nba.games").fetchall()[0] == (2,)
 
 
 def test_raw_files_are_ignored(tmp_path):
@@ -339,7 +339,7 @@ def test_season_filters_skip_other_seasons_files(tmp_path):
 def test_season_is_integer(tmp_path):
     write(tmp_path, "games", 2026, "SELECT 2026::INTEGER AS season")
     con = build(tmp_path)
-    assert con.sql("SELECT typeof(season) FROM nba.games").fetchone() == ("INTEGER",)
+    assert con.sql("SELECT typeof(season) FROM nba.games").fetchall()[0] == ("INTEGER",)
 
 
 def test_players_is_a_table(tmp_path):
@@ -382,14 +382,14 @@ def test_storage_version_is_pinned(tmp_path):
     con = build(tmp_path)
     tags = con.sql(
         "SELECT tags FROM duckdb_databases() WHERE database_name = 'nba'"
-    ).fetchone()
+    ).fetchall()[0]
     assert tags and tags[0]["storage_version"].startswith(catalog.STORAGE_VERSION)
 
 
 def write_ncaam(outdir, dataset, season, query):
     path = dataset_path(outdir / "ncaam" / "torvik", dataset, season)
     path.parent.mkdir(parents=True, exist_ok=True)
-    duckdb.sql(f"COPY ({query}) TO '{path}' (FORMAT parquet)")
+    duckdb.default_connection().sql(f"COPY ({query}) TO '{path}' (FORMAT parquet)")
 
 
 def test_parse_league():
@@ -427,7 +427,7 @@ def test_leagues_have_separate_catalogs(tmp_path):
     ]
     assert con.sql(
         "SELECT count(*) FROM ncaam.torvik_team_results WHERE season = 2026"
-    ).fetchone() == (1,)
+    ).fetchall()[0] == (1,)
     # no NBA tables
     tables = {r[0] for r in con.sql("SHOW TABLES FROM ncaam").fetchall()}
     assert tables == {"metadata", "torvik_team_results"}

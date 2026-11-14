@@ -160,7 +160,7 @@ def write_pages(outdir):
             f.write(page(PLAYERS))
     ps = dataset_path(outdir / s.STATS_DIR, "player_seasons", SEASON)
     ps.parent.mkdir(parents=True)
-    duckdb.sql(
+    duckdb.default_connection().sql(
         # Tatum's NBA id, as player_ids.csv maps him
         f"COPY (SELECT {SEASON} AS season, '1628369' AS player_id, 'Jayson Tatum' AS name) "
         f"TO '{ps}' (FORMAT parquet)"
@@ -171,7 +171,9 @@ def test_build_season(tmp_path):
     write_pages(tmp_path)
     path = s.build_season(None, tmp_path, SEASON, refresh=False)
     assert path == dataset_path(tmp_path / bbref.OUT_DIR, s.DATASET, SEASON)
-    rel = duckdb.sql(f"SELECT * FROM read_parquet('{path}', hive_partitioning = false)")
+    rel = duckdb.default_connection().sql(
+        f"SELECT * FROM read_parquet('{path}', hive_partitioning = false)"
+    )
     types = {c: str(t) for c, t in zip(rel.columns, rel.types, strict=True)}
     assert types == {
         "season": "INTEGER",
@@ -180,8 +182,8 @@ def test_build_season(tmp_path):
         "player_id": "VARCHAR",
         "salary": "INTEGER",
     }
-    assert rel.count("*").fetchone() == (30 * len(PLAYERS),)
-    assert rel.filter("player_id IS NOT NULL").count("*").fetchone() == (30,)
+    assert rel.count("*").fetchall()[0] == (30 * len(PLAYERS),)
+    assert rel.filter("player_id IS NOT NULL").count("*").fetchall()[0] == (30,)
 
 
 def test_missing_page_writes_nothing(tmp_path):

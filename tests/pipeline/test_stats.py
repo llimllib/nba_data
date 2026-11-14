@@ -189,14 +189,16 @@ def write_raw(outdir, season=2026, empty=False, **overrides):
 
 def read(outdir, dataset, season=2026):
     path = dataset_path(outdir / stats.OUT_DIR, dataset, season)
-    rel = duckdb.sql(f"SELECT * FROM read_parquet('{path}', hive_partitioning = false)")
+    rel = duckdb.default_connection().sql(
+        f"SELECT * FROM read_parquet('{path}', hive_partitioning = false)"
+    )
     return [dict(zip(rel.columns, row)) for row in rel.fetchall()]
 
 
 def types(outdir, dataset, season=2026):
     path = dataset_path(outdir / stats.OUT_DIR, dataset, season)
     return dict(
-        duckdb.sql(
+        duckdb.execute(
             f"SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM read_parquet('{path}', hive_partitioning = false))"
         ).fetchall()
     )
@@ -231,7 +233,7 @@ def write_events(outdir, actions, season=2026):
         f"{result and repr(result)})".replace("None", "NULL")
         for i, (period, team, person, action, sub, result) in enumerate(actions)
     )
-    duckdb.sql(
+    duckdb.default_connection().sql(
         f"COPY (SELECT * FROM (VALUES {rows}) t(game_id, action_id, period, "
         "team_id, person_id, action_type, sub_type, shot_result)) TO "
         f"'{path}'"

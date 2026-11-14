@@ -63,7 +63,7 @@ import duckdb
 import pyarrow as pa
 
 from . import odds
-from .output import check_keys, dataset_path, write_atomic, write_parquet
+from .output import check_keys, dataset_path, scalar, write_atomic, write_parquet
 from .seasons import EASTERN, current_season, today_eastern
 
 API = "https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball"
@@ -697,7 +697,7 @@ def fetch_sdv(fetcher: Getter, outdir: Path, season: int) -> None:
         if body is None:
             raise ValueError(f"sportsdataverse has no {kind} for {season}")
         write_atomic(path, lambda tmp, body=body: tmp.write_bytes(body))
-        seasons = duckdb.sql(
+        seasons = duckdb.execute(
             f"SELECT DISTINCT season FROM read_parquet('{path}')"
         ).fetchall()
         if seasons != [(season,)]:
@@ -876,8 +876,7 @@ def build_season(outdir: Path, season: int) -> list[Path]:
     con = load(outdir, season)
     load_summaries(con, outdir, season)
 
-    count = con.execute("SELECT count(*) FROM games").fetchone()
-    if not count or not count[0]:
+    if not scalar(con, "SELECT count(*) FROM games"):
         print(f"ncaam_espn: no finished games in {season} yet")
         return []
 

@@ -20,6 +20,17 @@ def dataset_path(source_dir: Path, dataset: str, season: int) -> Path:
     return source_dir / dataset / f"season={season}" / "data.parquet"
 
 
+def scalar(con: duckdb.DuckDBPyConnection, query: str):
+    """
+    The first value of a query's first row (an aggregate's), or None if it
+    has no rows. Read with fetchall: since DuckDB 2.0, fetchone leaves the
+    result open, and the connection refuses some calls (register) until it's
+    finished
+    """
+    rows = con.execute(query).fetchall()
+    return rows[0][0] if rows else None
+
+
 def write_atomic(path: Path, write: Callable[[Path], object]) -> None:
     """
     call write(tmp_path), then move the result into place. If write fails,
@@ -92,12 +103,12 @@ def check_keys(
         f"SELECT {cols}, count(*) FROM {table} GROUP BY ALL HAVING count(*) > 1"
     ).fetchall()
     any_null = " OR ".join(f"{k} IS NULL" for k in keys)
-    nulls = con.execute(f"SELECT count(*) FROM {table} WHERE {any_null}").fetchone()
+    nulls = scalar(con, f"SELECT count(*) FROM {table} WHERE {any_null}")
     problems = []
     if dupes:
         problems.append(f"{label}: duplicate ({cols}): {dupes[:5]}")
-    if nulls and nulls[0]:
-        problems.append(f"{label}: {nulls[0]} rows with a NULL in ({cols})")
+    if nulls:
+        problems.append(f"{label}: {nulls} rows with a NULL in ({cols})")
     if not problems:
         return
     dropped = os.environ.get(DROPPED_ENV)

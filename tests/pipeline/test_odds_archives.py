@@ -44,7 +44,7 @@ def write_team_game_logs(outdir, season, games):
     values = ", ".join(
         f"('{g}', '{d}'::DATE, '{t}')" for g, d, h, a in games for t in (h, a)
     )
-    duckdb.sql(
+    duckdb.default_connection().sql(
         f"COPY (FROM (VALUES {values}) v(game_id, game_date, team_id)) TO '{path}'"
     )
 
@@ -140,7 +140,7 @@ def write_odds_api(outdir, rows):
     values = ", ".join(
         f"({e}, {s}, {t}, 'odds_api_consensus_close')" for e, s, t in rows
     )
-    duckdb.sql(
+    duckdb.default_connection().sql(
         f"COPY (FROM (VALUES {values}) "
         f"v(game_id, home_point, over_under, spread_source)) TO '{path}'"
     )

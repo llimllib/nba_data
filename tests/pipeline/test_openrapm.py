@@ -59,7 +59,7 @@ def known(players):
 
 
 def read(path):
-    return duckdb.sql(
+    return duckdb.execute(
         f"SELECT * FROM read_parquet('{path}', hive_partitioning = false) "
         "ORDER BY player_id"
     ).fetchall()

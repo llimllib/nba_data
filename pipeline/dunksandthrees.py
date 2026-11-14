@@ -776,7 +776,7 @@ def known_players(outdir: Path, season: int, url: str = URL) -> set[str] | None:
         else f"{url}/{STATS_DIR}/player_seasons/season={season}/data.parquet"
     )
     try:
-        rows = duckdb.sql(
+        rows = duckdb.execute(
             f"SELECT player_id FROM read_parquet('{source}', hive_partitioning = false)"
         ).fetchall()
     except duckdb.HTTPException as e:

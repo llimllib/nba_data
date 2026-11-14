@@ -295,8 +295,8 @@ def same_columns(con: duckdb.DuckDBPyConnection, urls: list[str]) -> bool:
             GROUP BY file_name
         )
         """
-    ).fetchone()
-    return row is not None and row[0] == 1
+    ).fetchall()
+    return bool(row) and row[0][0] == 1
 
 
 def reader(con: duckdb.DuckDBPyConnection, dataset: str, urls: list[str]) -> str:

@@ -76,7 +76,7 @@ def write_raw(outdir, season, day_str, data):
 
 
 def read(outdir, dataset, season):
-    return duckdb.sql(
+    return duckdb.default_connection().sql(
         f"SELECT * FROM read_parquet('{dataset_path(outdir / espn.OUT_DIR, dataset, season)}', hive_partitioning = false)"
     )
 
@@ -108,7 +108,7 @@ def test_output_types(tmp_path):
     espn.build_season(tmp_path, 2026)
     for dataset in espn.QUERIES:
         types = dict(
-            duckdb.sql(
+            duckdb.execute(
                 f"SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM "
                 f"read_parquet('{dataset_path(tmp_path / espn.OUT_DIR, dataset, 2026)}', hive_partitioning = false))"
             ).fetchall()
@@ -119,7 +119,7 @@ def test_output_types(tmp_path):
         assert "BIGINT" not in types.values(), dataset
         assert not any(c[0].isdigit() for c in types), dataset
     pb = dict(
-        duckdb.sql(
+        duckdb.execute(
             f"SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM "
             f"read_parquet('{dataset_path(tmp_path / espn.OUT_DIR, 'player_box', 2026)}', hive_partitioning = false))"
         ).fetchall()
@@ -217,7 +217,7 @@ def test_rebuild_overwrites(tmp_path):
         tmp_path, 2026, "2025-11-06", day([player(2, "BRK", BKN)], game="0022500200")
     )
     espn.build_season(tmp_path, 2026)
-    assert read(tmp_path, "player_box", 2026).count("*").fetchone() == (2,)
+    assert read(tmp_path, "player_box", 2026).count("*").fetchall()[0] == (2,)
 
 
 def client_error(code):
@@ -292,7 +292,9 @@ def write_games(outdir, season, game_ids):
     path = dataset_path(outdir / espn.STATS_DIR, "games", season)
     path.parent.mkdir(parents=True, exist_ok=True)
     values = ", ".join(f"('{g}')" for g in game_ids)
-    duckdb.sql(f"COPY (FROM (VALUES {values}) v(game_id)) TO '{path}'")
+    duckdb.default_connection().sql(
+        f"COPY (FROM (VALUES {values}) v(game_id)) TO '{path}'"
+    )
 
 
 def test_games_not_in_games_are_held_back(tmp_path):

@@ -101,7 +101,14 @@ from nba_api.stats.endpoints import (
 
 from . import lookups, schedule
 from .catalog import URL
-from .output import check_keys, dataset_path, report, write_atomic, write_parquet
+from .output import (
+    check_keys,
+    dataset_path,
+    report,
+    scalar,
+    write_atomic,
+    write_parquet,
+)
 from .seasons import EASTERN, current_season, season_window, today_eastern
 
 RAW_DIR = Path("nba/raw/stats")
@@ -613,9 +620,7 @@ def normalized(
 
 
 def count(con: duckdb.DuckDBPyConnection, table: str) -> int:
-    row = con.execute(f"SELECT count(*) FROM {table}").fetchone()
-    assert row is not None
-    return row[0]
+    return scalar(con, f"SELECT count(*) FROM {table}")
 
 
 def join_raw(

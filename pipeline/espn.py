@@ -36,7 +36,7 @@ from pathlib import Path
 import duckdb
 
 from .catalog import URL
-from .output import check_keys, dataset_path, write_atomic, write_parquet
+from .output import check_keys, dataset_path, scalar, write_atomic, write_parquet
 from .seasons import current_season, season_days, season_window, today_eastern
 from .teams import TEAM_ABBREVS_FILE, UnknownTeamAbbrev, load_team_abbrevs
 
@@ -349,8 +349,7 @@ def build_season(
         drop_other_team(con, dataset)
         check_keys(con, "out", KEYS[dataset], f"espn {dataset}")
 
-        rows = con.execute("SELECT count(*) FROM out").fetchone()
-        if not (rows and rows[0]):
+        if not scalar(con, "SELECT count(*) FROM out"):
             print(f"espn: no {dataset} for {season} yet")
             continue
         path = dataset_path(outdir / OUT_DIR, dataset, season)
@@ -449,7 +448,7 @@ def check_abbrevs(con, dataset: str) -> None:
     if unknown:
         raise UnknownTeamAbbrev(
             f"espn {dataset}: no team_id for {sorted(u[0] for u in unknown)} in season "
-            f"{con.execute('SELECT any_value(season) FROM src').fetchone()[0]}; "
+            f"{scalar(con, 'SELECT any_value(season) FROM src')}; "
             "add them to team_abbrevs.csv"
         )
 

@@ -38,7 +38,7 @@ def power(*teams, through="2026-11-11", built="2026-11-12", season=2027):
 
 
 def read(path, order="team_id"):
-    return duckdb.sql(
+    return duckdb.execute(
         f"SELECT * FROM read_parquet('{path}', hive_partitioning = false) "
         f"ORDER BY {order}"
     ).fetchall()
@@ -231,7 +231,7 @@ def test_main_no_fetch_rebuilds(tmp_path, team_ids):
 def test_team_ids_for_reads_out_first(tmp_path):
     path = dataset_path(tmp_path / p.STATS_DIR, "team_seasons", 2027)
     path.parent.mkdir(parents=True)
-    duckdb.sql(
+    duckdb.default_connection().sql(
         "COPY (SELECT * FROM (VALUES (2027, '1610612759', 'SAS', true), "
         "(2027, '1', 'EST', false)) t(season, team_id, nba_abbrev, is_nba)) "
         f"TO '{path}' (FORMAT parquet)"

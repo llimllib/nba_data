@@ -246,7 +246,7 @@ class FakeFetcher:
 
 
 def read(path):
-    rel = duckdb.sql(
+    rel = duckdb.default_connection().sql(
         f"SELECT * FROM read_parquet('{path}', hive_partitioning = false) ORDER BY ALL"
     )
     return rel
@@ -298,7 +298,7 @@ def test_build_season_uses_the_latest_page(tmp_path):
     path = ctg.build_season(tmp_path, SEASON, pages)
     assert path == dataset_path(tmp_path / ctg.OUT_DIR, ctg.DATASET, SEASON)
     rel = read(path)
-    assert rel.count("*").fetchone() == (46,)
+    assert rel.count("*").fetchall()[0] == (46,)
     regular = rel.filter("season_type = 'regular_season'")
     assert regular.select("as_of_date::VARCHAR, def_rtg").distinct().fetchall() == [
         ("2026-04-12", 99.0)

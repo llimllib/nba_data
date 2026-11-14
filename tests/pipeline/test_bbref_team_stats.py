@@ -130,7 +130,7 @@ def test_build_team_stats(tmp_path):
     path = bbref.build_team_stats(tmp_path, league_page(), SEASON)
     assert path == dataset_path(tmp_path / bbref.OUT_DIR, "bbref_team_stats", SEASON)
     types = dict(
-        duckdb.sql(
+        duckdb.execute(
             f"SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM "
             f"read_parquet('{path}', hive_partitioning = false))"
         ).fetchall()

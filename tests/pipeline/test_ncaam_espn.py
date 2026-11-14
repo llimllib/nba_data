@@ -418,7 +418,7 @@ def test_fetcher_retries_a_dropped_connection_three_times(monkeypatch):
 
 
 def read(path):
-    return duckdb.sql(
+    return duckdb.default_connection().sql(
         f"SELECT * FROM read_parquet('{path}', hive_partitioning = false)"
     )
 
@@ -433,8 +433,8 @@ def test_build_season_from_espn(tmp_path):
     names = ["games", "team_box", "player_box", "team_seasons", "player_seasons"]
     assert paths == [dataset_path(tmp_path / "ncaam/espn", n, SEASON) for n in names]
     games, team_box, player_box, team_seasons, player_seasons = map(read, paths)
-    assert games.count("*").fetchone() == (1,)
-    assert team_box.count("*").fetchone() == (2,)
+    assert games.count("*").fetchall()[0] == (1,)
+    assert team_box.count("*").fetchall()[0] == (2,)
     assert player_box.select("player_id").order("1").fetchall() == [("10",), ("20",)]
     assert team_seasons.select("team_id, is_d1, torvik_team").order("1").fetchall() == [
         ("194", True, "Ohio St."),
@@ -493,7 +493,7 @@ def write_sdv(outdir, season=2010, box_games=(1, 2)):
         f"'Away {a}', {conf(a)}, 70, 60, true, false, '', 'Arena', 1000, {f})"
         for g, d, h, a, f in games
     )
-    duckdb.sql(
+    duckdb.default_connection().sql(
         f"""COPY (SELECT * FROM (VALUES {rows}) v(game_id, season, season_type,
             game_date, game_date_time, home_id, home_location, home_name,
             home_abbreviation, home_display_name, home_conference_id, away_id,
@@ -515,11 +515,11 @@ def write_sdv(outdir, season=2010, box_games=(1, 2)):
                 f"'home' AS team_home_away, true AS team_winner, 70 AS team_score, "
                 f"60 AS opponent_team_score, {stats}"
             )
-    duckdb.sql(
+    duckdb.default_connection().sql(
         f"COPY ({' UNION ALL '.join(box)}) TO '{paths['team_box']}' (FORMAT parquet)"
     )
     pstats = ", ".join(f"5 AS {c}" for c in ne.SDV_PLAYER_STATS.values())
-    duckdb.sql(
+    duckdb.default_connection().sql(
         f"""COPY (
             SELECT g AS game_id, {season} AS season, DATE '2009-11-09' AS game_date,
                 194 AS team_id, a AS athlete_id, 'P' || a AS athlete_display_name,
@@ -537,11 +537,11 @@ def test_build_season_from_sportsdataverse(tmp_path):
     games, team_box, player_box, team_seasons, player_seasons = map(read, paths)
     # the unfinished game, and players who didn't play or have no id, are out
     assert games.select("game_id").order("1").fetchall() == [("1",), ("2",)]
-    assert team_box.count("*").fetchone() == (4,)
+    assert team_box.count("*").fetchall()[0] == (4,)
     assert player_box.select("player_id").fetchall() == [("10",)]
     assert player_seasons.select("player_id").fetchall() == [("10",)]
     row = team_box.filter("game_id = '1' AND team_id = '194'")
-    assert row.select("fgm, tov, pf, largest_lead, home").fetchone() == (
+    assert row.select("fgm, tov, pf, largest_lead, home").fetchall()[0] == (
         10,
         10,
         10,
@@ -560,7 +560,7 @@ def test_missing_boxes_are_filled_from_espn(tmp_path):
     espn = FakeESPN(summaries={"2": summary("2")})
     ne.fetch_summaries(espn, tmp_path, 2010, ne.missing_boxes(tmp_path, 2010), TODAY)
     team_box = read(ne.build_season(tmp_path, 2010)[1])
-    assert team_box.filter("game_id = '2'").count("*").fetchone() == (2,)
+    assert team_box.filter("game_id = '2'").count("*").fetchall()[0] == (2,)
 
 
 def test_teams_csv():

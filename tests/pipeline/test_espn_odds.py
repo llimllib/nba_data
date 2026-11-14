@@ -68,13 +68,13 @@ def write_team_game_logs(outdir, games):
     values = ", ".join(
         f"('{g}', '{d}'::DATE, '{t}')" for g, d, teams in games for t in teams
     )
-    duckdb.sql(
+    duckdb.default_connection().sql(
         f"COPY (FROM (VALUES {values}) v(game_id, game_date, team_id)) TO '{path}'"
     )
 
 
 def read(path):
-    return duckdb.sql(
+    return duckdb.default_connection().sql(
         f"SELECT * FROM read_parquet('{path}', hive_partitioning = false)"
     )
 

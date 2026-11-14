@@ -78,9 +78,9 @@ def write_player_seasons(outdir, players, season=2027):
     path = dataset_path(outdir / stats.OUT_DIR, "player_seasons", season)
     path.parent.mkdir(parents=True, exist_ok=True)
     rows = ", ".join(f"('{pid}', '{name}')" for pid, name in players)
-    duckdb.sql(f"SELECT * FROM (VALUES {rows}) t(player_id, name)").write_parquet(
-        str(path)
-    )
+    duckdb.default_connection().sql(
+        f"SELECT * FROM (VALUES {rows}) t(player_id, name)"
+    ).write_parquet(str(path))
 
 
 class FakeESPN:
@@ -322,9 +322,9 @@ def write_schedule(outdir, starts, season=2027):
     path = dataset_path(outdir / stats.OUT_DIR, "schedule", season)
     path.parent.mkdir(parents=True, exist_ok=True)
     rows = ", ".join(f"('{i}', TIMESTAMPTZ '{s}')" for i, s in enumerate(starts))
-    duckdb.sql(f"SELECT * FROM (VALUES {rows}) t(game_id, start_time)").write_parquet(
-        str(path)
-    )
+    duckdb.default_connection().sql(
+        f"SELECT * FROM (VALUES {rows}) t(game_id, start_time)"
+    ).write_parquet(str(path))
 
 
 def test_next_tipoff(tmp_path):
