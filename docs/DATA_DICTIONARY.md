@@ -575,6 +575,11 @@ Built from the same responses, one file per season under `nba/stats/`.
 
 **`team_seasons/season=<season>/data.parquet`**: one row per team that played that
 season, including All-Star teams and international preseason opponents.
+Conference and division come from `leaguestandingsv3` (one request,
+refetched every run; raw response at
+`nba/raw/stats/<season>/standings.json.gz`). They're per season, so a team
+that changed division is in its old one for the seasons before the change.
+None changed between 2009-10 and 2026-27.
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -582,6 +587,20 @@ season, including All-Star teams and international preseason opponents.
 | nba_abbrev | VARCHAR | The NBA's abbreviation that season (NJN, BKN, ...). Not unique within a season |
 | full_name | VARCHAR | e.g. "Charlotte Bobcats", "LA Clippers" |
 | is_nba | BOOLEAN | One of the 30 franchises. False for All-Star teams (Team LeBron, Rising Stars) and international preseason opponents (Melbourne United, Real Madrid) |
+| conference | VARCHAR | `East` or `West`. NULL for teams that aren't NBA teams |
+| division | VARCHAR | `Atlantic`, `Central`, `Southeast`, `Northwest`, `Pacific` or `Southwest`. NULL for teams that aren't NBA teams |
+
+```sql
+-- this season's conference standings, from the game logs
+SELECT t.conference, t.nba_abbrev AS team,
+    count(*) FILTER (WHERE g.win) AS w, count(*) FILTER (WHERE NOT g.win) AS l
+FROM team_game_logs g
+JOIN games USING (season, game_id)
+JOIN team_seasons t USING (season, team_id)
+WHERE g.season = 2027 AND games.game_type = 'regular_season'
+GROUP BY ALL
+ORDER BY t.conference, w / (w + l) DESC;
+```
 
 **`player_seasons/season=<season>/data.parquet`**: one row per player who played
 (including preseason), has season stats, or is on a team's roster, with

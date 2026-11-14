@@ -37,6 +37,13 @@ refetched every run too (one request), for pipeline.schedule:
 
 It's optional as well: a season without it has no schedule.
 
+The standings (one request, every run too) give each team's conference and
+division that season, for team_seasons:
+
+    nba/raw/stats/<season>/standings.json.gz
+
+Optional too: without them, team_seasons' conference and division are NULL.
+
 and these are built from them, one file per season:
 
     nba/stats/team_game_logs/season=<season>/data.parquet  (and team_oreb, from game_events)
@@ -80,6 +87,7 @@ from nba_api.stats.endpoints import (
     LeagueDashPlayerBioStats,
     LeagueDashPlayerPtShot,
     LeagueDashPlayerStats,
+    LeagueStandingsV3,
     PlayerGameLogs,
     ScheduleLeagueV2,
     TeamGameLogs,
@@ -118,6 +126,8 @@ ROSTERS_DAILY = "rosters_daily"
 ROSTERS_DAILY_KEYS = ["as_of_date", "team_id", "player_id"]
 
 SCHEDULE = "schedule"
+
+STANDINGS = "standings"
 
 # The team game logs, which games is built from, can list a game hours after
 # it ends: up to about 4 hours after a late West Coast game. Other datasets
@@ -257,6 +267,59 @@ def fetch_schedule(
     )
     write_raw(raw_path(outdir, season, SCHEDULE), data)
     print(f"stats: fetched {SCHEDULE}")
+
+
+def check_standings(data: dict) -> None:
+    """raise unless the standings have every NBA team's conference and division"""
+    rs = result_set(data)
+    missing = {"TeamID", "Conference", "Division"} - set(rs["headers"])
+    if missing:
+        raise ValueError(f"the standings have no {missing}")
+    i, c, d = (rs["headers"].index(h) for h in ("TeamID", "Conference", "Division"))
+    teams = {row[i] for row in rs["rowSet"] if row[c] and row[d]}
+    if teams != set(lookups.NBA_TEAM_IDS):
+        raise ValueError(
+            f"the standings have {len(teams)} teams with a conference and "
+            f"division, not the {len(lookups.NBA_TEAM_IDS)} in NBA_TEAM_IDS"
+        )
+
+
+def fetch_standings(
+    outdir: Path, season: int, fetch: Callable[..., dict] = fetch
+) -> None:
+    data = fetch(
+        LeagueStandingsV3,
+        {
+            "league_id": "00",
+            "season": season_string(season),
+            "season_type": "Regular Season",
+        },
+        check=check_standings,
+    )
+    write_raw(raw_path(outdir, season, STANDINGS), data)
+    print(f"stats: fetched {STANDINGS}")
+
+
+def load_standings(con: duckdb.DuckDBPyConnection, outdir: Path, season: int) -> None:
+    """
+    Load `standings` (team_id, conference, division) from the saved
+    standings, empty if there are none
+    """
+    path = raw_path(outdir, season, STANDINGS)
+    if path.is_file():
+        check_standings(read_raw(path))
+        load_raw(con, path, "standings_raw")
+        query = (
+            "SELECT teamid::VARCHAR AS team_id, conference::VARCHAR AS conference, "
+            "division::VARCHAR AS division FROM standings_raw"
+        )
+    else:
+        print(f"stats: no {STANDINGS} for {season}; no conferences or divisions")
+        query = (
+            "SELECT NULL::VARCHAR AS team_id, NULL::VARCHAR AS conference, "
+            "NULL::VARCHAR AS division WHERE false"
+        )
+    con.execute(f"CREATE OR REPLACE TABLE standings AS {query}")
 
 
 def daily_rosters_path(outdir: Path, season: int, day: date) -> Path:
@@ -830,6 +893,7 @@ def build_season(
         )
         load_raw(con, raw_path(outdir, season, name), table)
     load_rosters(con, outdir, season)
+    load_standings(con, outdir, season)
     load_team_orebs(con, outdir, season, url)
 
     # the lookups read team_game_logs, so they're built after it
@@ -917,6 +981,7 @@ def main(argv: list[str] | None = None) -> None:
         elif not args.no_fetch:
             fetch_season(args.out, season)
             fetch_schedule(args.out, season)
+            fetch_standings(args.out, season)
             fetch_rosters(args.out, season)
             fetched = datetime.now(UTC)
         if not build_season(args.out, season, args.url, fetched):

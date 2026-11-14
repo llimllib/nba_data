@@ -4,7 +4,7 @@ from datetime import UTC, date, datetime, timedelta
 
 import duckdb
 import pytest
-from nba_api.stats.endpoints import LeagueDashPlayerStats
+from nba_api.stats.endpoints import LeagueDashPlayerStats, LeagueStandingsV3
 
 from pipeline import stats
 from pipeline.output import dataset_path
@@ -533,8 +533,69 @@ def test_team_seasons(tmp_path):
         "nba_abbrev": "BOS",
         "full_name": "Boston Celtics",
         "is_nba": True,
+        # no saved standings
+        "conference": None,
+        "division": None,
     }
     assert set(rows) == {str(BOS), str(NYK)}
+
+
+def standings(skip=()):
+    """standings for every NBA team; Boston is in the Atlantic, the rest elsewhere"""
+    rows = [
+        ["00", t, "East", "Atlantic" if t == BOS else f"Div{t % 6}", "1-0"]
+        for t in stats.lookups.NBA_TEAM_IDS
+        if t not in skip
+    ]
+    return response(["LeagueID", "TeamID", "Conference", "Division", "Record"], rows)
+
+
+def test_team_seasons_conference_and_division(tmp_path):
+    write_raw(tmp_path, team_game_logs_base=melbourne("0012500001"))
+    stats.write_raw(stats.raw_path(tmp_path, 2026, stats.STANDINGS), standings())
+    stats.build_season(tmp_path, 2026)
+    rows = {r["team_id"]: r for r in read(tmp_path, "team_seasons")}
+    assert (rows[str(BOS)]["conference"], rows[str(BOS)]["division"]) == (
+        "East",
+        "Atlantic",
+    )
+    # an international team isn't in the standings
+    assert (rows["15016"]["conference"], rows["15016"]["division"]) == (None, None)
+    assert types(tmp_path, "team_seasons")["division"] == "VARCHAR"
+
+
+def test_standings_missing_a_team_fail(tmp_path):
+    write_raw(tmp_path)
+    stats.write_raw(
+        stats.raw_path(tmp_path, 2026, stats.STANDINGS), standings(skip={NYK})
+    )
+    with pytest.raises(ValueError, match="29 teams"):
+        stats.build_season(tmp_path, 2026)
+
+
+def test_fetch_standings(tmp_path):
+    calls = []
+
+    def fake_fetch(endpoint, kwargs, check):
+        calls.append((endpoint, kwargs))
+        data = standings()
+        check(data)
+        return data
+
+    stats.fetch_standings(tmp_path, 2027, fetch=fake_fetch)
+    assert calls == [
+        (
+            LeagueStandingsV3,
+            {"league_id": "00", "season": "2026-27", "season_type": "Regular Season"},
+        )
+    ]
+    saved = stats.read_raw(stats.raw_path(tmp_path, 2027, stats.STANDINGS))
+    assert len(stats.result_set(saved)["rowSet"]) == 30
+
+    # an empty response is retried, so check rejects it
+    empty = response(["TeamID", "Conference", "Division"], [])
+    with pytest.raises(ValueError, match="0 teams"):
+        stats.check_standings(empty)
 
 
 def melbourne(game_id):

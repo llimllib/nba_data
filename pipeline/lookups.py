@@ -2,12 +2,13 @@
 Lookup tables built from a season's raw stats.nba.com responses, which carry
 the names and abbreviations the other tables leave out:
 
-    team_seasons    team_id -> abbreviation and name that season
+    team_seasons    team_id -> abbreviation, name, conference and division
+                    that season
     player_seasons  player_id -> name that season, and whether they played
     games           game_id -> date, teams, and what the game id encodes
 
 Called from pipeline.stats.build_season, which has loaded the raw responses
-(tgl_base, pgl_base, ps_*_base, rosters) and built team_game_logs.
+(tgl_base, pgl_base, ps_*_base, rosters, standings) and built team_game_logs.
 """
 
 import duckdb
@@ -36,20 +37,26 @@ KEYS = {
 
 def build_team_seasons(con: duckdb.DuckDBPyConnection, season: int) -> None:
     # a team's name can't change mid-season, but if a source ever disagrees,
-    # use what it was called in its latest game
+    # use what it was called in its latest game. Conference and division
+    # come from the standings (NULL for All-Star and international teams, and
+    # for seasons without saved standings)
     con.execute(
         f"""
         CREATE OR REPLACE TABLE team_seasons AS
-        SELECT {season}::INTEGER AS season, team_id::VARCHAR AS team_id,
-            arg_max(team_abbreviation, game_date) AS nba_abbrev,
-            arg_max(team_name, game_date) AS full_name,
-            team_id::BIGINT BETWEEN {NBA_TEAM_IDS.start} AND {NBA_TEAM_IDS.stop - 1} AS is_nba
+        SELECT t.*, s.conference, s.division
         FROM (
-            SELECT team_id, team_abbreviation, team_name, game_date FROM tgl_base
-            UNION ALL
-            SELECT team_id, team_abbreviation, team_name, game_date FROM pgl_base
-        )
-        GROUP BY team_id
+            SELECT {season}::INTEGER AS season, team_id::VARCHAR AS team_id,
+                arg_max(team_abbreviation, game_date) AS nba_abbrev,
+                arg_max(team_name, game_date) AS full_name,
+                team_id::BIGINT BETWEEN {NBA_TEAM_IDS.start} AND {NBA_TEAM_IDS.stop - 1} AS is_nba
+            FROM (
+                SELECT team_id, team_abbreviation, team_name, game_date FROM tgl_base
+                UNION ALL
+                SELECT team_id, team_abbreviation, team_name, game_date FROM pgl_base
+            )
+            GROUP BY team_id
+        ) t
+        LEFT JOIN standings s USING (team_id)
         ORDER BY team_id
         """
     )
