@@ -13,7 +13,8 @@ minutes (checked on 117 games from 2010 to 2027; see docs/v2.md).
 
 It's two requests a game (and rarely a third), so unlike pipeline.stats
 this only fetches the games it doesn't have yet, plus the last RECENT days'
-games, which may still be corrected. The games come from the season's
+games, which may still be corrected (not with --no-recent, which
+update.yml's polling runs pass). The games come from the season's
 `games` table, from --out if it's there and the bucket otherwise. Each
 game's responses are kept together:
 
@@ -963,9 +964,11 @@ def fetch_season(
     clock: Callable[[], float] = time.monotonic,
     budget: float | None = None,
     workers: int = WORKERS,
+    recent: timedelta | None = RECENT,
 ) -> FetchResult:
     """
-    Fetch the games in `games` that aren't saved or are recent, newest
+    Fetch the games in `games` that aren't saved or are within `recent`
+    days of `today` (None: only games that aren't saved), newest
     first and `workers` at a time, starting new ones for up to `budget`
     seconds. Each game is saved as it arrives. When too many recent games
     have failed, pause and carry on (see PAUSES); a pause that wouldn't fit
@@ -976,7 +979,8 @@ def fetch_season(
     todo = [
         g
         for g, d in sorted(games, key=lambda g: (g[1], g[0]), reverse=True)
-        if not raw_path(outdir, season, g).is_file() or d >= today - RECENT
+        if not raw_path(outdir, season, g).is_file()
+        or (recent is not None and d >= today - recent)
     ]
     start = clock()
     result = FetchResult(0, [])
@@ -1377,6 +1381,12 @@ def main(argv: list[str] | None = None) -> None:
         help=f"games to fetch at once (default: {WORKERS})",
     )
     parser.add_argument(
+        "--no-recent",
+        action="store_true",
+        help="only fetch games that aren't saved, not the last "
+        f"{RECENT.days} days' again (for the runs that poll for new games)",
+    )
+    parser.add_argument(
         "--url", default=URL, help=f"bucket URL for the games table (default: {URL})"
     )
     args = parser.parse_args(argv)
@@ -1395,7 +1405,13 @@ def main(argv: list[str] | None = None) -> None:
             if args.minutes is not None:
                 budget = args.minutes * 60 - (time.monotonic() - start)
             result = fetch_season(
-                args.out, season, games, today, budget=budget, workers=args.workers
+                args.out,
+                season,
+                games,
+                today,
+                budget=budget,
+                workers=args.workers,
+                recent=None if args.no_recent else RECENT,
             )
             if result.stopped:
                 stopped.append(season)

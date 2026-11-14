@@ -1071,3 +1071,20 @@ def test_player_game_logs_wait_for_the_team_game_logs(tmp_path):
     assert stats.build_season(tmp_path, 2026)
     games = {r["game_id"] for r in read(tmp_path, "player_game_logs")}
     assert games == {GAME, CUP_FINAL}
+
+
+@pytest.mark.parametrize("argv,rosters", [([], True), (["--no-rosters"], False)])
+def test_main_no_rosters(tmp_path, monkeypatch, argv, rosters):
+    calls = []
+    for name in [
+        "fetch_season",
+        "fetch_schedule",
+        "fetch_standings",
+        "fetch_cup_standings",
+        "fetch_rosters",
+    ]:
+        monkeypatch.setattr(stats, name, lambda *a, name=name, **kw: calls.append(name))
+    monkeypatch.setattr(stats, "build_season", lambda *a, **kw: True)
+    stats.main(["--out", str(tmp_path), "--season", "2027", *argv])
+    assert ("fetch_rosters" in calls) == rosters
+    assert "fetch_season" in calls

@@ -850,11 +850,12 @@ WHERE b.season = 2027 AND b.provider_id = '100' AND b.close_spread <> 0 AND g.pl
 ESPN's NBA injury list
 ([site API](https://site.api.espn.com/apis/site/v2/sports/basketball/nba/injuries)),
 as of every time it was fetched: one row per fetch and listed player. ESPN
-only publishes the current list, so the history is what we saved: every
-`update.yml` run (every 4 hours, plus 06:13 and 10:13 UTC) from November
-12, 2026 (season 2027) on, with nothing earlier, and from November 14,
-2026, `injuries.yml` runs shortly before tip-offs, so most games have a
-fetch 15 to 50 minutes before they start. Each fetch is kept at
+only publishes the current list, so the history is what we saved, from
+November 12, 2026 (season 2027) on, with nothing earlier: every
+`update.yml` run (every 4 hours until November 14, 2026; since then its
+full runs at 12:43 and 16:43 UTC and its runs as games finish) and, from
+November 14, 2026, `injuries.yml` shortly before tip-offs, so most games
+have a fetch 15 to 50 minutes before they start. Each fetch is kept at
 `nba/raw/espn/<season>/injuries/<fetched_at>.json.gz`. Built by
 `pipeline/espn_injuries.py`.
 

@@ -1,12 +1,14 @@
 [Unit]
-Description=Run nba_data update.yml on schedule
+Description=Run nba_data update.yml while games end
 
 [Timer]
 Unit=nba-dispatch@update.yml.service
-# every 4 hours
-OnCalendar=*-*-* 00/4:43:00 UTC
-# extra runs at 1am and 5am Eastern, so last night's games are in by morning
-OnCalendar=*-*-* 06,10:13:00 UTC
+# every 30 minutes while a night's games can come in: the NBA's team game
+# logs list a game 2 to 4.5 hours after it ends. Most runs find nothing to
+# do (pipeline.gate) and stop in under a minute. UTC, and clear of the full
+# runs (nba-update-full.timer) and sources.yml (12:03), since a run queued
+# in the update-v2 group cancels an older one that's waiting
+OnCalendar=*-*-* 00..11,19..23:05,35:00 UTC
 Persistent=true
 
 [Install]

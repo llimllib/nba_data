@@ -23,7 +23,7 @@
 # The catalog isn't rebuilt here: that purges the CDN first, which needs
 # DO_CDN_API_KEY. The next update.yml run does it; to run it now:
 #
-#     gh workflow run update.yml
+#     gh workflow run update.yml -f full=true
 #
 # usage: scripts/rebuild_seasons.sh [--rotations] [--allow-missing] [--dry-run] SEASON...
 # needs the Spaces credentials and AWS_ENDPOINT_URL (mise.local.toml)
@@ -277,4 +277,4 @@ for season in "$@"; do
   echo "  done"
 done
 
-echo "done; the next update.yml run rebuilds the catalog (gh workflow run update.yml to run it now)"
+echo "done; the next update.yml run rebuilds the catalog (gh workflow run update.yml -f full=true to run it now)"

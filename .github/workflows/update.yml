@@ -5,11 +5,24 @@ name: Update data (v2)
 # so the two don't hit stats.nba.com through the exit node at once
 #
 # There's no cron: GitHub's schedule dropped about 40% of runs, mostly
-# overnight. A systemd timer on billmill.org dispatches it instead, every 4
-# hours plus 06:13 and 10:13 UTC; the unit files are in deploy/
+# overnight. systemd timers on billmill.org dispatch it instead (the unit
+# files are in deploy/): every 30 minutes from 19:05 to 11:35 UTC, when
+# games end, and with full=true at 12:43 and 16:43 UTC. A run without
+# full=true asks pipeline.gate first, and stops there unless a game is over
+# and not in games yet, or a recent game has no play-by-play; it also
+# doesn't refetch the last two days' play-by-play, which the full runs do,
+# for the NBA's corrections. The timers keep the polling runs away from
+# the full runs and sources.yml (12:03 UTC): runs in the update-v2 group
+# wait for each other, but a newer one queued behind a running one cancels
+# an older one that's waiting.
 
 on:
   workflow_dispatch:
+    inputs:
+      full:
+        description: Run even if no game is due, and refetch recent play-by-play
+        type: boolean
+        default: false
 
 concurrency:
   group: update-v2
@@ -35,7 +48,34 @@ env:
   CACHE_CONTROL: "public, max-age=0, must-revalidate, s-maxage=3600"
 
 jobs:
+  # most polling runs stop here: no exit node, no stats.nba.com
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
+    steps:
+      - uses: actions/checkout@v7
+        if: ${{ !inputs.full }}
+
+      - uses: jdx/mise-action@v5
+        if: ${{ !inputs.full }}
+
+      - name: Anything to do?
+        id: gate
+        run: |
+          if [ "$FULL" = "true" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            uv run python -m pipeline.gate
+          fi
+        env:
+          FULL: ${{ inputs.full }}
+
   update:
+    needs: gate
+    # a gate that failed (no output) doesn't stop the update
+    if: ${{ !cancelled() && needs.gate.outputs.run != 'false' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -80,8 +120,15 @@ jobs:
           fi
           curl --max-time 10 -sf https://www.google.com > /dev/null
 
+      # the rosters only in the full runs, so they're fetched at the same
+      # time every day (pipeline.stats.ROSTER_MAX_AGE)
       - name: Fetch NBA stats
-        run: uv run python -m pipeline.stats --out out
+        run: |
+          if [ "${{ inputs.full }}" = "true" ]; then
+            uv run python -m pipeline.stats --out out
+          else
+            uv run python -m pipeline.stats --out out --no-rosters
+          fi
 
       # player stints and play-by-play, for the games in the games table just
       # built (so a night's games are fetched in the first run that has
@@ -95,7 +142,12 @@ jobs:
         continue-on-error: true
         run: |
           aws s3 sync "s3://$BUCKET/nba/raw/stats/$SEASON/playbyplay/" "out/nba/raw/stats/$SEASON/playbyplay/" --no-progress
-          uv run python -m pipeline.rotations --out out --minutes 10
+          # a boolean input, so safe to interpolate
+          if [ "${{ inputs.full }}" = "true" ]; then
+            uv run python -m pipeline.rotations --out out --minutes 10
+          else
+            uv run python -m pipeline.rotations --out out --minutes 10 --no-recent
+          fi
         env: *spaces
 
       # team_game_logs.team_oreb is counted from game_events, so rebuild

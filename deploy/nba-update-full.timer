@@ -1,0 +1,13 @@
+[Unit]
+Description=Run nba_data update.yml in full: corrections, rosters
+
+[Timer]
+Unit=nba-dispatch-full@update.yml.service
+# runs whether or not a game is due, and refetch the last two days'
+# play-by-play for the NBA's corrections. After sources.yml (12:03 UTC),
+# and outside nba-update.timer's window
+OnCalendar=*-*-* 12,16:43:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

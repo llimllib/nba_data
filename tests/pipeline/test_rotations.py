@@ -981,6 +981,20 @@ def test_fetch_season_fetches_new_and_recent_games(tmp_path):
     assert stats.read_raw(path) == fake_game("0022500003")
 
 
+def test_fetch_season_without_recent_games(tmp_path):
+    for game_id in ("0022500001", "0022500003"):
+        stats.write_raw(rotations.raw_path(tmp_path, 2026, game_id), {})
+    seen = []
+
+    def fetch(game_id):
+        seen.append(game_id)
+        return fake_game(game_id)
+
+    assert fetch_season(tmp_path, fetch, recent=None) == rotations.FetchResult(2, [])
+    # 0022500003 is recent, but saved
+    assert seen == ["0022500004", "0022500002"]
+
+
 def test_fetch_season_fetches_games_at_once(tmp_path):
     # each fetch waits until two are in flight, so this only finishes if
     # they overlap

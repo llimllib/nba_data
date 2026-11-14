@@ -43,7 +43,7 @@ needs are downloaded.
 
 - **What's there:** NBA game logs, player season stats and lookup tables
   (teams, players, games) from stats.nba.com for 2009-10 on, and ESPN's net
-  points data for 2018-19 on, updated every 4 hours
+  points data for 2018-19 on, updated through the night as games finish
 - **Keys:** NBA ids (`player_id`, `team_id`, `game_id`, as strings) in every
   table, and `season` is the end year (2026 = 2025-26). Names come from
   `players` and `team_seasons`

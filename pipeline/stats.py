@@ -125,7 +125,8 @@ SEASON_TYPES = {"regular_season": "Regular Season", "playoffs": "Playoffs"}
 EVENTS = "game_events"
 
 ROSTERS = "team_rosters"
-# the update runs every 4 hours, so this refetches rosters once a day
+# update.yml's full runs are at 12:43 and 16:43 UTC (its polling runs don't
+# fetch rosters), so this refetches them once a day, at 12:43
 ROSTER_MAX_AGE = timedelta(hours=20)
 # between roster requests, to go easy on stats.nba.com
 ROSTER_DELAY = 1
@@ -1042,6 +1043,12 @@ def main(argv: list[str] | None = None) -> None:
         action="store_true",
         help="fetch only the rosters, then rebuild from raw files (to backfill them)",
     )
+    fetching.add_argument(
+        "--no-rosters",
+        action="store_true",
+        help="don't refetch the rosters, however old (update.yml's polling "
+        "runs, so they're refetched at the same time each day, by the full runs)",
+    )
     parser.add_argument(
         "--url",
         default=URL,
@@ -1058,7 +1065,8 @@ def main(argv: list[str] | None = None) -> None:
             fetch_schedule(args.out, season)
             fetch_standings(args.out, season)
             fetch_cup_standings(args.out, season)
-            fetch_rosters(args.out, season)
+            if not args.no_rosters:
+                fetch_rosters(args.out, season)
             fetched = datetime.now(UTC)
         if not build_season(args.out, season, args.url, fetched):
             raise SystemExit(f"stats: no raw data for season {season}")

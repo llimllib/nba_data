@@ -2,7 +2,7 @@ name: Injuries before tip-off
 
 # Fetches ESPN's injury list shortly before games, so espn_injuries has a
 # snapshot close to each tip-off (#108); update.yml fetches it too, but
-# every 4 hours. Only ESPN and the bucket: no stats.nba.com, so no exit
+# not timed to the games. Only ESPN and the bucket: no stats.nba.com, so no exit
 # node. A run with no game in the next 75 minutes does nothing, so the
 # timer (deploy/nba-injuries.timer) can fire at the same times every day.
 #
