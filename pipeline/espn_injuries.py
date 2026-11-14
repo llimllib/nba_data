@@ -29,7 +29,7 @@ usage: python -m pipeline.espn_injuries [--out out] [--no-fetch] [--url URL]
 
 import argparse
 import re
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import duckdb
@@ -297,6 +297,27 @@ def build_season(outdir: Path, season: int, url: str = URL) -> Path | None:
     return out
 
 
+def next_tipoff(
+    outdir: Path, season: int, now: datetime, url: str = URL
+) -> datetime | None:
+    """
+    The earliest start_time after `now` in the season's schedule (from
+    `outdir`, else the bucket); None if there's none
+    """
+    try:
+        rows = read_stats(
+            outdir,
+            season,
+            "schedule",
+            f"SELECT min(start_time) FROM t WHERE start_time > '{now.isoformat()}'",
+            url,
+        )
+    except duckdb.IOException as e:
+        print(f"espn_injuries: no schedule: {e}")
+        return None
+    return rows[0][0] if rows and rows[0][0] else None
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="ESPN's NBA injury list")
     parser.add_argument("--out", type=Path, default=Path("out"))
@@ -314,9 +335,26 @@ def main(argv: list[str] | None = None) -> None:
         default=URL,
         help=f"bucket URL for player_seasons if --out has none (default: {URL})",
     )
+    parser.add_argument(
+        "--before-games",
+        type=float,
+        metavar="MINUTES",
+        help="do nothing unless a game tips off within this many minutes "
+        "(for the runs timed to tip-offs)",
+    )
     args = parser.parse_args(argv)
 
     today = today_eastern()
+    if args.before_games is not None:
+        now = datetime.now(UTC)
+        tip = next_tipoff(args.out, current_season(today), now, args.url)
+        if tip is None or tip - now > timedelta(minutes=args.before_games):
+            print(
+                f"espn_injuries: no game in the next {args.before_games:g} "
+                f"minutes (next: {tip}); not fetching"
+            )
+            return
+        print(f"espn_injuries: next game at {tip}")
     if not args.no_fetch:
         fetch(Fetcher(label="espn_injuries"), args.out, today, datetime.now(UTC))
     for season in args.season or [current_season(today)]:

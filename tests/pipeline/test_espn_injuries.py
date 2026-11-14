@@ -1,4 +1,4 @@
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 
 import duckdb
 import pytest
@@ -316,3 +316,46 @@ def test_fetch_saves_under_the_current_season(tmp_path):
     doc["season"] = {"year": 2026, "type": 4}
     path = espn_injuries.fetch(FakeESPN(doc), tmp_path, date(2026, 9, 15), NOW)
     assert path.parent == espn_injuries.raw_dir(tmp_path, 2027)
+
+
+def write_schedule(outdir, starts, season=2027):
+    path = dataset_path(outdir / stats.OUT_DIR, "schedule", season)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    rows = ", ".join(f"('{i}', TIMESTAMPTZ '{s}')" for i, s in enumerate(starts))
+    duckdb.sql(f"SELECT * FROM (VALUES {rows}) t(game_id, start_time)").write_parquet(
+        str(path)
+    )
+
+
+def test_next_tipoff(tmp_path):
+    write_schedule(
+        tmp_path,
+        ["2026-11-12 23:00:00+00", "2026-11-13 00:00:00+00", "2026-11-13 00:30:00+00"],
+    )
+    now = datetime(2026, 11, 12, 23, 30, tzinfo=UTC)
+    tip = espn_injuries.next_tipoff(tmp_path, 2027, now, url="http://nowhere.invalid")
+    assert tip == datetime(2026, 11, 13, 0, 0, tzinfo=UTC)
+    later = datetime(2026, 11, 14, tzinfo=UTC)
+    assert espn_injuries.next_tipoff(tmp_path, 2027, later) is None
+
+
+def test_before_games_skips_when_no_game_is_soon(tmp_path, monkeypatch, capsys):
+    soon = datetime.now(UTC) + timedelta(minutes=30)
+    write_schedule(
+        tmp_path,
+        [soon.isoformat()],
+        season=espn_injuries.current_season(espn_injuries.today_eastern()),
+    )
+
+    def no_fetch(*a, **kw):
+        raise AssertionError("fetched")
+
+    monkeypatch.setattr(espn_injuries, "fetch", no_fetch)
+    monkeypatch.setattr(espn_injuries, "build_season", no_fetch)
+    espn_injuries.main(["--out", str(tmp_path), "--before-games", "20"])
+    assert "not fetching" in capsys.readouterr().out
+    fetched = []
+    monkeypatch.setattr(espn_injuries, "fetch", lambda *a, **kw: fetched.append(1))
+    monkeypatch.setattr(espn_injuries, "build_season", lambda *a, **kw: None)
+    espn_injuries.main(["--out", str(tmp_path), "--before-games", "45"])
+    assert fetched == [1]

@@ -1,0 +1,135 @@
+name: Injuries before tip-off
+
+# Fetches ESPN's injury list shortly before games, so espn_injuries has a
+# snapshot close to each tip-off (#108); update.yml fetches it too, but
+# every 4 hours. Only ESPN and the bucket: no stats.nba.com, so no exit
+# node. A run with no game in the next 75 minutes does nothing, so the
+# timer (deploy/nba-injuries.timer) can fire at the same times every day.
+#
+# Its own concurrency group, so it never waits behind update.yml. If the
+# two overlap, the one that uploads last may publish an espn_injuries file
+# without the other's snapshot; the raw file is kept either way, and the
+# next run of either rebuilds from every saved snapshot.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: injuries
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  BUCKET: basketball-data
+  UV_HTTP_TIMEOUT: 600
+  # players that don't match an NBA id are listed here; "Report unmatched
+  # players" fails the run after the rest is published
+  PIPELINE_DROPPED: /tmp/pipeline-dropped.txt
+  CACHE_CONTROL: "public, max-age=0, must-revalidate, s-maxage=3600"
+
+jobs:
+  injuries:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: jdx/mise-action@v5
+
+      - name: Current season
+        run: echo "SEASON=$(uv run python -c 'from pipeline.seasons import current_season, today_eastern; print(current_season(today_eastern()))')" >> "$GITHUB_ENV"
+
+      # the build reads every saved snapshot, and matches players on the
+      # saved rosters; player_seasons and the schedule come from the bucket
+      - name: Download the saved lists and rosters
+        run: |
+          aws s3 sync "s3://$BUCKET/nba/raw/espn/$SEASON/injuries/" "out/nba/raw/espn/$SEASON/injuries/" --no-progress
+          aws s3 sync "s3://$BUCKET/nba/raw/stats/$SEASON/" "out/nba/raw/stats/$SEASON/" --exclude '*' --include 'team_rosters/*' --no-progress
+        env: &spaces
+          AWS_ACCESS_KEY_ID: ${{ secrets.DO_SPACES_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.DO_SPACES_SECRET }}
+          AWS_ENDPOINT_URL: https://sfo3.digitaloceanspaces.com
+          AWS_DEFAULT_REGION: us-east-1
+
+      - name: Fetch ESPN's injury list
+        id: fetch
+        run: uv run python -m pipeline.espn_injuries --out out --before-games 75
+
+      # nothing was built if no game was soon
+      - name: Built anything?
+        id: built
+        run: |
+          if [ -d out/nba/espn ]; then echo "built=true" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Integrity check
+        if: steps.built.outputs.built == 'true'
+        run: uv run python -m pipeline.catalog --out out --check --remote-lookups
+
+      # only the new snapshot and the table; the rosters were only read
+      - name: Upload
+        if: steps.built.outputs.built == 'true'
+        run: |
+          aws s3 sync "out/nba/raw/espn/$SEASON/injuries/" "s3://$BUCKET/nba/raw/espn/$SEASON/injuries/" --acl public-read --cache-control "$CACHE_CONTROL" --no-progress
+          aws s3 sync out/nba/espn/ "s3://$BUCKET/nba/espn/" --acl public-read --cache-control "$CACHE_CONTROL" --no-progress
+        env: *spaces
+
+      # the catalog's view already lists the season's file, so it doesn't
+      # need rebuilding; the CDN just has to drop its copy
+      - name: Purge the CDN
+        if: steps.built.outputs.built == 'true'
+        run: |
+          curl -sf -X DELETE \
+            -H "Authorization: Bearer $DO_CDN_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"files": ["nba/espn/espn_injuries/*"]}' \
+            "https://api.digitalocean.com/v2/cdn/endpoints/$DO_CDN_ENDPOINT_ID/cache"
+        env:
+          DO_CDN_API_KEY: ${{ secrets.DO_CDN_API_KEY }}
+          DO_CDN_ENDPOINT_ID: ${{ secrets.DO_CDN_ENDPOINT_ID }}
+
+      - name: Report unmatched players
+        run: |
+          if [ -s "$PIPELINE_DROPPED" ]; then
+            cat "$PIPELINE_DROPPED"
+            echo "::error::players on ESPN's injury list didn't match an NBA id"
+            exit 1
+          fi
+
+      - name: Notify on failure
+        if: failure()
+        uses: actions/github-script@v9.0.0
+        with:
+          script: |
+            const issueTitle = 'Injuries workflow failed';
+            const fs = require('fs');
+            const dropped = fs.existsSync(process.env.PIPELINE_DROPPED)
+              ? fs.readFileSync(process.env.PIPELINE_DROPPED, 'utf8').trim() : '';
+            const detail = dropped
+              ? `\n\nUnmatched players (everything else was published):\n\`\`\`\n${dropped}\n\`\`\``
+              : '';
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              creator: 'github-actions[bot]'
+            });
+            const existingIssue = issues.data.find(issue => issue.title === issueTitle);
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            if (existingIssue) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existingIssue.number,
+                body: `Another failure detected in workflow run: ${runUrl}${detail}`
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: issueTitle,
+                body: `Workflow run failed: ${runUrl}\n\nPlease check the workflow logs for details.${detail}`
+              });
+            }

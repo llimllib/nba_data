@@ -852,7 +852,9 @@ ESPN's NBA injury list
 as of every time it was fetched: one row per fetch and listed player. ESPN
 only publishes the current list, so the history is what we saved: every
 `update.yml` run (every 4 hours, plus 06:13 and 10:13 UTC) from November
-12, 2026 (season 2027) on, with nothing earlier. Each fetch is kept at
+12, 2026 (season 2027) on, with nothing earlier, and from November 14,
+2026, `injuries.yml` runs shortly before tip-offs, so most games have a
+fetch 15 to 50 minutes before they start. Each fetch is kept at
 `nba/raw/espn/<season>/injuries/<fetched_at>.json.gz`. Built by
 `pipeline/espn_injuries.py`.
 

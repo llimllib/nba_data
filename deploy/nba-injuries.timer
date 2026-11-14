@@ -1,0 +1,18 @@
+[Unit]
+Description=Run nba_data injuries.yml before tip-offs
+
+[Timer]
+Unit=nba-dispatch@injuries.yml.service
+# shortly before each cluster of tip-offs (Eastern, so DST is handled);
+# the workflow does nothing unless a game tips within 75 minutes, so these
+# fire every day. 11:40 and the afternoon times are for weekend and holiday
+# games; the evening ones cover 7, 7:30, 8-8:30, 9-9:30, 10 and 10:30-11pm
+OnCalendar=*-*-* 11,12,14,15,16,17,18:40:00 America/New_York
+OnCalendar=*-*-* 19:15,45:00 America/New_York
+OnCalendar=*-*-* 20,21:40:00 America/New_York
+OnCalendar=*-*-* 22:15:00 America/New_York
+# no catching up: a list fetched after the game is no use
+Persistent=false
+
+[Install]
+WantedBy=timers.target

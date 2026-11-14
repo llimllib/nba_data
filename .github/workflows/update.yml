@@ -138,7 +138,12 @@ jobs:
       - name: Injuries
         id: injuries
         continue-on-error: true
-        run: uv run python -m pipeline.espn_injuries --out out
+        run: |
+          # injuries.yml may have saved a list since this run downloaded
+          # the ESPN files; build with it, so this upload doesn't drop it
+          aws s3 sync "s3://$BUCKET/nba/raw/espn/$SEASON/injuries/" "out/nba/raw/espn/$SEASON/injuries/" --no-progress
+          uv run python -m pipeline.espn_injuries --out out
+        env: *spaces
 
       # check this run's files before anything is published
       - name: Integrity check
