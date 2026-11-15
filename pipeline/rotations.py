@@ -354,17 +354,29 @@ def logged_ids(game: dict, logged: dict[int, Logged]) -> dict[int, int]:
 
 
 def keyable(
-    game_id: str, pid: int, logged: dict[int, Logged], ids: dict[int, int]
+    game_id: str,
+    pid: int,
+    logged: dict[int, Logged],
+    ids: dict[int, int],
+    known: Collection[str] = (),
 ) -> bool:
     """
     whether a box score player can be keyed. Players with no NBA id
     (international teams in preseason) can't, and neither can a preseason
     player the game logs have with no id, since player_seasons skips them
-    (Stefano Mancinelli of Milano, 6005 in 0011000001's box score)
+    (Stefano Mancinelli of Milano, 6005 in 0011000001's box score): a
+    preseason player is kept if they're in `known`, the season's
+    player_seasons. The game logs only list players who got on the floor
+    and sometimes leave out one who did (Amida Brimah in 0011700010), so
+    they're only the test when player_seasons couldn't be read
     """
-    return bool(pid) and not (
-        game_id.startswith("001") and bool(logged) and ids.get(pid, pid) not in logged
-    )
+    if not pid:
+        return False
+    if not game_id.startswith("001"):
+        return True
+    if known:
+        return str(ids.get(pid, pid)) in known
+    return not logged or ids.get(pid, pid) in logged
 
 
 # --- time
@@ -1202,7 +1214,7 @@ def build_season(outdir: Path, season: int, url: str = URL) -> bool:
                 sts["in_box_score"].append(False)
             for p in t["players"]:
                 pid = p["personId"]
-                if not keyable(game_id, pid, logged, ids):
+                if not keyable(game_id, pid, logged, ids, known):
                     continue
                 player_id = str(ids.get(pid, pid))
                 comment = (p.get("comment") or "").strip()
@@ -1240,7 +1252,7 @@ def build_season(outdir: Path, season: int, url: str = URL) -> bool:
                 sts["comment"].append(comment or None)
                 sts["in_box_score"].append(True)
         for s in stints:
-            if not keyable(game_id, s.player_id, logged, ids):
+            if not keyable(game_id, s.player_id, logged, ids, known):
                 continue
             rows["game_id"].append(game_id)
             rows["team_id"].append(str(s.team_id))

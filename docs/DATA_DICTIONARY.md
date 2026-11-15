@@ -465,7 +465,10 @@ Players who didn't play and aren't in that season's `player_seasons` are
 left out: before 2027 `player_seasons` only has players who got on the
 floor that season, so a player who never did (2021-22's hardship
 signings, say) would fail the integrity check. That's 50 rows in
-2018-2026; the build lists them.
+2018-2026; the build lists them. In preseason games, players who aren't
+in `player_seasons` are left out whether they played or not (international
+opponents' players the game logs have with no id); `game_rotations`
+leaves out their stints too.
 
 | Column | Type | Description |
 |--------|------|-------------|

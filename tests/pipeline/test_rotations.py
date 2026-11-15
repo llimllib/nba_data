@@ -874,13 +874,28 @@ def test_build_uses_the_game_logs_ids(tmp_path):
     assert flags == [(True,)]
 
 
-def logs_without_durant(tmp_path, game_id):
+def logs_without_durant(tmp_path, game_id, player_seasons=None):
     """
     build the fixture as `game_id` with every player in the game logs but
-    Durant, and return the stints' player ids
+    Durant, and return the stints' player ids. With `player_seasons`
+    ("with" or "without" Durant), every other box score player is in
+    player_seasons too
     """
     save_fixture(tmp_path, game_id=game_id)
     game = stats.read_raw(FIXTURE)
+    if player_seasons:
+        players = ", ".join(
+            f"('{p['personId']}')"
+            for t in rotations.box_teams(game["boxscore"])
+            for p in t["players"]
+            if player_seasons == "with" or p["personId"] != 201142
+        )
+        write_parquet(
+            tmp_path,
+            "player_seasons",
+            2026,
+            f"SELECT * FROM (VALUES {players}) t(player_id)",
+        )
     rows = ", ".join(
         f"('{game_id}', '{p['personId']}', '{t['teamId']}', 0.0, 0, 0)"
         for t in rotations.box_teams(game["boxscore"])
@@ -905,13 +920,47 @@ def test_build_skips_preseason_players_the_game_logs_cant_key(tmp_path):
     player_seasons, so their stints are skipped; in any other game, they're
     kept for the integrity check to find
     """
-    ids = logs_without_durant(tmp_path / "preseason", "0012500001")
+    ids = logs_without_durant(
+        tmp_path / "preseason", "0012500001", player_seasons="without"
+    )
     assert "201142" not in ids and ids
     statuses = status_rows(tmp_path / "preseason").project("player_id").fetchall()
     assert ("201142",) not in statuses and statuses
-    assert "201142" in logs_without_durant(tmp_path / "regular", GAME)
+    assert "201142" in logs_without_durant(
+        tmp_path / "regular", GAME, player_seasons="without"
+    )
     statuses = status_rows(tmp_path / "regular").project("player_id").fetchall()
     assert ("201142",) in statuses
+
+
+def test_build_keeps_preseason_players_in_player_seasons(tmp_path):
+    """
+    The game logs sometimes leave out a preseason player who played (Amida
+    Brimah in 0011700010). They're in player_seasons, so they can be keyed,
+    and their stints and status are kept
+    """
+    ids = logs_without_durant(tmp_path, "0012500001", player_seasons="with")
+    assert "201142" in ids
+    statuses = status_rows(tmp_path).project("player_id").fetchall()
+    assert ("201142",) in statuses
+
+
+def test_keyable():
+    line = rotations.Logged(team_id=1, seconds=60.0, pts=0, plus_minus=0)
+    logged = {1: line, 2: line}
+    preseason, regular = "0012500001", "0022500001"
+    # no id
+    assert not rotations.keyable(regular, 0, logged, {})
+    # outside preseason, always
+    assert rotations.keyable(regular, 3, logged, {}, known={"1"})
+    # in preseason, by player_seasons, under the game logs' id
+    assert rotations.keyable(preseason, 3, logged, {}, known={"3"})
+    assert not rotations.keyable(preseason, 1, logged, {}, known={"3"})
+    assert rotations.keyable(preseason, 9, logged, {9: 3}, known={"3"})
+    # without player_seasons, by the game's logs
+    assert rotations.keyable(preseason, 1, logged, {})
+    assert not rotations.keyable(preseason, 3, logged, {})
+    assert rotations.keyable(preseason, 3, {}, {})
 
 
 def test_no_games(tmp_path):
