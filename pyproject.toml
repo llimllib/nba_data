@@ -8,6 +8,7 @@ dependencies = [
     "boto3>=1.38.18",
     "duckdb>=2.0.0",
     "nba-api>=1.11.4",
+    "pdfplumber>=0.11.10",
     "pyarrow>=17.0.0",
     "pytest>=8.3.4",
 ]

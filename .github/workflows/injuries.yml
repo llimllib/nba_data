@@ -2,8 +2,9 @@ name: Injuries before tip-off
 
 # Fetches ESPN's injury list shortly before games, so espn_injuries has a
 # snapshot close to each tip-off (#108); update.yml fetches it too, but
-# not timed to the games. Only ESPN and the bucket: no stats.nba.com, so no exit
-# node. A run with no game in the next 75 minutes does nothing, so the
+# not timed to the games. Then the NBA's injury report (#109): the latest
+# PDF, and any missing for games that have tipped off. Only ESPN, the
+# NBA's PDF CDN and the bucket: no stats.nba.com, so no exit node. A run with no game in the next 75 minutes does nothing, so the
 # timer (deploy/nba-injuries.timer) can fire at the same times every day.
 #
 # Its own concurrency group, so it never waits behind update.yml. If the
@@ -38,7 +39,8 @@ env:
 jobs:
   injuries:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # the injury report's first run fetches the season so far (~4 minutes)
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
 
@@ -47,12 +49,12 @@ jobs:
       - name: Current season
         run: echo "SEASON=$(uv run python -c 'from pipeline.seasons import current_season, today_eastern; print(current_season(today_eastern()))')" >> "$GITHUB_ENV"
 
-      # the build reads every saved snapshot, and matches players on the
-      # saved rosters; player_seasons and the schedule come from the bucket
-      - name: Download the saved lists and rosters
+      # the builds read every saved snapshot and report, and match players
+      # on the saved rosters; the stats datasets come from the bucket
+      - name: Download the saved lists, reports and rosters
         run: |
           aws s3 sync "s3://$BUCKET/nba/raw/espn/$SEASON/injuries/" "out/nba/raw/espn/$SEASON/injuries/" --no-progress
-          aws s3 sync "s3://$BUCKET/nba/raw/stats/$SEASON/" "out/nba/raw/stats/$SEASON/" --exclude '*' --include 'team_rosters/*' --no-progress
+          aws s3 sync "s3://$BUCKET/nba/raw/stats/$SEASON/" "out/nba/raw/stats/$SEASON/" --exclude '*' --include 'team_rosters/*' --include 'injury_report/*' --no-progress
         env: &spaces
           AWS_ACCESS_KEY_ID: ${{ secrets.DO_SPACES_ACCESS_KEY }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.DO_SPACES_SECRET }}
@@ -76,27 +78,42 @@ jobs:
         run: |
           if [ -d out/nba/espn ]; then echo "built=true" >> "$GITHUB_OUTPUT"; fi
 
+      # only when a game is soon, like ESPN's. A failure doesn't stop ESPN's
+      # list from publishing; it's reported at the end
+      - name: Fetch the NBA's injury report
+        id: injury_report
+        if: steps.built.outputs.built == 'true'
+        continue-on-error: true
+        run: uv run python -m pipeline.injury_report --out out
+
       - name: Integrity check
         if: steps.built.outputs.built == 'true'
         run: uv run python -m pipeline.catalog --out out --check --remote-lookups
 
-      # only the new snapshot and the table; the rosters were only read
+      # only the new snapshots, reports and tables; the rosters were only read
       - name: Upload
         if: steps.built.outputs.built == 'true'
         run: |
           aws s3 sync "out/nba/raw/espn/$SEASON/injuries/" "s3://$BUCKET/nba/raw/espn/$SEASON/injuries/" --acl public-read --cache-control "$CACHE_CONTROL" --no-progress
           aws s3 sync out/nba/espn/ "s3://$BUCKET/nba/espn/" --acl public-read --cache-control "$CACHE_CONTROL" --no-progress
+          if [ -d "out/nba/raw/stats/$SEASON/injury_report" ]; then
+            aws s3 sync "out/nba/raw/stats/$SEASON/injury_report/" "s3://$BUCKET/nba/raw/stats/$SEASON/injury_report/" --acl public-read --cache-control "$CACHE_CONTROL" --no-progress
+          fi
+          if [ -d out/nba/stats/injury_report ]; then
+            aws s3 sync out/nba/stats/injury_report/ "s3://$BUCKET/nba/stats/injury_report/" --acl public-read --cache-control "$CACHE_CONTROL" --no-progress
+          fi
         env: *spaces
 
-      # the catalog's view already lists the season's file, so it doesn't
-      # need rebuilding; the CDN just has to drop its copy
+      # the catalog's views already list the season's files, so it doesn't
+      # need rebuilding; the CDN just has to drop its copies (update.yml's
+      # next catalog build adds injury_report's view the first time)
       - name: Purge the CDN
         if: steps.built.outputs.built == 'true'
         run: |
           curl -sf -X DELETE \
             -H "Authorization: Bearer $DO_CDN_API_KEY" \
             -H "Content-Type: application/json" \
-            -d '{"files": ["nba/espn/espn_injuries/*"]}' \
+            -d '{"files": ["nba/espn/espn_injuries/*", "nba/stats/injury_report/*"]}' \
             "https://api.digitalocean.com/v2/cdn/endpoints/$DO_CDN_ENDPOINT_ID/cache"
         env:
           DO_CDN_API_KEY: ${{ secrets.DO_CDN_API_KEY }}
@@ -106,9 +123,15 @@ jobs:
         run: |
           if [ -s "$PIPELINE_DROPPED" ]; then
             cat "$PIPELINE_DROPPED"
-            echo "::error::players on ESPN's injury list didn't match an NBA id"
+            echo "::error::players on an injury list didn't match an NBA id"
             exit 1
           fi
+
+      - name: Report an injury report failure
+        if: always() && steps.injury_report.outcome == 'failure'
+        run: |
+          echo "::error::the NBA injury report step failed; ESPN's list was published"
+          exit 1
 
       - name: Notify on failure
         if: failure()

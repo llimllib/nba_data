@@ -14,7 +14,7 @@ to be guessed. Probed on 2026-11-17:
 
 | Dates | Slot names | Reports |
 |---|---|---|
-| ~2018-12-06 to 2019-06 (season 2019) | `_01PM`, `_05PM`, `_08PM` | 3 a day. 2018-12-05 and earlier are 403 |
+| 2018-12-17 5 PM to 2019-06 (season 2019) | `_01PM`, `_05PM`, `_08PM` | 3 a day. Nothing earlier |
 | 2019-20 to 2025-12-21 | `_08AM` ... `_11PM` | Hourly; the header reads :30 (`_05PM` is 05:30 PM) |
 | 2025-12-22 on | `_HH_MMAM`, `_HH_MMPM` | Every 15 minutes (`_05_00PM`, `_05_15PM`) |
 
@@ -30,7 +30,10 @@ Layouts:
   (`Right Ankle; Sprain`); since then it's free text
   (`Left Finger Sprain`).
 - Game date, time, matchup and team are printed only on their first row.
-  A team that hasn't reported has one `NOT YET SUBMITTED` row.
+  A team that hasn't reported has one `NOT YET SUBMITTED` row, and one
+  with nobody to report (seen in 2019) `ALL PLAYERS AVAILABLE`.
+- All-Star weekend's reports list `Non-NBA Team`; rows whose team or game
+  isn't in the schedule are skipped and listed.
 - Wrapped cells are split above and below their row (vertically
   centered), so line-based `pdftotext` parsing doesn't work. Since 2024
   only page 1 has the header.
@@ -95,7 +98,11 @@ included.
   included), or for a game not played yet, `rosters_daily`. If that fails,
   a name only one player in `player_seasons` has.
 - **Exceptions:** `player_ids.csv`, source `nba_injury`, with the printed
-  name as `source_id`.
+  name as `source_id`. Names with no NBA id at all (two-way players who
+  never played) are listed in `pipeline/injury_report_no_id.txt`, and
+  their rows left out.
+- **A match not in that season's `player_seasons`** is left out and
+  listed, since the integrity check would reject it.
 - **Unmatched rows** are reported through `PIPELINE_DROPPED`.
 
 ## Dataset
@@ -132,7 +139,8 @@ included.
 - Whether `ak-static.cms.nba.com` serves GitHub Actions IPs. `injuries.yml`
   runs without the Tailscale exit node; if the CDN blocks Actions, it needs
   one.
-- Suspensions: none seen in a report yet, so their format is unchecked.
+- ~~Suspensions~~: `Team Suspension` and `League Suspension`, with no
+  detail (found in the test reports).
 
 ## Done when
 

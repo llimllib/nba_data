@@ -33,8 +33,13 @@ KEY_OF = {lookup: key for key, lookup in LOOKUPS.items()}
 
 # Key columns that aren't checked. The schedule lists games before they're
 # played, so before they're in games, and their teams before they're in
-# team_seasons; pipeline.schedule checks its ids itself
-UNCHECKED = {"schedule": {"game_id", "home_team_id", "away_team_id"}}
+# team_seasons; pipeline.schedule checks its ids itself. The injury report
+# lists today's games before they're in games; its game ids come from the
+# schedule
+UNCHECKED = {
+    "schedule": {"game_id", "home_team_id", "away_team_id"},
+    "injury_report": {"game_id"},
+}
 
 # how many bad values to show per column
 EXAMPLES = 5

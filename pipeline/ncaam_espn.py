@@ -515,7 +515,7 @@ def trim_summary(data: dict) -> dict:
 class Fetcher:
     """
     GETs no faster than one per REQUEST_DELAY seconds, asking for gzip. A
-    404 is None. A server error (ESPN's CDN sends the odd 504) is retried
+    404 (or another status in `not_found`) is None. A server error (ESPN's CDN sends the odd 504) is retried
     once, after RETRY_DELAY, and a dropped connection or truncated response
     up to CONNECTION_RETRIES times
     """
@@ -526,8 +526,10 @@ class Fetcher:
         sleep=time.sleep,
         clock=time.time,
         label: str = "ncaam_espn",
+        not_found: tuple[int, ...] = (404,),
     ):
         self.delay = delay
+        self.not_found = not_found
         self.label = label
         self.sleep = sleep
         self.clock = clock
@@ -575,7 +577,7 @@ class Fetcher:
                     body = gzip.decompress(body)
                 return body
         except urllib.error.HTTPError as e:
-            if e.code == 404:
+            if e.code in self.not_found:
                 return None
             body = e.read()[:500].decode("utf-8", "replace")
             print(f"{self.label}: HTTP {e.code} for {url}: {body!r}", flush=True)

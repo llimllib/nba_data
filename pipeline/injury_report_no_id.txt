@@ -1,0 +1,6 @@
+# Players on the NBA's injury report with no NBA player id: two-way and
+# G League players who never played in an NBA game, so they aren't in
+# player_seasons. pipeline.injury_report leaves their rows out rather than
+# reporting them as unmatched. One name a line, as printed ("Last, First").
+Bibbs, Justin
+Hicks, Stephan
