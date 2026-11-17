@@ -527,9 +527,11 @@ class Fetcher:
         clock=time.time,
         label: str = "ncaam_espn",
         not_found: tuple[int, ...] = (404,),
+        timeout: float = 120,
     ):
         self.delay = delay
         self.not_found = not_found
+        self.timeout = timeout
         self.label = label
         self.sleep = sleep
         self.clock = clock
@@ -571,7 +573,7 @@ class Fetcher:
             url, headers={"User-Agent": USER_AGENT, "Accept-Encoding": "gzip"}
         )
         try:
-            with urllib.request.urlopen(req, timeout=120) as res:
+            with urllib.request.urlopen(req, timeout=self.timeout) as res:
                 body = res.read()
                 if res.headers.get("Content-Encoding") == "gzip":
                     body = gzip.decompress(body)

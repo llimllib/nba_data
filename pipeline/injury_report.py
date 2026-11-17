@@ -790,7 +790,13 @@ def main(argv: list[str] | None = None) -> None:
     fetcher = (
         None
         if args.no_fetch
-        else Fetcher(delay=REQUEST_DELAY, label="injury_report", not_found=(403, 404))
+        else Fetcher(
+            delay=REQUEST_DELAY,
+            label="injury_report",
+            not_found=(403, 404),
+            # a PDF is ~100KB; a connection that stalls is retried sooner
+            timeout=30,
+        )
     )
     for season in args.season or [current_season(today_eastern())]:
         if fetcher:
