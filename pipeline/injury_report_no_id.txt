@@ -4,3 +4,4 @@
 # reporting them as unmatched. One name a line, as printed ("Last, First").
 Bibbs, Justin
 Hicks, Stephan
+Pointer, Sir'Dominic

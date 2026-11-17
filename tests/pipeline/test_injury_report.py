@@ -16,6 +16,7 @@ R2019 = FIXTURES / "Injury-Report_2019-01-10_05PM.pdf"
 R2018 = FIXTURES / "Injury-Report_2018-12-22_05PM.pdf"
 R2025 = FIXTURES / "Injury-Report_2025-01-10_06PM.pdf"
 R2027 = FIXTURES / "Injury-Report_2026-11-16_06_00PM.pdf"
+R2027_LATER = FIXTURES / "Injury-Report_2026-11-16_06_45PM.pdf"
 
 CHI, CLE, POR, MIN = "1610612741", "1610612739", "1610612757", "1610612750"
 
@@ -39,6 +40,17 @@ def test_slots_in_2019_are_three_a_day():
         "2019-01-09_08PM",
         "2019-01-09_05PM",
     ]
+
+
+def test_three_a_day_until_2021_22_except_the_bubble():
+    # a noon tip-off's report is the night before's
+    assert names(list(ir.slots_before(et(2019, 11, 29, 12, 0)))[:2]) == [
+        "2019-11-28_08PM",
+        "2019-11-28_05PM",
+    ]
+    assert next(ir.slots_before(et(2021, 4, 15, 19, 0))).name == "2021-04-15_05PM"
+    assert next(ir.slots_before(et(2020, 8, 10, 13, 0))).name == "2020-08-10_12PM"
+    assert next(ir.slots_before(et(2021, 11, 15, 19, 0))).name == "2021-11-15_06PM"
 
 
 def test_hourly_slots_are_published_at_half_past():
@@ -66,9 +78,14 @@ def test_no_slots_before_the_first_report():
     assert not list(ir.slots_before(et(2018, 12, 1, 19, 0)))
 
 
-def test_slot_season():
-    assert next(ir.slots_before(et(2026, 10, 20, 19, 0))).season == 2027
-    assert next(ir.slots_before(et(2026, 6, 10, 20, 0))).season == 2026
+def test_reports_are_saved_under_the_season_fetched_for(tmp_path):
+    # the 2020 bubble's playoffs, in what's otherwise the next season
+    cdn = FakeCDN({"2020-09-02_05PM": b"%PDF-1.4 a"})
+    reports = ir.Reports(tmp_path, 2020, cdn, datetime(2021, 1, 1, tzinfo=UTC))
+    path = reports.before(et(2020, 9, 2, 18, 30))
+    assert path == tmp_path / (
+        "nba/raw/stats/2020/injury_report/Injury-Report_2020-09-02_05PM.pdf"
+    )
 
 
 # --- fetching
@@ -92,7 +109,7 @@ class FakeCDN:
 
 def test_before_steps_back_past_missing_slots(tmp_path):
     cdn = FakeCDN({"2026-11-16_06_15PM": b"%PDF-1.4 a"})
-    reports = ir.Reports(tmp_path, cdn, datetime(2026, 11, 18, tzinfo=UTC))
+    reports = ir.Reports(tmp_path, 2027, cdn, datetime(2026, 11, 18, tzinfo=UTC))
     path = reports.before(et(2026, 11, 16, 19, 0))
     assert path == tmp_path / (
         "nba/raw/stats/2027/injury_report/Injury-Report_2026-11-16_06_15PM.pdf"
@@ -102,7 +119,7 @@ def test_before_steps_back_past_missing_slots(tmp_path):
     # the missing slots are recorded, so they aren't asked for again
     missing = (tmp_path / "nba/raw/stats/2027/injury_report/missing.txt").read_text()
     assert missing == "2026-11-16_06_30PM\n2026-11-16_06_45PM\n"
-    again = ir.Reports(tmp_path, cdn, datetime(2026, 11, 18, tzinfo=UTC))
+    again = ir.Reports(tmp_path, 2027, cdn, datetime(2026, 11, 18, tzinfo=UTC))
     assert again.before(et(2026, 11, 16, 19, 0)) == path
     assert len(cdn.urls) == 3
 
@@ -110,22 +127,22 @@ def test_before_steps_back_past_missing_slots(tmp_path):
 def test_a_recent_slot_isnt_recorded_missing(tmp_path):
     cdn = FakeCDN({"2026-11-16_06_30PM": b"%PDF-1.4 a"})
     now = et(2026, 11, 16, 18, 50)
-    reports = ir.Reports(tmp_path, cdn, now)
+    reports = ir.Reports(tmp_path, 2027, cdn, now)
     path = reports.before(now)
     assert path and path.name.endswith("06_30PM.pdf")
-    assert not reports.missing_path(2027).exists()
+    assert not reports.missing_path.exists()
 
 
 def test_slots_not_published_yet_arent_fetched(tmp_path):
     cdn = FakeCDN({})
-    reports = ir.Reports(tmp_path, cdn, et(2026, 11, 16, 17, 0))
+    reports = ir.Reports(tmp_path, 2027, cdn, et(2026, 11, 16, 17, 0))
     assert reports.before(et(2026, 11, 16, 19, 0)) is None
     assert cdn.urls == []
 
 
 def test_a_response_thats_not_a_pdf_fails(tmp_path):
     cdn = FakeCDN({"2026-11-16_06_45PM": b"<html>"})
-    reports = ir.Reports(tmp_path, cdn, datetime(2026, 11, 17, tzinfo=UTC))
+    reports = ir.Reports(tmp_path, 2027, cdn, datetime(2026, 11, 17, tzinfo=UTC))
     with pytest.raises(ValueError, match="isn't a PDF"):
         reports.before(et(2026, 11, 16, 19, 0))
 
@@ -356,29 +373,75 @@ def build(outdir):
     return duckdb.read_parquet(str(path), hive_partitioning=False)
 
 
+def dicts(table) -> list[dict]:
+    return [dict(zip(table.columns, r)) for r in table.fetchall()]
+
+
+def save_report(outdir, pdf):
+    path = outdir / "nba/raw/stats/2027/injury_report" / pdf.name
+    path.write_bytes(pdf.read_bytes())
+
+
 def test_build(season):
     table = build(season)
     types = dict(zip(table.columns, map(str, table.types)))
     assert types == {
         "season": "INTEGER",
+        "report_time": "TIMESTAMP WITH TIME ZONE",
         "game_id": "VARCHAR",
         "game_date": "DATE",
         "team_id": "VARCHAR",
         "player_id": "VARCHAR",
-        "report_time": "TIMESTAMP WITH TIME ZONE",
         "status": "VARCHAR",
         "reason": "VARCHAR",
         "detail": "VARCHAR",
     }
-    rows = table.fetchall()
+    rows = dicts(table)
     assert len(rows) == 12
-    assert {r[1] for r in rows} == {CHI_CLE}
-    by_id = {r[4]: r for r in rows}
-    assert by_id["16"][3] == CLE
-    assert by_id["16"][6:] == ("Out", "G League", "Two-Way")
-    assert by_id["4"][3] == CHI
-    assert by_id["4"][6:] == ("Questionable", "Injury/Illness", "Left Finger Sprain")
-    assert by_id["4"][5] == et(2026, 11, 16, 18, 0)
+    assert {r["game_id"] for r in rows} == {CHI_CLE}
+    by_id = {r["player_id"]: r for r in rows}
+    udeh = by_id["16"]
+    assert (udeh["team_id"], udeh["status"], udeh["reason"], udeh["detail"]) == (
+        CLE,
+        "Out",
+        "G League",
+        "Two-Way",
+    )
+    smith = by_id["4"]
+    assert (smith["team_id"], smith["status"], smith["detail"]) == (
+        CHI,
+        "Questionable",
+        "Left Finger Sprain",
+    )
+    assert smith["report_time"] == et(2026, 11, 16, 18, 0)
+    assert smith["game_date"] == date(2026, 11, 16)
+
+
+def test_every_report_before_tipoff_is_kept(season):
+    save_report(season, R2027_LATER)
+    rows = dicts(build(season))
+    times = {r["report_time"] for r in rows}
+    assert times == {et(2026, 11, 16, 18, 0), et(2026, 11, 16, 18, 45)}
+    assert len(rows) == 24
+    # the latest before a time, as a prediction made then would use
+    smith = [r for r in rows if r["player_id"] == "4"]
+    assert max(r["report_time"] for r in smith) == et(2026, 11, 16, 18, 45)
+
+
+def test_reports_after_tipoff_arent_kept(season):
+    # the 7:15 report lists the 7:00 game, which has started
+    save_report(season, R2027_LATER)
+    write(
+        season,
+        "schedule",
+        f"""
+        SELECT '{CHI_CLE}' AS game_id, DATE '2026-11-16' AS game_date,
+            TIMESTAMPTZ '2026-11-16 23:30:00+00' AS start_time,
+            '{CLE}' AS home_team_id, '{CHI}' AS away_team_id, 'final' AS status
+        """,
+    )
+    times = {r["report_time"] for r in dicts(build(season))}
+    assert times == {et(2026, 11, 16, 18, 0)}
 
 
 def test_a_report_after_tipoff_isnt_used(season):
@@ -429,5 +492,5 @@ def test_player_ids_csv_matches_a_name(season):
     ir.PLAYER_IDS_FILE.write_text(
         'source,source_id,player_id,method\nnba_injury,"Awaka, Tobe",99,manual\n'
     )
-    by_id = {r[4]: r for r in build(season).fetchall()}
-    assert by_id["99"][3] == CHI
+    by_id = {r["player_id"]: r for r in dicts(build(season))}
+    assert by_id["99"]["team_id"] == CHI

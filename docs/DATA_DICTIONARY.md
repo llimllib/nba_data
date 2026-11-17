@@ -169,7 +169,7 @@ ORDER BY ppg DESC LIMIT 10;
 | `game_rotations`, `game_events`, `player_game_status` | view | Each game's player stints, play-by-play, and every player in its box score (and, from November 5, 2026, its inactive players) with why they didn't play, for seasons with play-by-play |
 | `four_factors`, `player_box`, `team_box`, `player_details`, `net_pts_season` | view | Every season of each `nba/espn/` dataset |
 | `espn_injuries` | view | ESPN's injury list as of every fetch, from 2027 (`nba/espn/`) |
-| `injury_report` | view | The NBA's official injury report, as of the last report before each game's tip-off (`nba/stats/`) |
+| `injury_report` | view | The NBA's official injury report as of each saved report, for the games it lists that hadn't started, from December 2018 (`nba/stats/`) |
 | `betting_lines` | view | Each game's opening and closing spread, total and moneylines by sportsbook or archive, from 2012 (`nba/espn/`) |
 | `bbref_team_stats`, `bbref_salaries` | view | Every season of basketball-reference's team stats and player salaries (`nba/bbref/`) |
 | `ctg_team_summary` | view | Every season of Cleaning the Glass's team summary (`nba/ctg/`) |
@@ -493,23 +493,31 @@ GROUP BY ALL ORDER BY games DESC;
 
 ### `injury_report/season=<season>/data.parquet`
 
-The NBA's official injury report: one row per game and player listed, from
-the last report the league published before that game's tip-off. Teams must
+The NBA's official injury report as of each saved report: one row per
+report, game and player listed, for the games the report lists that hadn't
+started (a report lists that day's and the next day's games). Teams must
 report each player who may miss a game, and the league publishes the
 reports as PDFs several times a day (`https://ak-static.cms.nba.com/referee/injury/Injury-Report_<slot>.pdf`):
-three a day from December 17, 2018 to the end of the 2019 season, every
-hour from 2019-20, and every 15 minutes since December 22, 2025, so in 2027
-the report is from 15 minutes before tip-off. Each report also lists the
-next day's games. A game still to come has the latest report's rows.
-Each report used is kept at
+three a day (1:30, 5:30 and 8:30 PM) from December 17, 2018 to the end of
+the 2021 season (other hours in the 2020 bubble), every hour from 2021-22,
+and every 15 minutes since December 22, 2025. Not every
+report is saved: for past days, the last one before each tip-off time
+(about three a day), and in the current season also the latest one
+whenever `injuries.yml` runs. Each is kept at
 `nba/raw/stats/<season>/injury_report/Injury-Report_<slot>.pdf`. Built by
 `pipeline/injury_report.py`.
 
 It's known before the game, so it's what a prediction of who plays can use;
-`player_game_status` is what happened. Fifteen minutes before tip-off almost
-every player is `Out` or `Available`: in 2027's first 205 games, 3 were
-`Questionable`, against 1,513 `Out`. A team that hadn't reported yet is
-listed `NOT YET SUBMITTED` and has no rows for that game.
+`player_game_status` is what happened. For a prediction made at some time,
+use the latest `report_time` before it, as with `espn_injuries`; the last
+report before a day's first tip-off is always saved. How close to tip-off
+matters: from the last report before each day's first tip-off, 49% of 2027's
+first 158 `Questionable` players played, but 15 minutes before their own
+games almost every player is `Out` or `Available` (3 `Questionable` in 205
+games). A team that hadn't reported yet is listed `NOT YET SUBMITTED` and
+has no rows in that report (5-7% of teams in the last report before a
+day's first tip-off; none of them had reported in an earlier one), so a
+player missing from a report isn't necessarily healthy.
 
 Players are matched to NBA ids by name (the report's `Last, First`): among
 the game's box score players for that team (`player_game_status`), then the
@@ -521,19 +529,23 @@ never appeared, say) is left out.
 
 | Column | Type | Description |
 |--------|------|-------------|
-| season, game_id, team_id, player_id | | Key: `(game_id, player_id)`. `game_id` comes from `schedule`, so a game not played yet isn't in `games` |
-| game_date | DATE | The game's date, US Eastern |
+| season, game_id, team_id, player_id | | Key: `(report_time, game_id, player_id)`. `game_id` comes from `schedule`, so a game not played yet isn't in `games` |
 | report_time | TIMESTAMPTZ | When the report was published (its header, Eastern) |
+| game_date | DATE | The game's date, US Eastern |
 | status | VARCHAR | `Out`, `Doubtful`, `Questionable`, `Probable` or `Available` |
 | reason | VARCHAR | The category, as printed: `Injury/Illness`, `G League` (`G League Team` in 2019), `Not With Team`, `Personal Reasons`, `Rest`, `League Suspension`, `Team Suspension`, `Health and Safety Protocols` (2020-2022), ... Null if the report has none |
 | detail | VARCHAR | What follows it: the injury (`Right Ankle; Sprain` until December 2025, `Left Finger Sprain` since), or `Two-Way` / `On Assignment` for the G League. Null if none |
 
 ```sql
--- how often each status played
+-- how often each status played, from each game's last report before tip-off
+WITH last AS (
+    SELECT * FROM injury_report WHERE season = 2027
+    QUALIFY report_time = max(report_time) OVER (PARTITION BY game_id)
+)
 SELECT r.status, count(*) AS players, count(*) FILTER (s.played) AS played
-FROM injury_report r
+FROM last r
 LEFT JOIN player_game_status s USING (season, game_id, player_id)
-WHERE r.season = 2027 AND r.game_id IN (SELECT game_id FROM games WHERE season = 2027)
+WHERE r.game_id IN (SELECT game_id FROM games WHERE season = 2027)
 GROUP BY ALL ORDER BY players DESC;
 ```
 

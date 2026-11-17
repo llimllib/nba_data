@@ -169,7 +169,9 @@ class Players:
             print(f"espn_injuries: matching on rosters only; no player_seasons: {e}")
             rows = []
         for pid, name in rows:
-            self.season.setdefault(normalize_name(name), set()).add(str(pid))
+            # a few past seasons have players with no name
+            if name:
+                self.season.setdefault(normalize_name(name), set()).add(str(pid))
 
     def roster(self, day: date) -> dict[tuple[str, str], str]:
         """(team_id, name key) -> player_id on the latest rosters on or before `day`"""

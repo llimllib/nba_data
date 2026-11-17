@@ -3,9 +3,11 @@ The NBA's official injury report (#109), built into
 
     nba/stats/injury_report/season=<season>/data.parquet
 
-one row per game and listed player, from the last report the league
-published before that game's tip-off: the player's status (Out, Doubtful,
-Questionable, Probable, Available) and the reason. It's the official
+one row per saved report, game and listed player, for the games the report
+lists that hadn't started: the player's status (Out, Doubtful,
+Questionable, Probable, Available) and the reason. A prediction made at
+some time uses the latest report before it (as with espn_injuries); a
+game's last word is its latest report before tip-off. It's the official
 pre-game input for predicting who plays; player_game_status is what
 happened, and espn_injuries is ESPN's version.
 
@@ -17,8 +19,9 @@ and official.nba.com lists only the current day's, so past reports are
 found by guessing their slot. A slot that doesn't exist is a 403. The
 slots have changed twice (see slots_before):
 
-    2018-12-17 to the 2019 offseason   1:30, 5:30 and 8:30 PM, "_05PM"
-    2019-20 to 2025-12-21              every hour at :30, "_05PM"
+    2018-12-17 to the 2021 offseason   1:30, 5:30 and 8:30 PM, "_05PM"
+                                       (the 2020 bubble: other hours)
+    2021-22 to 2025-12-21              every hour at :30, "_05PM"
     2025-12-22 on                      every 15 minutes, "_05_00PM"
 
 Each report lists that day's and the next day's games. For each tip-off
@@ -28,8 +31,11 @@ the one before that, up to MAX_STEPS, if it's missing), and kept at
     nba/raw/stats/<season>/injury_report/Injury-Report_<slot>.pdf
 
 with the slots that were missing listed in missing.txt there, so they
-aren't asked for again. The dataset is rebuilt from every saved report:
-each game takes its rows from the last one published before its tip-off.
+aren't asked for again. The dataset is rebuilt from every saved report.
+The last report before a day's first tip-off is also the one before
+that day's earliest games, so it's always fetched. A team that hasn't
+reported yet (NOT YET SUBMITTED) has no rows in that report; in 2019 and
+2027 none of those had reported in an earlier one either.
 
 The PDFs are parsed by word position (parse_report): wrapped cells are
 split above and below their row, so their text lines don't line up.
@@ -72,7 +78,7 @@ from .seasons import EASTERN, current_season, today_eastern
 
 BASE_URL = "https://ak-static.cms.nba.com/referee/injury/"
 DATASET = "injury_report"
-KEYS = ["game_id", "player_id"]
+KEYS = ["report_time", "game_id", "player_id"]
 SOURCE = "nba_injury"
 # names with no NBA id at all, whose rows are left out
 NO_ID_FILE = Path(__file__).parent / "injury_report_no_id.txt"
@@ -89,13 +95,15 @@ MISSING_FILE = "missing.txt"
 
 # the first report: there are none before this
 FIRST_REPORT = datetime(2018, 12, 17, 17, 30, tzinfo=EASTERN)
-# the 2019 season's reports, three a day
-SEASON_2019_END = date(2019, 7, 1)
-SEASON_2019_HOURS = (13, 17, 20)
+# until the 2021-22 season, three reports a day, at these hours (:30)
+HOURLY_FROM = date(2021, 7, 1)
+THREE_A_DAY_HOURS = (13, 17, 20)
+# but the 2020 bubble's were at other hours (11:30 AM, 5:30 PM, ...)
+BUBBLE = (date(2020, 7, 22), date(2020, 10, 15))
 # reports every 15 minutes from this day; before it, every hour at :30
 QUARTER_HOURS_FROM = date(2025, 12, 22)
 # how many slots before a tip-off to try
-MAX_STEPS = 4
+MAX_STEPS = 6
 # a slot missing this long after it's due is recorded as missing; a newer
 # one may just not be published yet
 PUBLISH_LAG = timedelta(hours=1)
@@ -112,11 +120,11 @@ ALL_AVAILABLE = "ALL PLAYERS AVAILABLE"
 TEAM_NOTES = (NOT_SUBMITTED, ALL_AVAILABLE)
 
 COLUMNS = [
+    ("report_time", "TIMESTAMPTZ"),
     ("game_id", "VARCHAR"),
     ("game_date", "DATE"),
     ("team_id", "VARCHAR"),
     ("player_id", "VARCHAR"),
-    ("report_time", "TIMESTAMPTZ"),
     ("status", "VARCHAR"),
     ("reason", "VARCHAR"),
     ("detail", "VARCHAR"),
@@ -136,8 +144,8 @@ class Slot:
         return f"{BASE_URL}Injury-Report_{self.name}.pdf"
 
     @property
-    def season(self) -> int:
-        return current_season(self.published.date())
+    def file_name(self) -> str:
+        return f"Injury-Report_{self.name}.pdf"
 
 
 def is_slot(t: datetime) -> bool:
@@ -146,8 +154,8 @@ def is_slot(t: datetime) -> bool:
         return False
     if t.date() >= QUARTER_HOURS_FROM:
         return t.minute % 15 == 0
-    if t.date() < SEASON_2019_END:
-        return t.minute == 30 and t.hour in SEASON_2019_HOURS
+    if t.date() < HOURLY_FROM and not BUBBLE[0] <= t.date() <= BUBBLE[1]:
+        return t.minute == 30 and t.hour in THREE_A_DAY_HOURS
     return t.minute == 30
 
 
@@ -183,45 +191,40 @@ def raw_dir(outdir: Path, season: int) -> Path:
     return outdir / stats.RAW_DIR / str(season) / DATASET
 
 
-def report_path(outdir: Path, slot: Slot) -> Path:
-    return raw_dir(outdir, slot.season) / f"Injury-Report_{slot.name}.pdf"
-
-
 def saved_reports(outdir: Path, season: int) -> list[Path]:
     return sorted(raw_dir(outdir, season).glob("*.pdf"))
 
 
 class Reports:
-    """saved reports, fetching the ones that aren't saved"""
+    """
+    a season's saved reports, fetching the ones that aren't saved. A report
+    is saved under the season whose games it was fetched for, not the one
+    its date falls in: the 2020 bubble's playoffs ran into October
+    """
 
-    def __init__(self, outdir: Path, fetcher: Getter | None, now: datetime):
-        self.outdir = outdir
+    def __init__(
+        self, outdir: Path, season: int, fetcher: Getter | None, now: datetime
+    ):
+        self.dir = raw_dir(outdir, season)
         self.fetcher = fetcher
         self.now = now
-        self.missing: dict[int, set[str]] = {}
-
-    def missing_path(self, season: int) -> Path:
-        return raw_dir(self.outdir, season) / MISSING_FILE
-
-    def missing_in(self, season: int) -> set[str]:
-        if season not in self.missing:
-            path = self.missing_path(season)
-            names = path.read_text().split() if path.is_file() else []
-            self.missing[season] = set(names)
-        return self.missing[season]
+        self.missing_path = self.dir / MISSING_FILE
+        names = (
+            self.missing_path.read_text().split() if self.missing_path.is_file() else []
+        )
+        self.missing = set(names)
 
     def mark_missing(self, slot: Slot) -> None:
-        missing = self.missing_in(slot.season)
-        missing.add(slot.name)
-        text = "".join(f"{n}\n" for n in sorted(missing))
-        write_atomic(self.missing_path(slot.season), lambda p: p.write_text(text))
+        self.missing.add(slot.name)
+        text = "".join(f"{n}\n" for n in sorted(self.missing))
+        write_atomic(self.missing_path, lambda p: p.write_text(text))
 
     def get(self, slot: Slot) -> Path | None:
         """the slot's saved report, fetched if need be; None if there's none"""
-        path = report_path(self.outdir, slot)
+        path = self.dir / slot.file_name
         if path.is_file():
             return path
-        if self.fetcher is None or slot.name in self.missing_in(slot.season):
+        if self.fetcher is None or slot.name in self.missing:
             return None
         body = self.fetcher.get(slot.url)
         if body is None:
@@ -638,12 +641,13 @@ def build_season(
                 by_team[(g.game_date, team)] = g
     teams = team_ids(outdir, season, url)
 
-    # each game's rows from the last report before its tip-off
-    chosen: dict[str, tuple[Report, list[tuple[str, Row]]]] = {}
+    # every report's rows for the games it lists that haven't started, and
+    # each team's note (NOT YET SUBMITTED) in the last report before its game
+    listed: list[tuple[Report, Game, str, Row]] = []
+    last_note: dict[tuple[str, str], tuple[datetime, str | None, str]] = {}
     unknown_games = set()
     for path in paths:
         rep = parse_report(path)
-        found: dict[str, list[tuple[str, Row]]] = {}
         for row in rep.rows:
             # All-Star weekend's teams aren't NBA teams
             team_id = teams.get(row.team, "")
@@ -652,11 +656,13 @@ def build_season(
                 # postponed, or the schedule doesn't have it
                 unknown_games.add(f"{row.game_date} {row.matchup}")
                 continue
-            if rep.time < game.start_time:
-                found.setdefault(game.game_id, []).append((team_id, row))
-        for game_id, rows in found.items():
-            if game_id not in chosen or chosen[game_id][0].time < rep.time:
-                chosen[game_id] = (rep, rows)
+            if rep.time >= game.start_time:
+                continue
+            listed.append((rep, game, team_id, row))
+            key = (game.game_id, team_id)
+            if key not in last_note or last_note[key][0] <= rep.time:
+                last_note[key] = (rep.time, row.note, row.team)
+    reported = {game_id for game_id, _ in last_note}
     if unknown_games:
         print(
             f"injury_report: {len(unknown_games)} games in the reports aren't "
@@ -664,40 +670,48 @@ def build_season(
         )
 
     matcher = Matcher(outdir, season, url)
-    game_of = {g.game_id: g for g in games}
-    rows, unmatched, elsewhere, not_submitted = [], {}, set(), []
-    for game_id, (rep, listed) in sorted(chosen.items()):
-        game = game_of[game_id]
-        for team_id, row in listed:
-            if row.player is None:
-                # a game still to come may yet get one
-                if row.note == NOT_SUBMITTED and game.start_time <= now:
-                    not_submitted.append(f"{game.game_date} {row.team}")
-                continue
-            pid = matcher.match(row.player, game_id, team_id, game.game_date)
-            label = f"{row.player} ({row.team})"
-            if pid is None:
-                if row.player in matcher.no_id or matcher.in_other_season(row.player):
-                    elsewhere.add(label)
-                else:
-                    unmatched[row.player] = label
-                continue
-            if pid not in matcher.season_ids:
-                # the integrity check would reject it
-                elsewhere.add(label)
-                continue
-            rows.append(
-                {
-                    "game_id": game_id,
-                    "game_date": game.game_date,
-                    "team_id": team_id,
-                    "player_id": pid,
-                    "report_time": rep.time,
-                    "status": row.status,
-                    "reason": row.reason,
-                    "detail": row.detail,
-                }
+    # a player is listed in many reports; match each name once per game
+    matched: dict[tuple[str, str, str], str | None] = {}
+    rows, unmatched, elsewhere = [], {}, set()
+    for rep, game, team_id, row in listed:
+        if row.player is None:
+            continue
+        key = (row.player, game.game_id, team_id)
+        if key not in matched:
+            matched[key] = matcher.match(
+                row.player, game.game_id, team_id, game.game_date
             )
+        pid = matched[key]
+        label = f"{row.player} ({row.team})"
+        if pid is None:
+            if row.player in matcher.no_id or matcher.in_other_season(row.player):
+                elsewhere.add(label)
+            else:
+                unmatched[row.player] = label
+            continue
+        if pid not in matcher.season_ids:
+            # the integrity check would reject it
+            elsewhere.add(label)
+            continue
+        rows.append(
+            {
+                "report_time": rep.time,
+                "game_id": game.game_id,
+                "game_date": game.game_date,
+                "team_id": team_id,
+                "player_id": pid,
+                "status": row.status,
+                "reason": row.reason,
+                "detail": row.detail,
+            }
+        )
+    # teams that still hadn't reported just before games that have started
+    game_of = {g.game_id: g for g in games}
+    not_submitted = sorted(
+        f"{game_of[game_id].game_date} {team}"
+        for (game_id, _), (_, note, team) in last_note.items()
+        if note == NOT_SUBMITTED and game_of[game_id].start_time <= now
+    )
 
     con = duckdb.connect()
     con.register("rows", arrow(rows, COLUMNS))
@@ -705,14 +719,14 @@ def build_season(
         f"""
         CREATE TABLE {DATASET} AS
         SELECT {season}::INTEGER AS season, * FROM rows
-        ORDER BY game_date, game_id, team_id, player_id
+        ORDER BY report_time, game_date, game_id, team_id, player_id
         """
     )
     check_keys(con, DATASET, KEYS, f"injury_report {DATASET}")
     out = dataset_path(outdir / stats.OUT_DIR, DATASET, season)
     write_parquet(con, DATASET, out)
     print(
-        f"injury_report: wrote {out} ({len(paths)} reports, {len(chosen)} "
+        f"injury_report: wrote {out} ({len(paths)} reports, {len(reported)} "
         f"games, {len(rows)} rows)"
     )
     if not_submitted:
@@ -734,7 +748,7 @@ def build_season(
         if g.final
         and g.start_time > FIRST_REPORT
         and g.start_time <= now
-        and g.game_id not in chosen
+        and g.game_id not in reported
     ]
     problems = []
     if missed:
@@ -778,9 +792,9 @@ def main(argv: list[str] | None = None) -> None:
         if args.no_fetch
         else Fetcher(delay=REQUEST_DELAY, label="injury_report", not_found=(403, 404))
     )
-    reports = Reports(args.out, fetcher, now)
     for season in args.season or [current_season(today_eastern())]:
         if fetcher:
+            reports = Reports(args.out, season, fetcher, now)
             games = season_games(args.out, season, args.url)
             if not games and season != current_season(today_eastern()):
                 # past seasons' schedules are fetched for their tip-off times

@@ -14,8 +14,8 @@ to be guessed. Probed on 2026-11-17:
 
 | Dates | Slot names | Reports |
 |---|---|---|
-| 2018-12-17 5 PM to 2019-06 (season 2019) | `_01PM`, `_05PM`, `_08PM` | 3 a day. Nothing earlier |
-| 2019-20 to 2025-12-21 | `_08AM` ... `_11PM` | Hourly; the header reads :30 (`_05PM` is 05:30 PM) |
+| 2018-12-17 5 PM to the 2021 offseason | `_01PM`, `_05PM`, `_08PM` | 3 a day (the 2020 bubble: other hours, `_11AM`, `_05PM`). Nothing earlier. First probed as season 2019 only; the 2020 backfill showed it lasted until 2021-22 |
+| 2021-22 to 2025-12-21 | `_08AM` ... `_11PM` | Hourly; the header reads :30 (`_05PM` is 05:30 PM) |
 | 2025-12-22 on | `_HH_MMAM`, `_HH_MMPM` | Every 15 minutes (`_05_00PM`, `_05_15PM`) |
 
 A slot that doesn't exist returns 403.
@@ -108,11 +108,15 @@ included.
 ## Dataset
 
 `nba/stats/injury_report/season=<season>/data.parquet`, one row per
-`game_id` and `player_id`:
+saved report, `game_id` and `player_id`, for the games the report lists
+that hadn't started. (Changed after the first build: it was one row per
+game from its last report before tip-off, but nba-rapm predicts as of
+each day's first tip-off, and for later games that report came after.
+A prediction now uses the latest report before its time.)
 
 | Column | |
 |---|---|
-| season, game_id, player_id | Key |
+| season, report_time, game_id, player_id | Key |
 | game_date, team_id | |
 | report_time | TIMESTAMPTZ, from the report's header |
 | status | `Out`, `Doubtful`, `Questionable`, `Probable`, `Available` |
