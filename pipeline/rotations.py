@@ -125,8 +125,30 @@ STATUS_KEYS = ["game_id", "player_id"]
 
 # a box score comment for a player who didn't play. The NBA writes them a
 # few ways: "DNP - Coach's Decision", "DND-Return to Competition
-# Reconditioning", "NWT_TEAM_SUSPENSION", "Inactive - G League - Two-Way"
-COMMENT = re.compile(r"(DNP|DND|NWT|Inactive)\s*[-_]\s*(.+)", re.IGNORECASE)
+# Reconditioning", "NWT_TEAM_SUSPENSION", "Inactive - G League - Two-Way",
+# and before 2018 also "Did Not Dress - Sore Left Foot", "OUT - (Sore Left
+# Knee)", "DNP - DND - Left knee surgery" (the last status is the one
+# that counts), or just "NWT". Each status, as written -> its name
+STATUSES = {
+    "dnp": "dnp",
+    "did not play": "dnp",
+    "dnd": "dnd",
+    "did not dress": "dnd",
+    # 2010-2017, a handful each
+    "out": "dnd",
+    "nwt": "nwt",
+    "not with team": "nwt",
+    "dnt": "nwt",
+    "did not travel": "nwt",
+    "inactive": "inactive",
+}
+# one status at the start of a comment, and what separates it from the rest
+COMMENT = re.compile(
+    r"("
+    + "|".join(s.replace(" ", r"\s+") for s in sorted(STATUSES, key=len, reverse=True))
+    + r")(?:\s*(?:-+>?|_|\()\s*|\s*$)(.*)",
+    re.IGNORECASE | re.DOTALL,
+)
 # the reason after the status, lowercased with _ as spaces -> its name
 REASONS = {
     "coach's decision": "coach",
@@ -148,6 +170,48 @@ REASONS = {
     "trade pending": "trade",
     "trade": "trade",
 }
+# before 2018 the reason is often free text ("Sore Left Foot", "NBA
+# Suspension", "Personal Reasons"), so a reason that isn't in REASONS is
+# the first of these that it matches. Concussions are concussion_protocol,
+# as they are from 2018 on (the protocol began in 2011-12)
+REASON_WORDS = [
+    (
+        re.compile(r"suspen.*\b(nba|league)\b|\b(nba|league)\b.*suspen"),
+        "league_suspension",
+    ),
+    (re.compile(r"team suspen"), "team_suspension"),
+    (re.compile(r"suspen"), "suspension"),
+    (re.compile(r"trade|acquired"), "trade"),
+    (
+        re.compile(r"d-? ?league|nba?dl|development(al)? league|assign"),
+        "g_league",
+    ),
+    (re.compile(r"signed|signing|transaction"), "signing"),
+    (re.compile(r"personal|family|excused|visa"), "personal"),
+    (re.compile(r"coach|(organizational|team|personnel) decision"), "coach"),
+    (re.compile(r"\brest\b|maintenance|recovery day"), "rest"),
+    (re.compile(r"conc?us+i(on|ve)"), "concussion_protocol"),
+    (re.compile(r"conditioning|training"), "reconditioning"),
+    (re.compile(r"travel|not with team"), "not_with_team"),
+    (
+        re.compile(
+            r"\b(left|right|lf|rt|lower|upper)\b|ankle|knee|foot|feet|back|"
+            r"hamstring|achilles|calf|shoulder|groin|wrist|hand|finger|thumb|"
+            r"\bhip|elbow|toe|quad|thigh|abdom|oblique|hernia|neck|\bribs?\b|"
+            r"\beye|nose|face|heel|\blegs?\b|\barm|\b[am]cl\b|plantar|fractur|"
+            r"sprain|strain|sore|surgery|injur|bruise|contus|tend[oi]n|"
+            r"il+ness|\bflu|virus|infect|gastr|migr|jaw|chest|spasm|cartilage|"
+            r"\bbone|meniscus|shin|fibula|teeth|tooth|stomach|throat|"
+            r"respirat|pn[eu]+monia|pneumothorax|bronchitis|sinus|pox|"
+            r"appendectomy|pubal|pubis|stress reaction|nerve|cardi|fibrillation|"
+            r"medica|precaution|weather|corneal|metatars|pectoral|tailbone|"
+            r"sesamoid|ligament|rotator|torn|ruptur|dislocat|pain|tight|disc|\bhead|"
+            r"food|poison|\bcold\b|vertigo|dizz|sick|\bill\b|lacerat|dehydrat|"
+            r"appendic|influenza|pelvi|heart|echo|dental|allerg|recover|rehab"
+        ),
+        "injury",
+    ),
+]
 
 # games this recent are refetched every run, for the NBA's corrections
 RECENT = timedelta(days=2)
@@ -432,13 +496,40 @@ def played(box: dict, team_id: int) -> dict[int, float]:
 def comment_status(comment: str) -> tuple[str | None, str | None]:
     """
     (status, reason) from a box score comment: "DND - Injury/Illness" ->
-    ("dnd", "injury"). Either is None if it isn't one we know
+    ("dnd", "injury"). Either is None if it isn't one we know, and the
+    reason is also None if the comment doesn't give one ("NWT" is
+    not_with_team, though)
     """
-    m = COMMENT.fullmatch(comment.strip().replace("’", "'"))
-    if not m:
+    status, text = parse_comment(comment)
+    if status is None:
         return None, None
-    reason = " ".join(m[2].replace("_", " ").split()).lower()
-    return m[1].lower(), REASONS.get(reason)
+    if not text:
+        return status, "not_with_team" if status == "nwt" else None
+    if text in REASONS:
+        return status, REASONS[text]
+    for words, reason in REASON_WORDS:
+        if words.search(text):
+            return status, reason
+    return status, None
+
+
+def parse_comment(comment: str) -> tuple[str | None, str]:
+    """
+    A box score comment's status and the text of its reason, lowercased,
+    with _ as spaces and no closing punctuation: "DNP - DND - Back
+    spasms." -> ("dnd", "back spasms"). The status is None if the comment
+    doesn't start with one. A second status replaces a DNP ("DNP - NWT")
+    or repeats the first ("DND - Did Not Dress"); otherwise it's the reason
+    ("Inactive - Not With Team")
+    """
+    status, text = None, comment.strip().replace("’", "'")
+    while m := COMMENT.fullmatch(text):
+        inner = STATUSES[" ".join(m[1].lower().split())]
+        if status not in (None, "dnp", inner):
+            break
+        status, text = inner, m[2].strip()
+    text = " ".join(text.replace("_", " ").split()).lower().strip(".()' ")
+    return status, text
 
 
 def norm(name: str) -> str:
@@ -1228,7 +1319,8 @@ def build_season(outdir: Path, season: int, url: str = URL) -> bool:
                 status, reason = "played", None
                 if not appeared:
                     status, reason = comment_status(comment)
-                    if status is None or reason is None:
+                    # a comment that gives no reason ("DND") isn't unknown
+                    if status is None or (reason is None and parse_comment(comment)[1]):
                         unknown[comment] += 1
                 # a player in for no time has no stint (joined folds it)
                 if (

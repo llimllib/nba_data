@@ -465,8 +465,19 @@ team.
 Players who didn't play and aren't in that season's `player_seasons` are
 left out: before 2027 `player_seasons` only has players who got on the
 floor that season, so a player who never did (2021-22's hardship
-signings, say) would fail the integrity check. That's 50 rows in
-2018-2026; the build lists them. In preseason games, players who aren't
+signings, say) would fail the integrity check. That's 79 rows in
+2010-2026; the build lists them.
+
+Before 2018 the reason is often free text, which usually names the
+injury (`DND - Sore Left Foot`, `NWT - Personal Reasons`, `DND -
+Suspended by NBA`), and the status is written more ways (`Did Not Dress
+-`, `Not With Team -`, `OUT -`, `DNT -`, `DNP - DND -`). The build sorts
+these into the same reasons by keyword: a comment naming a body part, an
+illness or a medical procedure is `injury`, and a concussion is
+`concussion_protocol` as it is later. The body part is only in
+`comment`. 52 comments from 2010-2017 give no reason (`DND -`, `DND`), so
+their `reason` is null. Games with no play-by-play clock (119 in 2010)
+have no stints in `game_rotations` but are here. In preseason games, players who aren't
 in `player_seasons` are left out whether they played or not (international
 opponents' players the game logs have with no id); `game_rotations`
 leaves out their stints too.
@@ -476,8 +487,8 @@ leaves out their stints too.
 | season, game_id, team_id, player_id | | Key: `(game_id, player_id)` |
 | starter | BOOLEAN | Started the game (the box score gives starters a position) |
 | played | BOOLEAN | Got on the floor: has minutes, or has no comment. A few players in for no time (`0:00`, on for a free throw or the last second) have no comment, and count; they have no stint in `game_rotations`, since a stint with no time is folded away. From the minutes rather than the comment because a few 2027 box scores say `DNP - Coach's Decision` for a player with minutes |
-| status | VARCHAR | `played`, or for players who didn't: `dnp` (active, didn't play), `dnd` (didn't dress), `nwt` (not with the team), `inactive` (on the inactive list: in the box score October 20-26, 2026, and from the rosters from November 5, 2026). Null for a comment the build doesn't know (it lists them) |
-| reason | VARCHAR | Null for players who played, and for inactive players from the rosters. Otherwise `coach` (coach's decision), `injury` (injury or illness), `concussion_protocol`, `reconditioning` (return to competition reconditioning), `health_and_safety` (COVID protocols and self-isolation, 2020-2022), `rest`, `personal`, `not_with_team`, `g_league_two_way` (only October 20-26, 2026), `league_suspension`, `team_suspension`, `suspension` (2018-2019, which don't say whose), `ineligible` (ineligible to play), `trade` (a trade pending or just made). Null for a comment the build doesn't know |
+| status | VARCHAR | `played`, or for players who didn't: `dnp` (active, didn't play), `dnd` (didn't dress), `nwt` (not with the team), `inactive` (on the inactive list: in the box score October 20-26, 2026, and from the rosters from November 5, 2026). Before 2018, `Did Not Dress` and `OUT` are `dnd`, `Not With Team` and `DNT` (did not travel) `nwt`, and `DNP - DND -` or `DNP - NWT -` the second. Null for a comment the build doesn't know (it lists them) |
+| reason | VARCHAR | Null for players who played, and for inactive players from the rosters. Otherwise `coach` (coach's decision), `injury` (injury or illness), `concussion_protocol`, `reconditioning` (return to competition reconditioning), `health_and_safety` (COVID protocols and self-isolation, 2020-2022), `rest`, `personal`, `not_with_team`, `g_league_two_way` (only October 20-26, 2026), `league_suspension`, `team_suspension`, `suspension` (2018-2019, which don't say whose), `ineligible` (ineligible to play), `trade` (a trade pending or just made), and before 2018 also `g_league` (assigned to the D-League) and `signing` (just signed). `nwt` with no reason is `not_with_team`. Null for a comment that gives no reason (`DND`, 52 before 2018) or one the build doesn't know (it lists those) |
 | comment | VARCHAR | The box score's comment as written, which the NBA writes several ways (`DND - Injury/Illness`, `DND-Return to Competition Reconditioning`, `DND_LEAGUE_SUSPENSION`). Null if empty |
 | in_box_score | BOOLEAN | False for inactive players from the rosters |
 
