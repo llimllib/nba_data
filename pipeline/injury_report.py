@@ -59,6 +59,7 @@ import re
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
+from functools import cache
 from itertools import islice
 from pathlib import Path
 
@@ -104,6 +105,11 @@ BUBBLE = (date(2020, 7, 22), date(2020, 10, 15))
 QUARTER_HOURS_FROM = date(2025, 12, 22)
 # how many slots before a tip-off to try
 MAX_STEPS = 6
+# and for a game the report before its tip-off doesn't list
+MAX_FILL_STEPS = 12
+# a game with a report saved this long before its tip-off that doesn't list
+# it had no one to report, rather than a report missing
+RECENT_REPORT = timedelta(hours=3)
 # a slot missing this long after it's due is recorded as missing; a newer
 # one may just not be published yet
 PUBLISH_LAG = timedelta(hours=1)
@@ -438,6 +444,7 @@ def reason_of(cells: dict[str, str]) -> tuple[str | None, str | None]:
     return text(reason), text(detail)
 
 
+@cache
 def parse_report(path: Path) -> Report:
     """a saved report's rows, with the date, matchup and team carried down"""
     time, cells = cells_of(path)
@@ -740,16 +747,20 @@ def build_season(
             f"player_seasons, so they're left out: {sorted(elsewhere)}"
         )
 
-    # a played game with no report before it: a missing slot, or a parsing
-    # problem. Nothing's expected before the first report
-    missed = [
-        f"{g.game_date} {g.game_id}"
-        for g in games
-        if g.final
-        and g.start_time > FIRST_REPORT
-        and g.start_time <= now
-        and g.game_id not in reported
-    ]
+    # a played game with no saved report shortly before it: a missing slot.
+    # One that's saved but doesn't list the game had nobody to report: since
+    # 2021-22 a game with no one listed is left off (before, its teams were
+    # "ALL PLAYERS AVAILABLE"). Nothing's expected before the first report
+    times = sorted({parse_report(p).time for p in paths})
+    missed, unlisted = [], []
+    for g in missed_games(games, reported, now):
+        recent = any(g.start_time - RECENT_REPORT <= t < g.start_time for t in times)
+        (unlisted if recent else missed).append(f"{g.game_date} {g.game_id}")
+    if unlisted:
+        print(
+            f"injury_report: {len(unlisted)} played games aren't on the report "
+            f"before them, so no one was listed: {unlisted[:10]}"
+        )
     problems = []
     if missed:
         problems.append(
@@ -765,6 +776,45 @@ def build_season(
     if problems:
         report("injury_report: " + "; ".join(problems))
     return out
+
+
+def missed_games(games: list[Game], reported: set[str], now: datetime) -> list[Game]:
+    """played games with no saved report before tip-off that lists them"""
+    return [
+        g
+        for g in games
+        if g.final and FIRST_REPORT < g.start_time <= now and g.game_id not in reported
+    ]
+
+
+def lists(rep: Report, game: Game, teams: dict[str, str]) -> bool:
+    """whether a report lists `game`, before it starts"""
+    sides = {game.home_team_id, game.away_team_id}
+    return rep.time < game.start_time and any(
+        r.game_date == game.game_date and teams.get(r.team) in sides for r in rep.rows
+    )
+
+
+def fill_missed(
+    reports: Reports, outdir: Path, season: int, games: list[Game], url: str = URL
+) -> None:
+    """
+    For a played game the report before its tip-off doesn't list (close to
+    a playoff tip-off the league drops the game from the report, and it
+    sometimes leaves a game out), step back further, to the last report
+    that does
+    """
+    teams = team_ids(outdir, season, url)
+    reps = [parse_report(p) for p in saved_reports(outdir, season)]
+    reported = {g.game_id for g in games for rep in reps if lists(rep, g, teams)}
+    for game in missed_games(games, reported, reports.now):
+        for slot in islice(slots_before(game.start_time), MAX_FILL_STEPS):
+            if slot.published > reports.now:
+                continue
+            path = reports.get(slot)
+            if path and lists(parse_report(path), game, teams):
+                print(f"injury_report: {game.game_id} is in {path.name}")
+                break
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -810,6 +860,7 @@ def main(argv: list[str] | None = None) -> None:
             if season == current_season(today_eastern()):
                 # the newest, for the games still to come
                 reports.before(now)
+            fill_missed(reports, args.out, season, games, args.url)
         build_season(args.out, season, now, args.url)
 
 

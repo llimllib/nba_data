@@ -428,6 +428,46 @@ def test_every_report_before_tipoff_is_kept(season):
     assert max(r["report_time"] for r in smith) == et(2026, 11, 16, 18, 45)
 
 
+def test_a_game_left_off_the_report_had_no_one_listed(season):
+    # a game the 6:00 report, an hour before, doesn't list: since 2021-22
+    # that means neither team had anyone to report
+    write(
+        season,
+        "schedule",
+        f"""
+        SELECT * FROM (VALUES
+            ('{CHI_CLE}', DATE '2026-11-16', TIMESTAMPTZ '2026-11-17 00:00:00+00', '{CLE}', '{CHI}', 'final'),
+            ('0022600199', DATE '2026-11-16', TIMESTAMPTZ '2026-11-17 00:00:00+00', '8001', '8002', 'final')
+        ) t(game_id, game_date, start_time, home_team_id, away_team_id, status)
+        """,
+    )
+    assert {r["game_id"] for r in dicts(build(season))} == {CHI_CLE}
+
+
+def test_fill_missed_steps_back_to_a_report_that_lists_the_game(season):
+    raw = season / "nba/raw/stats/2027/injury_report"
+    (raw / R2027.name).unlink()
+    # the 6:45 report doesn't list the game (any other report will do)
+    (raw / R2027_LATER.name).write_bytes(R2019.read_bytes())
+    cdn = FakeCDN({"2026-11-16_06_00PM": R2027.read_bytes()})
+    reports = ir.Reports(season, 2027, cdn, et(2026, 11, 17, 12, 0))
+    games = ir.season_games(season, 2027, url=str(season / "bucket"))
+    ir.fill_missed(reports, season, 2027, games, url=str(season / "bucket"))
+    assert names_of(cdn.urls) == [
+        "2026-11-16_06_30PM",
+        "2026-11-16_06_15PM",
+        "2026-11-16_06_00PM",
+    ]
+    assert (raw / R2027.name).is_file()
+
+
+def names_of(urls):
+    return [
+        u.removeprefix(ir.BASE_URL + "Injury-Report_").removesuffix(".pdf")
+        for u in urls
+    ]
+
+
 def test_reports_after_tipoff_arent_kept(season):
     # the 7:15 report lists the 7:00 game, which has started
     save_report(season, R2027_LATER)

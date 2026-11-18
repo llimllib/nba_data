@@ -3,6 +3,9 @@
 # player_seasons. pipeline.injury_report leaves their rows out rather than
 # reporting them as unmatched. One name a line, as printed ("Last, First").
 Bibbs, Justin
+Buie III, Boo
 Hicks, Stephan
+Mangas, Kyle
 Pointer, Sir'Dominic
 Tillman, Justin
+Tubelis, Azuolas
