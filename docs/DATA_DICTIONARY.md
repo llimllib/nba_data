@@ -164,7 +164,7 @@ ORDER BY ppg DESC LIMIT 10;
 | Name | Type | Description |
 |------|------|-------------|
 | `team_game_logs`, `player_game_logs`, `player_season_stats`, `team_seasons`, `player_seasons`, `games` | view | Every season of each `nba/stats/` dataset |
-| `schedule` | view | Every game on the schedule, played or not, from 2027 |
+| `schedule` | view | Every game on the schedule, played or not, from 2019 |
 | `rosters_daily` | view | Every team's roster as of each day fetched, from 2027 |
 | `game_rotations`, `game_events`, `player_game_status` | view | Each game's player stints, play-by-play, and every player in its box score (and, from November 5, 2026, its inactive players) with why they didn't play, for seasons with play-by-play |
 | `four_factors`, `player_box`, `team_box`, `player_details`, `net_pts_season` | view | Every season of each `nba/espn/` dataset |
@@ -555,7 +555,10 @@ Every game on the NBA's schedule for the season, played or not, from
 `scheduleleaguev2` (one request, refetched every run, so postponements and
 new times are picked up). Use it for upcoming games; for played games,
 `games` and `team_game_logs` have the same `game_id`s. Raw response at
-`nba/raw/stats/<season>/schedule.json.gz`. From 2027 (2026-27).
+`nba/raw/stats/<season>/schedule.json.gz`. From 2019 (2018-19): 2019-2026
+were fetched once, in November 2026, for the injury report's tip-off times
+(their games' ids, dates and home teams match `games`), and only 2027 on is
+refetched.
 
 Differences from `games`:
 
