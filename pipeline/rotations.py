@@ -141,12 +141,23 @@ STATUSES = {
     "dnt": "nwt",
     "did not travel": "nwt",
     "inactive": "inactive",
+    # 1996-97 on
+    "did not travel with team": "nwt",
+    "did not make trip": "nwt",
+    "dn make trip": "nwt",
+    "dn not make trip": "nwt",
+    "dn travel": "nwt",
+    "not w/team": "nwt",
+    "ntw": "nwt",
+    "not dressed": "dnd",
+    "not suited": "dnd",
+    "not suited up": "dnd",
 }
 # one status at the start of a comment, and what separates it from the rest
 COMMENT = re.compile(
     r"("
     + "|".join(s.replace(" ", r"\s+") for s in sorted(STATUSES, key=len, reverse=True))
-    + r")(?:\s*(?:-+>?|_|\()\s*|\s*$)(.*)",
+    + r")(?:\s*(?:-+>?|_|\(|[,;:.])\s*|\s*$)(.*)",
     re.IGNORECASE | re.DOTALL,
 )
 # the reason after the status, lowercased with _ as spaces -> its name
@@ -179,7 +190,7 @@ REASON_WORDS = [
         re.compile(r"suspen.*\b(nba|league)\b|\b(nba|league)\b.*suspen"),
         "league_suspension",
     ),
-    (re.compile(r"team suspen"), "team_suspension"),
+    (re.compile(r"team suspen|susp\.? by team|team rules"), "team_suspension"),
     (re.compile(r"suspen"), "suspension"),
     (re.compile(r"trade|acquired"), "trade"),
     (
@@ -187,12 +198,18 @@ REASON_WORDS = [
         "g_league",
     ),
     (re.compile(r"signed|signing|transaction"), "signing"),
-    (re.compile(r"personal|family|excused|visa"), "personal"),
+    (
+        re.compile(r"personal|family|excused|visa|baby|\blabor\b|funeral"),
+        "personal",
+    ),
     (re.compile(r"coach|(organizational|team|personnel) decision"), "coach"),
     (re.compile(r"\brest\b|maintenance|recovery day"), "rest"),
     (re.compile(r"conc?us+i(on|ve)"), "concussion_protocol"),
     (re.compile(r"conditioning|training"), "reconditioning"),
-    (re.compile(r"travel|not with team"), "not_with_team"),
+    (
+        re.compile(r"travel|not with team|yet to report|not yet (with team|reported)"),
+        "not_with_team",
+    ),
     (
         re.compile(
             r"\b(left|right|lf|rt|lower|upper)\b|ankle|knee|foot|feet|back|"
@@ -207,7 +224,10 @@ REASON_WORDS = [
             r"medica|precaution|weather|corneal|metatars|pectoral|tailbone|"
             r"sesamoid|ligament|rotator|torn|ruptur|dislocat|pain|tight|disc|\bhead|"
             r"food|poison|\bcold\b|vertigo|dizz|sick|\bill\b|lacerat|dehydrat|"
-            r"appendic|influenza|pelvi|heart|echo|dental|allerg|recover|rehab"
+            r"appendic|influenza|pelvi|heart|echo|dental|allerg|recover|rehab|"
+            # 1996-97 on
+            r"asthma|an[ae]mia|diabet|kidney|intestin|testic|root canal|"
+            r"arthroscop|fever|\bspur|patella|\bspr\b"
         ),
         "injury",
     ),
@@ -539,7 +559,8 @@ def parse_comment(comment: str) -> tuple[str | None, str]:
     or repeats the first ("DND - Did Not Dress"); otherwise it's the reason
     ("Inactive - Not With Team")
     """
-    status, text = None, comment.strip().replace("’", "'")
+    # 1996-97 and 1997-98's are often in quotes, some cut off before the end
+    status, text = None, comment.strip().strip('"').strip().replace("’", "'")
     while m := COMMENT.fullmatch(text):
         inner = STATUSES[" ".join(m[1].lower().split())]
         if status not in (None, "dnp", inner):
