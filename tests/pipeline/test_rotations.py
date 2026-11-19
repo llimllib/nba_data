@@ -739,7 +739,8 @@ def test_build_player_game_status(tmp_path, capsys):
 def test_build_player_game_status_odd_comments(tmp_path, capsys):
     """
     Played comes from the minutes, not the comment; a player in for no time
-    with no comment played; a comment we don't know is kept, and listed
+    with no comment played, but not one with no minutes or comment who isn't
+    in the play-by-play; a comment we don't know is kept, and listed
     """
     game = stats.read_raw(FIXTURE)
     for t in rotations.box_teams(game["boxscore"]):
@@ -751,6 +752,8 @@ def test_build_player_game_status_odd_comments(tmp_path, capsys):
                 p["statistics"]["minutes"] = "0:00"
             elif p["personId"] == 1630256:
                 p["comment"] = "DNP - Abducted By Aliens"
+            elif p["personId"] == 1631120:  # Davison, no minutes at all
+                p["comment"] = ""
     stats.write_raw(rotations.raw_path(tmp_path, 2026, GAME), game)
     assert rotations.build_season(tmp_path, 2026, url="http://nowhere.invalid")
     rows = {
@@ -762,8 +765,12 @@ def test_build_player_game_status_odd_comments(tmp_path, capsys):
     assert rows["201142"] == (True, "played", None, "DNP - Coach's Decision")
     assert rows["1631172"] == (True, "played", None, None)
     assert rows["1630256"] == (False, "dnp", None, "DNP - Abducted By Aliens")
+    # no comment and no minutes ("", not "0:00"), and not in the
+    # play-by-play: didn't play, for no reason we know (1996-97)
+    assert rows["1631120"] == (False, None, None, None)
     out = capsys.readouterr().out
     assert "'DNP - Abducted By Aliens' (1)" in out
+    assert "'' (" not in out
     assert "disagrees" not in out
 
 
@@ -1317,6 +1324,9 @@ def test_box_teams_leave_out_placeholders():
     home = b["boxScoreTraditional"]["homeTeam"]["players"]
     unnamed = {"firstName": "", "familyName": "", "nameI": ""}
     home.append(player(1219, "x", "x") | unnamed | {"comment": "", "statistics": blank})
+    staff = {"comment": "no memo for staff", "statistics": blank}
+    home.append(player(1294, "x", "x") | unnamed | staff)
+
     # a player with no name but a comment, or any stat, is kept
     home.append(
         player(1220, "x", "x")
@@ -1329,4 +1339,4 @@ def test_box_teams_leave_out_placeholders():
     ids = [p["personId"] for p in rotations.box_teams(b)[0]["players"]]
     assert ids == [p for p, _, _ in HOME_PLAYERS] + [1220, 1221]
     # the saved box score isn't changed
-    assert len(home) == len(HOME_PLAYERS) + 3
+    assert len(home) == len(HOME_PLAYERS) + 4

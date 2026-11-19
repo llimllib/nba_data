@@ -480,11 +480,14 @@ def minutes_seconds(minutes: str) -> float:
 def placeholder(p: dict) -> bool:
     """
     A box score row that isn't a player: 1996-97's box scores have 6 or 7 a
-    team in most games, with an id (1219) but no name, comment or stats
+    team in most games, with an id (1219) but no name or stats, and no
+    comment or "no memo for staff"
     """
-    return not (
-        p["firstName"] or p["familyName"] or (p.get("comment") or "").strip()
-    ) and not any(p["statistics"].values())
+    return (
+        not (p["firstName"] or p["familyName"])
+        and (p.get("comment") or "").strip() in ("", "no memo for staff")
+        and not any(p["statistics"].values())
+    )
 
 
 def box_teams(box: dict) -> list[dict]:
@@ -1298,6 +1301,7 @@ def build_season(outdir: Path, season: int, url: str = URL) -> bool:
             evs["matches_box_score"].append(None if problems is None else not problems)
 
         on_floor = {s.player_id for s in stints}
+        actors = {a.get("personId") for a in game["playbyplay"]["game"]["actions"]}
         roster = roster_on(rosters, dates.get(game_id))
         # either team's: a player traded that day can be on one's roster
         # and in the other's box score
@@ -1328,13 +1332,22 @@ def build_season(outdir: Path, season: int, url: str = URL) -> bool:
                 # A player with no comment played, even with "0:00" (on
                 # the floor for a free throw, or the last second; they're
                 # subbed in and out in the play-by-play)
+                # But with no minutes at all ("", not "0:00") they played
+                # only if they're in the play-by-play: 1996-97 has players
+                # with no minutes, comment or stats (0029600034's Eric
+                # Riley), and so do a few later games
                 seconds = minutes_seconds(p["statistics"]["minutes"])
-                appeared = bool(seconds) or not comment
+                appeared = bool(seconds) or (
+                    not comment and (bool(p["statistics"]["minutes"]) or pid in actors)
+                )
                 status, reason = "played", None
                 if not appeared:
                     status, reason = comment_status(comment)
                     # a comment that gives no reason ("DND") isn't unknown
-                    if status is None or (reason is None and parse_comment(comment)[1]):
+                    # and no comment is just unknown
+                    if comment and (
+                        status is None or (reason is None and parse_comment(comment)[1])
+                    ):
                         unknown[comment] += 1
                 # a player in for no time has no stint (joined folds it)
                 if (
