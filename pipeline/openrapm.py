@@ -32,9 +32,9 @@ are kept, under the ratings' `built` date, at
     nba/raw/openrapm/<built>/ratings.json.gz
     nba/raw/openrapm/<built>/decompose_openrapm.json.gz
 
-Seasons before FIRST_SEASON are left out until our lookup tables cover them
-(#89), and players not in their season's player_seasons are dropped, so the
-integrity check passes.
+Seasons start with FIRST_SEASON, 1996-97, openrapm's first and our lookup
+tables' too (#89), and players not in their season's player_seasons are
+dropped, so the integrity check passes.
 
 usage: python -m pipeline.openrapm [--out out] [--no-fetch]
 """
@@ -63,8 +63,8 @@ OUT_DIR = Path("nba/openrapm")
 STATS_DIR = Path("nba/stats")
 DATASET = "openrapm"
 
-# our lookup tables start with 2009-10; openrapm's go back to 1996-97
-FIRST_SEASON = 2010
+# openrapm's ratings and our lookup tables both start with 1996-97
+FIRST_SEASON = 1997
 
 # the decomposition's pieces, in its order -> our column suffix. The last
 # piece is the rating, which ratings.json already has

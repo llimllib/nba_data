@@ -14,7 +14,9 @@ when v2 replaced them ([#50](https://github.com/llimllib/nba_data/issues/50)).
 Season years represent the **end** of the season (e.g., `2025` = 2024-25 season).
 
 Data coverage:
-- stats.nba.com data: 2009-10 season (2010) through current
+- stats.nba.com data: 1996-97 season (1997) through current. Play-by-play
+  (`game_rotations`, `game_events`, `player_game_status`, and so
+  `team_oreb`) starts later; see each table
 - ESPN data: 2018-19 season (2019) through current
 
 ---
@@ -164,8 +166,8 @@ ORDER BY ppg DESC LIMIT 10;
 | Name | Type | Description |
 |------|------|-------------|
 | `team_game_logs`, `player_game_logs`, `player_season_stats`, `team_seasons`, `player_seasons`, `games` | view | Every season of each `nba/stats/` dataset |
-| `schedule` | view | Every game on the schedule, played or not, from 2019 |
-| `rosters_daily` | view | Every team's roster as of each day fetched, from 2027 |
+| `schedule` | view | Every game on the schedule, played or not, 1997-2009 and from 2019 |
+| `rosters_daily` | view | Every team's roster as of each day fetched, from 2027 (and one day, November 19, 2026, for each of 1997-2009) |
 | `game_rotations`, `game_events`, `player_game_status` | view | Each game's player stints, play-by-play, and every player in its box score (and, from November 5, 2026, its inactive players) with why they didn't play, for seasons with play-by-play |
 | `four_factors`, `player_box`, `team_box`, `player_details`, `net_pts_season` | view | Every season of each `nba/espn/` dataset |
 | `espn_injuries` | view | ESPN's injury list as of every fetch, from 2027 (`nba/espn/`) |
@@ -176,7 +178,7 @@ ORDER BY ppg DESC LIMIT 10;
 | `epm`, `epm_predictive` | view | dunksandthrees' season and predictive EPM, from 2026 (`nba/dunksandthrees/`) |
 | `epm_daily`, `epm_predictive_daily` | view | The same as of every day fetched, from 2027 |
 | `team_epm`, `team_epm_daily` | view | dunksandthrees' team ratings, the latest day and every day fetched, from 2027 |
-| `openrapm` | view | OpenRAPM player ratings, from 2010 (`nba/openrapm/`) |
+| `openrapm` | view | OpenRAPM player ratings, from 1997 (`nba/openrapm/`) |
 | `team_openrapm`, `team_openrapm_daily` | view | OpenRAPM's team power ratings, the latest day and every day, from 2027 |
 | `players` | table | One row per `player_id`: `name` (the latest one known), `first_season`, `last_season` (seasons on a roster count, even without games). A table, so joining it reads no parquet files |
 | `player_season_stats_per_game`, `player_season_stats_per_36`, `player_season_stats_per_100` | view | `player_season_stats` with counting stats scaled; see below |
@@ -264,6 +266,13 @@ only include players who played; DNPs aren't listed. Players with no NBA id
 One row per team per game, for every game type (preseason through the
 finals). The NBA's traditional and advanced team box scores, joined.
 
+The NBA's game logs have no preseason games for 1997-2003 and only 15 of
+2004's: its other 81 have a single row for both teams together, with no
+team, which is dropped (as is the row of season totals with no ids that
+every season before 2010 ends with). In 12 of Sacramento's 1997 games the
+NBA's `tov` isn't a whole number (17.8), and doesn't match the players'
+turnovers either, so it's NULL.
+
 | Column | Type | Description |
 |--------|------|-------------|
 | opp_team_id | VARCHAR | The other team in the game |
@@ -273,7 +282,7 @@ finals). The NBA's traditional and advanced team box scores, joined.
 | min, fgm, fga, ..., pts | | Traditional box score |
 | plus_minus | INTEGER | Points minus the opponent's points. Computed, not the NBA's value, which is wrong in 9 preseason games (once 4.4) |
 | off_rating, def_rating, net_rating, pace, poss, pie, ... | | Advanced box score; `e_` columns are the NBA's estimates |
-| team_oreb | INTEGER | Team offensive rebounds, which `oreb` doesn't count (below). From `game_events`; NULL for a game whose play-by-play we don't have |
+| team_oreb | INTEGER | Team offensive rebounds, which `oreb` doesn't count (below). From `game_events`; NULL for a game whose play-by-play we don't have (every game before 2010) |
 
 `poss` is counted from the play-by-play, not estimated from the box score.
 A possession ends when the other team gets the ball, and the team that gets
@@ -569,7 +578,11 @@ new times are picked up). Use it for upcoming games; for played games,
 `nba/raw/stats/<season>/schedule.json.gz`. From 2019 (2018-19): 2019-2026
 were fetched once, in November 2026, for the injury report's tip-off times
 (their games' ids, dates and home teams match `games`), and only 2027 on is
-refetched.
+refetched. 1997-2009 were fetched once too, with the rest of those seasons
+([#89](https://github.com/llimllib/nba_data/issues/89)), so 2010-2018 are
+the gap. Their schedules list preseason games with no teams and Team USA's
+2004-2006 Olympic and World Championship games (ids `009...`), also with no
+teams; both are left out.
 
 Differences from `games`:
 
@@ -667,7 +680,10 @@ Conference and division come from `leaguestandingsv3` (one request,
 refetched every run; raw response at
 `nba/raw/stats/<season>/standings.json.gz`). They're per season, so a team
 that changed division is in its old one for the seasons before the change.
-None changed between 2009-10 and 2026-27. The NBA Cup group comes from
+Through 2003-04 there were four (Atlantic and Central in the East, Midwest
+and Pacific in the West), and six from the 2004-05 realignment on. 1997-2002
+have 29 teams (no New Orleans), and so do 2003-2004 (the Hornets had moved
+to New Orleans, and the Bobcats hadn't started). The NBA Cup group comes from
 `iststandings` (one request, refetched every run, from 2024; raw response at
 `nba/raw/stats/<season>/cup_standings.json.gz`).
 
@@ -1237,7 +1253,8 @@ Each publish recomputes every season, so every season's file is rewritten
 when OpenRAPM's `built` date changes, and all of them hold the same version.
 The raw files of each version are kept at
 `nba/raw/openrapm/<built>/<name>.json.gz`. OpenRAPM rates seasons from
-1997, but only seasons covered by `player_seasons` (2010 on) are kept.
+1997, as `player_seasons` does, and players not in their season's
+`player_seasons` are dropped (none are, as of November 2026).
 
 ### `openrapm/season=<season>/data.parquet`
 

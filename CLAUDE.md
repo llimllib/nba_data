@@ -1,7 +1,7 @@
 # CLAUDE.md - Project Guidelines for AI Assistants
 
 ## Project Overview
-This repository builds up-to-date NBA (and men's college) basketball data, 2009-10 to present, as parquet files in object storage with consistent keys and a DuckDB catalog over them (v2). The data isn't in the repo: the v1 files in `data/` and their code in `src/` were removed at cutover (#50). **Read [docs/v2.md](docs/v2.md) before working on the pipeline** (code in `pipeline/`); it records the decisions.
+This repository builds up-to-date NBA (and men's college) basketball data, 1996-97 to present, as parquet files in object storage with consistent keys and a DuckDB catalog over them (v2). The data isn't in the repo: the v1 files in `data/` and their code in `src/` were removed at cutover (#50). **Read [docs/v2.md](docs/v2.md) before working on the pipeline** (code in `pipeline/`); it records the decisions.
 
 Commands (tools come from `mise.toml`):
 - `mise run test` / `mise run lint` (ruff format, ruff check, ty). CI runs both; keep them passing
@@ -19,7 +19,7 @@ Commands (tools come from `mise.toml`):
 - `uv run python -m pipeline.espn_net_pts --out out [--season 2026 ...]` builds `net_pts_season` from ESPN's season net points files (current season by default; `--no-fetch` uses the saved files)
 - `uv run python -m pipeline.ctg --out out [--season 2026 ...]` builds `ctg_team_summary` from Cleaning the Glass's league summary (past seasons fetched once, the current one every run; `--no-fetch` rebuilds every saved season)
 - `uv run python -m pipeline.dunksandthrees --out out` builds `epm` and `epm_predictive` for the season dunksandthrees is showing, `team_epm` (team ratings), and `epm_daily`, `epm_predictive_daily` and `team_epm_daily` (every day's values, current season only, from the saved daily pages) (only the current season, and for team ratings only today, is public; `--no-fetch` rebuilds every saved season)
-- `uv run python -m pipeline.openrapm --out out` builds `openrapm` (player ratings, 2010 on) from the JSON in openrapm's GitHub repo, rewriting every season when its `built` date changes (`--no-fetch` rebuilds from the newest saved version)
+- `uv run python -m pipeline.openrapm --out out` builds `openrapm` (player ratings, 1997 on) from the JSON in openrapm's GitHub repo, rewriting every season when its `built` date changes (`--no-fetch` rebuilds from the newest saved version)
 - `uv run python -m pipeline.openrapm_power --out out` builds `team_openrapm` and `team_openrapm_daily` (OpenRAPM's team power ratings, current season only) from `power.json` in openrapm's repo, filling in any days missing since the newest saved one from the repo's history (`--no-fetch` rebuilds from the saved days)
 - `uv run python -m pipeline.torvik --out out [--season 2026 ...]` builds men's college basketball (`ncaam/torvik/`: `torvik_team_results`, `torvik_four_factors`, and `torvik_ratings_daily` from torvik's daily time machine snapshots) from barttorvik.com, 2008 on (`--no-fetch` rebuilds every saved season; a past season's backfill is ~166 requests, 2s apart); `pipeline.catalog --league ncaam` builds its separate catalog, `ncaam/ncaam.duckdb`
 - `uv run python -m pipeline.ncaam_espn --out out [--season 2026 ...]` builds college games and box scores (`ncaam/espn/`: `games`, `team_box`, `player_box`, `team_seasons`, `player_seasons`), past seasons from sportsdataverse's files and the current one from ESPN's API (`--no-fetch` rebuilds every saved season)

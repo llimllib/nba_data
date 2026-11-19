@@ -161,14 +161,14 @@ def test_changed_decomposition_pieces_fail():
 
 
 def test_build(tmp_path):
-    rows = [rating(2009, 1), rating(2026, 1), rating(2026, 2), rating(2027, 1)]
+    rows = [rating(1996, 1), rating(2026, 1), rating(2026, 2), rating(2027, 1)]
     paths = o.build(
         tmp_path,
         ratings(*rows),
         decompose(*rows),
         known({2026: {"1", "2"}, 2027: {"1"}}),
     )
-    # 2009 is before FIRST_SEASON
+    # 1996 is before FIRST_SEASON
     assert paths == [
         dataset_path(tmp_path / o.OUT_DIR, "openrapm", 2026),
         dataset_path(tmp_path / o.OUT_DIR, "openrapm", 2027),

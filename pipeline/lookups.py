@@ -29,6 +29,20 @@ GAME_TYPES = {
 # international preseason opponents, which have other ids
 NBA_TEAM_IDS = range(1610612737, 1610612767)
 
+# Seasons a franchise id had no team. The Hornets' history up to 2002 is
+# Charlotte's (1610612766); New Orleans (1610612740) starts in 2002-03, and
+# Charlotte came back as the Bobcats in 2004-05
+NO_TEAM = {
+    1610612740: range(1997, 2003),
+    1610612766: range(2003, 2005),
+}
+
+
+def nba_team_ids(season: int) -> list[int]:
+    """the franchise ids that had a team in `season`"""
+    return [t for t in NBA_TEAM_IDS if season not in NO_TEAM.get(t, ())]
+
+
 KEYS = {
     "team_seasons": ["team_id"],
     "player_seasons": ["player_id"],

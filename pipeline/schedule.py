@@ -29,12 +29,30 @@ STATUSES = {1: "scheduled", 2: "in_progress", 3: "final"}
 NBA_ONLY = {"regular_season", "playoffs", "play_in", "cup_final"}
 
 
-def games(data: dict) -> list[dict]:
+def all_games(data: dict) -> list[dict]:
     """every game in a scheduleleaguev2 response, raising if it isn't one"""
     days = data["leagueSchedule"]["gameDates"]
     if not isinstance(days, list):
         raise TypeError(f"unexpected schedule shape: {str(data)[:500]}")
     return [g for day in days for g in day["games"]]
+
+
+def skipped(g: dict) -> bool:
+    """
+    A game the schedule knows only the id and time of, which the game logs
+    don't have either: preseason games before 2010 have status 0 and no
+    teams (they're only in the gameCode, "19961010/MINMIL"), and 2004-2006
+    have Team USA's Olympic and World Championship games, game ids 009...,
+    with no teams
+    """
+    if not g["homeTeam"]["teamId"] and not g["awayTeam"]["teamId"]:
+        return g["gameStatus"] == 0 or g["gameId"].startswith("009")
+    return False
+
+
+def games(data: dict) -> list[dict]:
+    """the games in a scheduleleaguev2 response, but for skipped() ones"""
+    return [g for g in all_games(data) if not skipped(g)]
 
 
 def text(value: str | None) -> str | None:
@@ -98,6 +116,9 @@ SCHEMA = pa.schema(
 
 def build_schedule(con: duckdb.DuckDBPyConnection, season: int, data: dict) -> None:
     """build `schedule` from a scheduleleaguev2 response"""
+    n = sum(skipped(g) for g in all_games(data))
+    if n:
+        print(f"schedule: skipping {n} games with no teams")
     con.register("arrow", pa.Table.from_pylist([row(g) for g in games(data)], SCHEMA))
     types = ", ".join(f"'{k}': '{v}'" for k, v in GAME_TYPES.items())
     bracket = "left(game_id, 3) IN ('004', '005')"

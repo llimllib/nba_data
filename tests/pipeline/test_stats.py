@@ -382,9 +382,9 @@ def test_no_types_are_bigint(tmp_path):
 
 def test_fractional_count_fails(tmp_path):
     logs = team_logs()
-    logs[0][TGL.index("TOV")] = 12.5
+    logs[0][TGL.index("PTS")] = 110.5
     write_raw(tmp_path, team_game_logs_base=response(TGL, logs))
-    with pytest.raises(duckdb.Error, match="tov is not a whole number"):
+    with pytest.raises(duckdb.Error, match="pts is not a whole number"):
         stats.build_season(tmp_path, 2026)
 
 
@@ -602,7 +602,48 @@ def test_fetch_standings(tmp_path):
     # an empty response is retried, so check rejects it
     empty = response(["TeamID", "Conference", "Division"], [])
     with pytest.raises(ValueError, match="0 teams"):
-        stats.check_standings(empty)
+        stats.check_standings(empty, 2027)
+
+
+def test_standings_before_thirty_teams():
+    # 1996-97 had no New Orleans, 2003-04 no Charlotte
+    assert len(stats.lookups.nba_team_ids(1997)) == 29
+    stats.check_standings(standings(skip={1610612740}), 1997)
+    stats.check_standings(standings(skip={1610612766}), 2004)
+    stats.check_standings(standings(), 2005)
+    with pytest.raises(ValueError, match="30 teams with .* not the 29"):
+        stats.check_standings(standings(), 1997)
+
+
+def test_game_logs_drop_rows_with_no_ids(tmp_path):
+    # the 1996-97 game logs end with a row of totals and no ids
+    totals = ["1996-97", None, None, None, None, None, None, None, 107.3, 208, 29.0, 1]
+    # and some of 2003-04's preseason games have only one row for both teams
+    both: list = ["2003-04", None, None, None, "0012500009", "2025-10-01T00:00:00"]
+    both += [None, None, 96.0, 193, 30.0, 1]
+    logs = team_logs() + [totals, both]
+    write_raw(tmp_path, team_game_logs_base=response(TGL, logs))
+    stats.build_season(tmp_path, 2026)
+    rows = read(tmp_path, "team_game_logs")
+    assert len(rows) == len(team_logs())
+    assert all(r["game_id"] and r["team_id"] for r in rows)
+
+    # but not in a regular-season game
+    both[TGL.index("GAME_ID")] = "0022500009"
+    write_raw(tmp_path, team_game_logs_base=response(TGL, logs))
+    with pytest.raises(ValueError, match="NULL"):
+        stats.build_season(tmp_path, 2026)
+
+
+def test_fractional_team_turnovers_are_null(tmp_path):
+    # 12 of Sacramento's 1996-97 games have turnovers like 17.8
+    logs = team_logs()
+    logs[0][TGL.index("TOV")] = 17.8
+    write_raw(tmp_path, team_game_logs_base=response(TGL, logs))
+    stats.build_season(tmp_path, 2026)
+    rows = {(r["game_id"], r["team_id"]): r for r in read(tmp_path, "team_game_logs")}
+    assert rows[(GAME, str(BOS))]["tov"] is None
+    assert rows[(GAME, str(NYK))]["tov"] == 15
 
 
 def cup_standings(group=None):
@@ -844,6 +885,18 @@ def test_roster_without_player_ids_fails(tmp_path):
     )
     with pytest.raises(ValueError, match="PLAYER_ID"):
         stats.build_season(tmp_path, 2026)
+
+
+def test_fetch_rosters_only_that_seasons_teams(tmp_path):
+    teams = []
+
+    def fake_fetch(endpoint, kwargs, check):
+        teams.append(int(kwargs["team_id"]))
+        return full_roster(int(kwargs["team_id"]))
+
+    stats.fetch_rosters(tmp_path, 1997, fetch=fake_fetch, sleep=lambda _: None)
+    assert len(teams) == 29
+    assert 1610612740 not in teams
 
 
 def test_fetch_rosters(tmp_path):

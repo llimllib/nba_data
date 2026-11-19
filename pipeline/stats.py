@@ -289,18 +289,22 @@ def fetch_schedule(
     print(f"stats: fetched {SCHEDULE}")
 
 
-def check_standings(data: dict) -> None:
-    """raise unless the standings have every NBA team's conference and division"""
+def check_standings(data: dict, season: int) -> None:
+    """
+    raise unless the standings have the conference and division of every
+    NBA team in `season`
+    """
     rs = result_set(data)
     missing = {"TeamID", "Conference", "Division"} - set(rs["headers"])
     if missing:
         raise ValueError(f"the standings have no {missing}")
     i, c, d = (rs["headers"].index(h) for h in ("TeamID", "Conference", "Division"))
     teams = {row[i] for row in rs["rowSet"] if row[c] and row[d]}
-    if teams != set(lookups.NBA_TEAM_IDS):
+    expected = set(lookups.nba_team_ids(season))
+    if teams != expected:
         raise ValueError(
             f"the standings have {len(teams)} teams with a conference and "
-            f"division, not the {len(lookups.NBA_TEAM_IDS)} in NBA_TEAM_IDS"
+            f"division, not the {len(expected)} NBA teams of {season}"
         )
 
 
@@ -314,7 +318,7 @@ def fetch_standings(
             "season": season_string(season),
             "season_type": "Regular Season",
         },
-        check=check_standings,
+        check=lambda data: check_standings(data, season),
     )
     write_raw(raw_path(outdir, season, STANDINGS), data)
     print(f"stats: fetched {STANDINGS}")
@@ -327,7 +331,7 @@ def load_standings(con: duckdb.DuckDBPyConnection, outdir: Path, season: int) ->
     """
     path = raw_path(outdir, season, STANDINGS)
     if path.is_file():
-        check_standings(read_raw(path))
+        check_standings(read_raw(path), season)
         load_raw(con, path, "standings_raw")
         query = (
             "SELECT teamid::VARCHAR AS team_id, conference::VARCHAR AS conference, "
@@ -449,7 +453,7 @@ def fetch_rosters(
     start, end = season_window(season)
     minimum = ROSTER_MIN if start <= day <= end else 1
     rosters = {}
-    for i, team_id in enumerate(lookups.NBA_TEAM_IDS):
+    for i, team_id in enumerate(lookups.nba_team_ids(season)):
         if i:
             sleep(ROSTER_DELAY)
         rosters[str(team_id)] = fetch(
@@ -620,6 +624,22 @@ def normalized(
     return exprs
 
 
+def drop_totals_rows(con: duckdb.DuckDBPyConnection, table: str) -> None:
+    """
+    Drop game log rows that are totals rather than a team's or a player's:
+    no team (or player) in no game or a preseason one. The game logs before
+    2010 end with one with every id null (208 points in 1996-97), and 81 of
+    2003-04's preseason games have only a row for both teams together
+    """
+    ids = ["team_id"] + (["player_id"] if table.startswith("pgl_") else [])
+    where = " AND ".join(f"{c} IS NULL" for c in ids)
+    where += " AND (game_id IS NULL OR game_id LIKE '001%')"
+    dropped = count(con, f"{table} WHERE {where}")
+    if dropped:
+        print(f"stats: dropping {dropped} {table} rows with no ids")
+        con.execute(f"DELETE FROM {table} WHERE {where}")
+
+
 def count(con: duckdb.DuckDBPyConnection, table: str) -> int:
     return scalar(con, f"SELECT count(*) FROM {table}")
 
@@ -728,6 +748,15 @@ def load_team_orebs(
 
 def build_team_game_logs(con: duckdb.DuckDBPyConnection, season: int) -> None:
     join_raw(con, ["tgl_base", "tgl_advanced"], ["game_id", "team_id"], "tgl")
+    # 12 of Sacramento's 1996-97 games have fractional turnovers (17.8),
+    # which don't match the players' either (18), so they're unknown
+    bad = con.execute(
+        "SELECT game_id, team_id, tov FROM tgl "
+        "WHERE tov::DOUBLE <> round(tov::DOUBLE) ORDER BY ALL"
+    ).fetchall()
+    if bad:
+        print(f"stats: tov isn't a whole number, so NULL: {bad}")
+        con.execute("UPDATE tgl SET tov = NULL WHERE tov::DOUBLE <> round(tov::DOUBLE)")
     rest = normalized(
         con, "tgl", {"game_id", "team_id", "game_date", "matchup", "wl"}, alias="t"
     )
@@ -967,6 +996,8 @@ def build_season(
             .replace("player_stats_", "ps_")
         )
         load_raw(con, raw_path(outdir, season, name), table)
+        if table.startswith(("tgl_", "pgl_")):
+            drop_totals_rows(con, table)
     load_rosters(con, outdir, season)
     load_standings(con, outdir, season)
     load_cup_groups(con, outdir, season)

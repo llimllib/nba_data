@@ -131,6 +131,20 @@ def test_playoff_series():
 def test_unknown_status_fails():
     with pytest.raises(ValueError, match="unknown status 9"):
         build(game("0022600175", status=9))
+    # status 0 is only skipped for a game with no teams
+    with pytest.raises(ValueError, match="unknown status 0"):
+        build(game("0022600175", status=0))
+
+
+def test_games_with_no_teams_are_skipped():
+    # 1996-97's preseason games
+    rows = build(
+        game("0012600001", home=0, away=0, status=0),
+        # Team USA's 2006 World Championship games
+        game("0092600001", home=0, away=0, status=1),
+        game("0022600001", status=3),
+    )
+    assert [r["game_id"] for r in rows] == ["0022600001"]
 
 
 def test_unknown_game_type_fails():
