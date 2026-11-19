@@ -1308,3 +1308,25 @@ def test_joined_folds_a_stint_with_no_time_into_the_next():
     assert len(stints) == 1
     assert (stints[0].start, stints[0].end, stints[0].pts) == (2638.0, 2880.0, 4)
     assert stints[0].lead_end - stints[0].lead_start == 4
+
+
+def test_box_teams_leave_out_placeholders():
+    # 1996-97's box scores have rows with an id but no name, comment or stats
+    b = box()
+    blank = {"minutes": "", "points": 0, "plusMinusPoints": 0.0}
+    home = b["boxScoreTraditional"]["homeTeam"]["players"]
+    unnamed = {"firstName": "", "familyName": "", "nameI": ""}
+    home.append(player(1219, "x", "x") | unnamed | {"comment": "", "statistics": blank})
+    # a player with no name but a comment, or any stat, is kept
+    home.append(
+        player(1220, "x", "x")
+        | unnamed
+        | {"comment": "DNP - Coach's Decision", "statistics": blank}
+    )
+    home.append(
+        player(1221, "x", "x") | unnamed | {"statistics": blank | {"minutes": "1:00"}}
+    )
+    ids = [p["personId"] for p in rotations.box_teams(b)[0]["players"]]
+    assert ids == [p for p, _, _ in HOME_PLAYERS] + [1220, 1221]
+    # the saved box score isn't changed
+    assert len(home) == len(HOME_PLAYERS) + 3

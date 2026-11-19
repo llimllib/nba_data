@@ -477,9 +477,23 @@ def minutes_seconds(minutes: str) -> float:
 # --- the box score
 
 
+def placeholder(p: dict) -> bool:
+    """
+    A box score row that isn't a player: 1996-97's box scores have 6 or 7 a
+    team in most games, with an id (1219) but no name, comment or stats
+    """
+    return not (
+        p["firstName"] or p["familyName"] or (p.get("comment") or "").strip()
+    ) and not any(p["statistics"].values())
+
+
 def box_teams(box: dict) -> list[dict]:
+    """the home and away teams' box scores, without placeholder() rows"""
     b = box["boxScoreTraditional"]
-    return [b["homeTeam"], b["awayTeam"]]
+    return [
+        t | {"players": [p for p in t["players"] if not placeholder(p)]}
+        for t in (b["homeTeam"], b["awayTeam"])
+    ]
 
 
 def played(box: dict, team_id: int) -> dict[int, float]:
