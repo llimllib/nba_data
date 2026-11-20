@@ -1,5 +1,9 @@
 import gzip
+import http.client
+import io
+import urllib.error
 from datetime import date
+from email.message import Message
 
 import duckdb
 import pytest
@@ -190,6 +194,24 @@ def test_regular_season_needs_every_team():
         summary(page(teams=range(1, 30)))
 
 
+def test_before_the_bobcats_there_were_29_teams():
+    # CTG starts in 2003-04, before Charlotte (4) came back
+    team_ids = {
+        a.abbrev: a.team_id
+        for a in load_team_abbrevs()
+        if a.source == "ctg" and a.covers(2004)
+    }
+    teams = [t for t in range(1, 31) if t != 4]
+    rows = ctg.team_summary(
+        page(season=2004, teams=teams), 2004, "regular_season", team_ids
+    )
+    assert len(rows) == 29
+    with pytest.raises(ValueError, match="28 teams have played, expected 29"):
+        ctg.team_summary(
+            page(season=2004, teams=teams[1:]), 2004, "regular_season", team_ids
+        )
+
+
 def played(team, wins, losses):
     return team_row(team, 0, SEASON_HEADERS, LAST_2WK_HEADERS).replace(
         '<td class="stat value">40</td><td class="stat value">42</td>',
@@ -330,3 +352,29 @@ def test_a_bad_page_writes_nothing(tmp_path):
     with pytest.raises(ValueError):
         ctg.build_season(tmp_path, SEASON, pages)
     assert not (tmp_path / "nba" / "ctg").exists()
+
+
+def fetcher_with(monkeypatch, *results):
+    """a Fetcher whose responses are `results` in turn (an exception is raised)"""
+    fetcher = ctg.Fetcher(delay=0)
+    pending = list(results)
+
+    def fetch(path):
+        r = pending.pop(0)
+        if isinstance(r, Exception):
+            raise r
+        return r
+
+    monkeypatch.setattr(fetcher, "fetch", fetch)
+    return fetcher
+
+
+def test_fetcher_retries_a_truncated_response_once(monkeypatch):
+    truncated = http.client.IncompleteRead(b"x", 10)
+    assert fetcher_with(monkeypatch, truncated, "ok").get("/a") == "ok"
+    with pytest.raises(http.client.IncompleteRead):
+        fetcher_with(monkeypatch, truncated, truncated).get("/a")
+    # HTTP errors aren't retried
+    error = urllib.error.HTTPError("u", 500, "x", Message(), io.BytesIO())
+    with pytest.raises(urllib.error.HTTPError):
+        fetcher_with(monkeypatch, error, "ok").get("/a")

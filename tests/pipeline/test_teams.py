@@ -1,5 +1,6 @@
 import pytest
 
+from pipeline.lookups import nba_team_ids
 from pipeline.teams import UnknownTeamAbbrev, load_team_abbrevs, team_id_for
 
 HEADER = "source,abbrev,team_id,first_season,last_season\n"
@@ -33,11 +34,12 @@ def test_espn_abbrevs_that_differ_from_nba(abbrev, team_id):
     assert team_id_for(load_team_abbrevs(), "espn", abbrev, 2026) == team_id
 
 
-@pytest.mark.parametrize("source", ["bbref", "ctg"])
-def test_has_30_teams_every_season(source):
+@pytest.mark.parametrize("source,first", [("bbref", 2010), ("ctg", 2004)])
+def test_has_every_team_every_season(source, first):
     rows = [r for r in load_team_abbrevs() if r.source == source]
-    for season in range(2010, 2027):
-        assert len({r.team_id for r in rows if r.covers(season)}) == 30, season
+    for season in range(first, 2027):
+        covered = {int(r.team_id) for r in rows if r.covers(season)}
+        assert covered == set(nba_team_ids(season)), season
 
 
 def test_ctg_ids_are_franchises():
@@ -45,6 +47,8 @@ def test_ctg_ids_are_franchises():
     # through renames: Brooklyn is 3 in New Jersey seasons too
     assert team_id_for(load_team_abbrevs(), "ctg", "3", 2012) == "1610612751"
     assert team_id_for(load_team_abbrevs(), "ctg", "19", 2013) == "1610612740"
+    # and Oklahoma City is 21 in Seattle seasons
+    assert team_id_for(load_team_abbrevs(), "ctg", "21", 2004) == "1610612760"
 
 
 @pytest.mark.parametrize(

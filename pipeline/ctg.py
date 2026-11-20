@@ -22,7 +22,8 @@ and a season is built from its latest page, whose date is `as_of_date`. The
 file is a daily snapshot.
 
 Teams are identified by CTG's team ids (1 to 30, in the hrefs of the team
-links), mapped to NBA team ids in team_abbrevs.csv (source "ctg"). Columns
+links, kept through relocations: 21 is Seattle before Oklahoma City, and 4,
+Charlotte, starts with the Bobcats in 2005), mapped to NBA team ids in team_abbrevs.csv (source "ctg"). Columns
 are found by their header text, so a changed table degrades: a missing
 optional column is NULL with a warning, and a missing required one, or an
 unexpected row count, writes nothing.
@@ -30,8 +31,10 @@ unexpected row count, writes nothing.
 
 import argparse
 import gzip
+import http.client
 import re
 import time
+import urllib.error
 import urllib.request
 from datetime import date
 from html.parser import HTMLParser
@@ -41,6 +44,7 @@ from typing import Protocol
 import duckdb
 import pyarrow as pa
 
+from .lookups import nba_team_ids
 from .output import check_keys, dataset_path, write_atomic, write_parquet
 from .seasons import current_season, today_eastern
 from .teams import load_team_abbrevs
@@ -236,8 +240,12 @@ def team_summary(
     absent = [n for n in NAMES[4:] if n not in found]
     if absent:
         print(f"{label}: columns missing, left NULL: {absent}")
-    if not 0 < len(parser.rows) <= 30:
-        raise ValueError(f"{label}: {len(parser.rows)} team rows, expected 1 to 30")
+    # 29 teams before the Bobcats, 2004
+    teams = len(nba_team_ids(season))
+    if not 0 < len(parser.rows) <= teams:
+        raise ValueError(
+            f"{label}: {len(parser.rows)} team rows, expected 1 to {teams}"
+        )
 
     types = dict(COLUMNS)
     season_columns = sum(1 for n in names if not (n or "").endswith(LAST_2WK))
@@ -278,11 +286,11 @@ def team_summary(
     most_games = max((r["wins"] + r["losses"] for r in rows), default=0)  # ty: ignore[unsupported-operator]
     if (
         season_type == "regular_season"
-        and len(rows) != 30
+        and len(rows) != teams
         and most_games >= OPENING_WEEK_GAMES
     ):
         raise ValueError(
-            f"{label}: {len(rows)} teams have played, expected 30 "
+            f"{label}: {len(rows)} teams have played, expected {teams} "
             f"after a team has played {most_games} games"
         )
     return rows
@@ -300,7 +308,10 @@ class Pages(Protocol):
 
 
 class Fetcher:
-    """Fetches pages no faster than one per REQUEST_DELAY seconds"""
+    """
+    Fetches pages no faster than one per REQUEST_DELAY seconds. A dropped or
+    truncated response is retried once
+    """
 
     def __init__(self, delay: float = REQUEST_DELAY, sleep=time.sleep, clock=time.time):
         self.delay = delay
@@ -309,6 +320,15 @@ class Fetcher:
         self.last = 0.0
 
     def get(self, path: str) -> str:
+        try:
+            return self.fetch(path)
+        except (http.client.IncompleteRead, urllib.error.URLError) as e:
+            if isinstance(e, urllib.error.HTTPError):
+                raise
+            print(f"ctg: {e!r}; retrying", flush=True)
+            return self.fetch(path)
+
+    def fetch(self, path: str) -> str:
         wait = self.last + self.delay - self.clock()
         if wait > 0:
             self.sleep(wait)

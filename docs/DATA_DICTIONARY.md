@@ -1086,10 +1086,12 @@ as with Isaac in 2027 (ORL $8M + $2.4M).
 
 Built by `pipeline/ctg.py` from the public league summary page,
 [cleaningtheglass.com/stats/league/summary](https://cleaningtheglass.com/stats/league/summary),
-seasons 2010 on. Raw pages are kept at
+seasons 2004 (CTG's first) on. Raw pages are kept at
 `nba/raw/ctg/<season>/team_summary_<season_type>/<date fetched>.html.gz`.
 CTG removes garbage time from every number. Teams are mapped from CTG's
-team ids (1-30, kept through renames) in `team_abbrevs.csv`, source `ctg`.
+team ids (1-30, kept through renames and moves: 21 is Seattle until 2008,
+3 New Jersey, 19 New Orleans/Oklahoma City) in `team_abbrevs.csv`, source
+`ctg`. 2004 has 29 teams: Charlotte (4) starts in 2005.
 
 ### `ctg_team_summary/season=<season>/data.parquet`
 
@@ -1114,8 +1116,8 @@ knocked out of the playoffs, and the 8 teams left out of the 2020 bubble).
 | wins_last_2wk, losses_last_2wk, point_diff_last_2wk, off_rtg_last_2wk, def_rtg_last_2wk, spread_diff_last_2wk | | The same over the last two weeks |
 
 Not kept: team names (use `team_seasons`) and CTG's ranks. Records match
-the NBA's game logs for every regular season and all but four 2017
-playoff team rows: CTG is missing one Boston-Washington and one
+the NBA's game logs in every season, regular season and playoffs, but for
+four 2017 playoff team rows: CTG is missing one Boston-Washington and one
 Clippers-Utah first-round game.
 
 ---
