@@ -205,7 +205,10 @@ REASON_WORDS = [
     ),
     (re.compile(r"signed|signing|transaction"), "signing"),
     (
-        re.compile(r"personal|family|excused|visa|baby|\blabor\b|funeral"),
+        re.compile(
+            r"personal|family|excused|visa|baby|\blabor\b|funeral|bereavement|"
+            r"birth"
+        ),
         "personal",
     ),
     (re.compile(r"coach|(organizational|team|personnel) decision"), "coach"),
@@ -213,7 +216,10 @@ REASON_WORDS = [
     (re.compile(r"conc?us+i(on|ve)"), "concussion_protocol"),
     (re.compile(r"conditioning|training"), "reconditioning"),
     (
-        re.compile(r"travel|not with team|yet to report|not yet (with team|reported)"),
+        re.compile(
+            r"travel|not with team|yet to report|not yet (with team|reported)|"
+            r"en ?route|flight"
+        ),
         "not_with_team",
     ),
     (
@@ -235,7 +241,7 @@ REASON_WORDS = [
             r"asthma|an[ae]mia|diabet|kidney|intestin|testic|root canal|"
             r"arthroscop|fever|\bspur|patella|\bspr\b|\binj\b|vision|lung|syncope|"
             r"conjunctiv|lab[iy]rinth|tonsil|viral|nausea|ulcer|costochond|"
-            r"intercostal|rash|tummy|syndrome"
+            r"intercostal|rash|tummy|syndrom|\bgum\b|symph"
         ),
         "injury",
     ),
