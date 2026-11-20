@@ -14,9 +14,8 @@ when v2 replaced them ([#50](https://github.com/llimllib/nba_data/issues/50)).
 Season years represent the **end** of the season (e.g., `2025` = 2024-25 season).
 
 Data coverage:
-- stats.nba.com data: 1996-97 season (1997) through current. Play-by-play
-  (`game_rotations`, `game_events`, `player_game_status`, and so
-  `team_oreb`) starts later; see each table
+- stats.nba.com data: 1996-97 season (1997) through current, play-by-play
+  (`game_rotations`, `game_events`, `player_game_status`) included
 - ESPN data: 2018-19 season (2019) through current
 
 ---
@@ -282,7 +281,7 @@ turnovers either, so it's NULL.
 | min, fgm, fga, ..., pts | | Traditional box score |
 | plus_minus | INTEGER | Points minus the opponent's points. Computed, not the NBA's value, which is wrong in 9 preseason games (once 4.4) |
 | off_rating, def_rating, net_rating, pace, poss, pie, ... | | Advanced box score; `e_` columns are the NBA's estimates |
-| team_oreb | INTEGER | Team offensive rebounds, which `oreb` doesn't count (below). From `game_events`; NULL for a game whose play-by-play we don't have (every game before 2010) |
+| team_oreb | INTEGER | Team offensive rebounds, which `oreb` doesn't count (below). From `game_events`; NULL for a game whose play-by-play we don't have or has no game clock (most preseason games before 2011, and the 1997 and 2001 All-Star games) |
 
 `poss` is counted from the play-by-play, not estimated from the box score.
 A possession ends when the other team gets the ball, and the team that gets
@@ -392,8 +391,13 @@ five players a side, has `matches_box_score` false. Filter on it for
 charts. The NBA's two box scores (`player_game_logs` and the game's box
 score) sometimes disagree about a player's plus-minus; matching either
 counts. Of 440 games checked (2010-2027, every game type), 437 match, and
-2,777 of the 2,787 in 2025-2027. The 2025 All-Star games, played to a
-target score with no game clock, have no rows.
+2,777 of the 2,787 in 2025-2027. In 1997-2009, 16,048 of 16,244 games
+match: from 1 a season to 39 (2004-05) don't. Box scores with only whole
+minutes (2000-01's playoffs, and most of 2003-04's and 2004-05's games),
+which are off from the play-by-play's by up to two minutes either way, are
+checked to two minutes rather than six seconds. In 11 of 2000-01's games
+every action type is padded with spaces; they're stripped. The 2025
+All-Star games, played to a target score with no game clock, have no rows.
 
 ### `game_events/season=<season>/data.parquet`
 
@@ -449,7 +453,7 @@ so pass a smaller `initialFetchSize` (128KB) to read only the footer.
 Every player in each game's box score, whether they started and played,
 and, for those who didn't play, why: the box score's comment (`DNP -
 Coach's Decision`, `Inactive - Injury/Illness`), split into a status and
-a reason. From November 5, 2026 on, it also has the players on each
+a reason, from 1997 on. From November 5, 2026, it also has the players on each
 team's roster that day who aren't in the box score, as `inactive`. It's
 what happened, known after the game, not the pre-game injury report
 (that's `espn_injuries`). Built from the box scores saved with
@@ -475,7 +479,21 @@ Players who didn't play and aren't in that season's `player_seasons` are
 left out: before 2027 `player_seasons` only has players who got on the
 floor that season, so a player who never did (2021-22's hardship
 signings, say) would fail the integrity check. That's 79 rows in
-2010-2026; the build lists them.
+2010-2026 and 229 in 1997-2009; the build lists them.
+
+1996-97's box scores have 6 or 7 rows a team in most games that aren't
+players (staff, presumably): an id but no name or stats, and no comment or
+`no memo for staff`. They're left out. A player with no minutes at all
+(not `0:00`) and no comment who isn't in the play-by-play didn't play,
+with a NULL status: 27 in 1997, and 6 in 2010-2024 (published before
+this rule, so they count as played until those seasons are rebuilt). Before
+2008 the injured list is in the box score too, as `Injured -` or `INJ -`,
+which is `inactive` (only first: `DNP - Injured Right Knee` is a `dnp`).
+1997-2009's comments are sorted the same way as 2010-2017's, and are
+often in quotes, separate the status with a comma, a semicolon or just a
+space, or write it other ways (`DN Make Trip`, `Not W/Team`, `Not Suited
+Up`); 82 rows have comments the build doesn't know (`NBA Suspension`,
+with no status, `DNA - Flu`, garbled ones).
 
 Before 2018 the reason is often free text, which usually names the
 injury (`DND - Sore Left Foot`, `NWT - Personal Reasons`, `DND -
@@ -495,8 +513,8 @@ leaves out their stints too.
 |--------|------|-------------|
 | season, game_id, team_id, player_id | | Key: `(game_id, player_id)` |
 | starter | BOOLEAN | Started the game (the box score gives starters a position) |
-| played | BOOLEAN | Got on the floor: has minutes, or has no comment. A few players in for no time (`0:00`, on for a free throw or the last second) have no comment, and count; they have no stint in `game_rotations`, since a stint with no time is folded away. From the minutes rather than the comment because a few 2027 box scores say `DNP - Coach's Decision` for a player with minutes |
-| status | VARCHAR | `played`, or for players who didn't: `dnp` (active, didn't play), `dnd` (didn't dress), `nwt` (not with the team), `inactive` (on the inactive list: in the box score October 20-26, 2026, and from the rosters from November 5, 2026). Before 2018, `Did Not Dress` and `OUT` are `dnd`, `Not With Team` and `DNT` (did not travel) `nwt`, and `DNP - DND -` or `DNP - NWT -` the second. Null for a comment the build doesn't know (it lists them) |
+| played | BOOLEAN | Got on the floor: has minutes, or has no comment (and, with no minutes at all, is in the play-by-play). A few players in for no time (`0:00`, on for a free throw or the last second) have no comment, and count; they have no stint in `game_rotations`, since a stint with no time is folded away. From the minutes rather than the comment because a few 2027 box scores say `DNP - Coach's Decision` for a player with minutes |
+| status | VARCHAR | `played`, or for players who didn't: `dnp` (active, didn't play), `dnd` (didn't dress), `nwt` (not with the team), `inactive` (on the inactive list: in the box score October 20-26, 2026, and from the rosters from November 5, 2026; before 2008, the injured list, `Injured -` or `INJ -` in the box score). Before 2018, `Did Not Dress` and `OUT` are `dnd`, `Not With Team` and `DNT` (did not travel) `nwt`, and `DNP - DND -` or `DNP - NWT -` the second. Null for a comment the build doesn't know (it lists them) |
 | reason | VARCHAR | Null for players who played, and for inactive players from the rosters. Otherwise `coach` (coach's decision), `injury` (injury or illness), `concussion_protocol`, `reconditioning` (return to competition reconditioning), `health_and_safety` (COVID protocols and self-isolation, 2020-2022), `rest`, `personal`, `not_with_team`, `g_league_two_way` (only October 20-26, 2026), `league_suspension`, `team_suspension`, `suspension` (2018-2019, which don't say whose), `ineligible` (ineligible to play), `trade` (a trade pending or just made), and before 2018 also `g_league` (assigned to the D-League) and `signing` (just signed). `nwt` with no reason is `not_with_team`. Null for a comment that gives no reason (`DND`, 52 before 2018) or one the build doesn't know (it lists those) |
 | comment | VARCHAR | The box score's comment as written, which the NBA writes several ways (`DND - Injury/Illness`, `DND-Return to Competition Reconditioning`, `DND_LEAGUE_SUSPENSION`). Null if empty |
 | in_box_score | BOOLEAN | False for inactive players from the rosters |
