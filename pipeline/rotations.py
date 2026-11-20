@@ -241,7 +241,7 @@ REASON_WORDS = [
             r"asthma|an[ae]mia|diabet|kidney|intestin|testic|root canal|"
             r"arthroscop|fever|\bspur|patella|\bspr\b|\binj\b|vision|lung|syncope|"
             r"conjunctiv|lab[iy]rinth|tonsil|viral|nausea|ulcer|costochond|"
-            r"intercostal|rash|tummy|syndrom|\bgum\b|symph"
+            r"intercostal|rash|tummy|syndrom|\bgum\b|symph|mononucle|harmstring"
         ),
         "injury",
     ),

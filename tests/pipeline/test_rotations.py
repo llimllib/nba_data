@@ -712,6 +712,7 @@ def test_build(tmp_path):
         ("NWT - Flight Complications", ("nwt", "not_with_team")),
         ("DNP - NWT - Wolf-Parkinson-White Syndrom", ("nwt", "injury")),
         ("DND - Pubic symphisitis", ("dnd", "injury")),
+        ("DND - Pulled Harmstring", ("dnd", "injury")),
         ("no memo for staff", (None, None)),
         ("DNA - FLU", (None, None)),
     ],
