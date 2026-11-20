@@ -26,6 +26,9 @@ saved day, so CI downloads them first:
 
     nba/raw/stats/<season>/team_rosters/<date>.json.gz
 
+but only while the season is the current one: a past season's rosters,
+fetched years later, are its last ones, not that day's.
+
 A team whose roster is too small or too big (an empty or partial response)
 is refetched, and if it stays that way the run fails before anything is
 saved.
@@ -467,10 +470,11 @@ def fetch_rosters(
         )
     for pid, _ in roster_players(rosters):
         former.pop(pid, None)
-    write_raw(
-        daily_rosters_path(outdir, season, day),
-        {"fetched": fetched.isoformat(), "rosters": rosters},
-    )
+    if season >= current_season(day):
+        write_raw(
+            daily_rosters_path(outdir, season, day),
+            {"fetched": fetched.isoformat(), "rosters": rosters},
+        )
     write_raw(
         raw_path(outdir, season, ROSTERS),
         {

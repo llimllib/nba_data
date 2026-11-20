@@ -165,8 +165,8 @@ ORDER BY ppg DESC LIMIT 10;
 | Name | Type | Description |
 |------|------|-------------|
 | `team_game_logs`, `player_game_logs`, `player_season_stats`, `team_seasons`, `player_seasons`, `games` | view | Every season of each `nba/stats/` dataset |
-| `schedule` | view | Every game on the schedule, played or not, 1997-2009 and from 2019 |
-| `rosters_daily` | view | Every team's roster as of each day fetched, from 2027 (and one day, November 19, 2026, for each of 1997-2009) |
+| `schedule` | view | Every game on the schedule, played or not |
+| `rosters_daily` | view | Every team's roster as of each day fetched, from 2027 |
 | `game_rotations`, `game_events`, `player_game_status` | view | Each game's player stints, play-by-play, and every player in its box score (and, from November 5, 2026, its inactive players) with why they didn't play, for seasons with play-by-play |
 | `four_factors`, `player_box`, `team_box`, `player_details`, `net_pts_season` | view | Every season of each `nba/espn/` dataset |
 | `espn_injuries` | view | ESPN's injury list as of every fetch, from 2027 (`nba/espn/`) |
@@ -485,8 +485,7 @@ signings, say) would fail the integrity check. That's 79 rows in
 players (staff, presumably): an id but no name or stats, and no comment or
 `no memo for staff`. They're left out. A player with no minutes at all
 (not `0:00`) and no comment who isn't in the play-by-play didn't play,
-with a NULL status: 27 in 1997, and 6 in 2010-2024 (published before
-this rule, so they count as played until those seasons are rebuilt). Before
+with a NULL status: 27 in 1997, and 6 in 2010-2024. Before
 2008 the injured list is in the box score too, as `Injured -` or `INJ -`,
 which is `inactive` (only first: `DNP - Injured Right Knee` is a `dnp`).
 1997-2009's comments are sorted the same way as 2010-2017's, and are
@@ -593,12 +592,15 @@ Every game on the NBA's schedule for the season, played or not, from
 `scheduleleaguev2` (one request, refetched every run, so postponements and
 new times are picked up). Use it for upcoming games; for played games,
 `games` and `team_game_logs` have the same `game_id`s. Raw response at
-`nba/raw/stats/<season>/schedule.json.gz`. From 2019 (2018-19): 2019-2026
-were fetched once, in November 2026, for the injury report's tip-off times
-(their games' ids, dates and home teams match `games`), and only 2027 on is
-refetched. 1997-2009 were fetched once too, with the rest of those seasons
-([#89](https://github.com/llimllib/nba_data/issues/89)), so 2010-2018 are
-the gap. Their schedules list preseason games with no teams and Team USA's
+`nba/raw/stats/<season>/schedule.json.gz`. 1997-2026 were fetched once, in
+November 2026 (2019-2026 for the injury report's tip-off times, 1997-2009
+with the rest of those seasons, [#89](https://github.com/llimllib/nba_data/issues/89),
+and 2010-2018 to fill the gap, [#114](https://github.com/llimllib/nba_data/issues/114)),
+and only 2027 on is refetched. Every game in `games` is in them, with the
+same date and home team, but for preseason games the NBA's schedules don't
+list: all of 2019-20's and one of 2016-17's (`0011600008`). Two preseason games in it aren't in
+`games` (`0011300114`, final, and `0011600107`, which still says
+`scheduled`). 1997-2009's schedules list preseason games with no teams and Team USA's
 2004-2006 Olympic and World Championship games (ids `009...`), also with no
 teams; both are left out.
 

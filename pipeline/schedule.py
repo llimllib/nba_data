@@ -8,7 +8,7 @@ pipeline.stats fetches it every run (one request) and builds it with the
 rest of the season. Unlike `games`, it lists games before they're played,
 and a neutral site's game keeps the home and away teams the NBA lists for
 it. Its game ids match `games`' once a game is played (checked for
-2009-10, 2019-20, 2020-21 and 2025-26), and the Cup's knockout games are
+1996-97 to 2025-26), and the Cup's knockout games are
 listed with their ids before their teams are known.
 """
 

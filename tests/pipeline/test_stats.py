@@ -1002,6 +1002,19 @@ def test_fetch_rosters_saves_each_day(tmp_path):
     assert len(saved["rosters"]) == 30
 
 
+def test_fetch_rosters_past_season_saves_no_day(tmp_path):
+    # a past season's rosters are its last ones, not the day's
+    def fake_fetch(endpoint, kwargs, check):
+        return full_roster(int(kwargs["team_id"]))
+
+    when = datetime(2026, 11, 19, 18, tzinfo=UTC)
+    stats.fetch_rosters(
+        tmp_path, 2026, fetch=fake_fetch, sleep=lambda _: None, now=lambda: when
+    )
+    assert stats.rosters_fetched(tmp_path, 2026) == when
+    assert stats.saved_roster_days(tmp_path, 2026) == []
+
+
 @pytest.mark.parametrize(
     "when, size, ok",
     [
