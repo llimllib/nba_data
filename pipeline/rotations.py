@@ -256,6 +256,9 @@ RETRY_PAUSE = 60
 
 # a player's minutes may differ from the box score's by this much, in seconds
 MINUTES_TOLERANCE = 6
+# or this much in a box score with only whole minutes (68 of 2000-01's 71
+# playoff games), which are within a minute but not always rounded
+WHOLE_MINUTES_TOLERANCE = 60
 
 # actions a player can have while on the bench
 OFF_FLOOR = re.compile(r"technical|t\.foul|ejection", re.IGNORECASE)
@@ -495,6 +498,18 @@ def minutes_seconds(minutes: str) -> float:
 
 
 # --- the box score
+
+
+def read_game(path: Path) -> dict:
+    """
+    A saved game, with its actions' types stripped: in 11 of 2000-01's
+    games (0020000374 to 0020000389) they're padded with spaces
+    ("Substitution      "), so no substitution was seen
+    """
+    game = stats.read_raw(path)
+    for a in game["playbyplay"]["game"]["actions"]:
+        a["actionType"] = a["actionType"].strip()
+    return game
 
 
 def placeholder(p: dict) -> bool:
@@ -1020,6 +1035,17 @@ def box_differences(
         secs[s.player_id] += s.end - s.start
         per_team[s.team_id] += s.end - s.start
     found = []
+    minutes = [
+        p["statistics"]["minutes"]
+        for t in box_teams(box)
+        for p in t["players"]
+        if p["statistics"]["minutes"]
+    ]
+    tolerance = (
+        WHOLE_MINUTES_TOLERANCE
+        if minutes and all(m.endswith(":00") for m in minutes)
+        else MINUTES_TOLERANCE
+    )
     for t in box_teams(box):
         for p in t["players"]:
             pid, st = p["personId"], p["statistics"]
@@ -1029,10 +1055,7 @@ def box_differences(
                 accepted.add(logged.get(pid, 0))
             if pm.get(pid, 0) not in accepted:
                 found.append(f"{pid} plus-minus {pm.get(pid, 0)}, box {box_pm}")
-            if (
-                abs(secs.get(pid, 0) - minutes_seconds(st["minutes"]))
-                > MINUTES_TOLERANCE
-            ):
+            if abs(secs.get(pid, 0) - minutes_seconds(st["minutes"])) > tolerance:
                 found.append(
                     f"{pid} minutes {secs.get(pid, 0) / 60:.1f}, box {st['minutes'] or 0}"
                 )
@@ -1271,7 +1294,7 @@ def build_season(outdir: Path, season: int, url: str = URL) -> bool:
     rosters = season_rosters(outdir, season, url)
     dates = game_dates(outdir, season, url) if rosters else {}
     for path in paths:
-        game = stats.read_raw(path)
+        game = read_game(path)
         game_id = path.name.removesuffix(".json.gz")
         logged = logs.get(game_id, {})
         ids = logged_ids(game, logged)

@@ -480,6 +480,14 @@ def test_box_differences():
     assert rotations.box_differences(game, stints, logged) == [
         "1 minutes 12.0, box 10:00"
     ]
+    # a box score with only whole minutes (2000-01's playoffs) is allowed
+    # to be a minute off, but not one with seconds
+    game["boxscore"] = box(minutes={**played, 1: "11:00"})
+    assert rotations.box_differences(game, stints, logged) == []
+    game["boxscore"] = box(minutes={**played, 1: "11:00", 2: "12:01"})
+    assert rotations.box_differences(game, stints, logged) == [
+        "1 minutes 12.0, box 11:00"
+    ]
 
 
 def test_a_real_game():
@@ -1358,3 +1366,18 @@ def test_box_teams_leave_out_placeholders():
     assert ids == [p for p, _, _ in HOME_PLAYERS] + [1220, 1221]
     # the saved box score isn't changed
     assert len(home) == len(HOME_PLAYERS) + 4
+
+
+def test_padded_action_types(tmp_path):
+    # 11 of 2000-01's games pad every action type ("Substitution      ")
+    def stints(outdir, game):
+        stats.write_raw(rotations.raw_path(outdir, 2026, GAME), game)
+        assert rotations.build_season(outdir, 2026, url="http://nowhere.invalid")
+        path = dataset_path(outdir / stats.OUT_DIR, rotations.NAME, 2026)
+        return duckdb.execute(f"SELECT * FROM '{path}' ORDER BY ALL").fetchall()
+
+    game = stats.read_raw(FIXTURE)
+    expected = stints(tmp_path / "plain", game)
+    for a in game["playbyplay"]["game"]["actions"]:
+        a["actionType"] = a["actionType"].ljust(40)
+    assert stints(tmp_path / "padded", game) == expected
