@@ -152,12 +152,15 @@ STATUSES = {
     "not dressed": "dnd",
     "not suited": "dnd",
     "not suited up": "dnd",
+    # on the injured list
+    "injured": "inactive",
+    "inj": "inactive",
 }
 # one status at the start of a comment, and what separates it from the rest
 COMMENT = re.compile(
     r"("
     + "|".join(s.replace(" ", r"\s+") for s in sorted(STATUSES, key=len, reverse=True))
-    + r")(?:\s*(?:-+>?|_|\(|[,;:.])\s*|\s*$)(.*)",
+    + r")(?:\s*(?:-+>?|_|\(|[,;:.])\s*|\s+|\s*$)(.*)",
     re.IGNORECASE | re.DOTALL,
 )
 # the reason after the status, lowercased with _ as spaces -> its name
@@ -187,12 +190,15 @@ REASONS = {
 # as they are from 2018 on (the protocol began in 2011-12)
 REASON_WORDS = [
     (
-        re.compile(r"suspen.*\b(nba|league)\b|\b(nba|league)\b.*suspen"),
+        re.compile(
+            r"(suspen|\bsus\b).*\b(nba|league)\b|\b(nba|league)\b.*(suspen|\bsus\b)"
+        ),
         "league_suspension",
     ),
     (re.compile(r"team suspen|susp\.? by team|team rules"), "team_suspension"),
     (re.compile(r"suspen"), "suspension"),
     (re.compile(r"trade|acquired"), "trade"),
+    (re.compile(r"ineligib"), "ineligible"),
     (
         re.compile(r"d-? ?league|nba?dl|development(al)? league|assign"),
         "g_league",
@@ -227,7 +233,9 @@ REASON_WORDS = [
             r"appendic|influenza|pelvi|heart|echo|dental|allerg|recover|rehab|"
             # 1996-97 on
             r"asthma|an[ae]mia|diabet|kidney|intestin|testic|root canal|"
-            r"arthroscop|fever|\bspur|patella|\bspr\b"
+            r"arthroscop|fever|\bspur|patella|\bspr\b|\binj\b|vision|lung|syncope|"
+            r"conjunctiv|lab[iy]rinth|tonsil|viral|nausea|ulcer|costochond|"
+            r"intercostal|rash|tummy|syndrome"
         ),
         "injury",
     ),
@@ -579,7 +587,9 @@ def parse_comment(comment: str) -> tuple[str | None, str]:
     status, text = None, comment.strip().strip('"').strip().replace("’", "'")
     while m := COMMENT.fullmatch(text):
         inner = STATUSES[" ".join(m[1].lower().split())]
-        if status not in (None, "dnp", inner):
+        # "Injured" (1996-2007's injured list) is a status only first:
+        # after one, it's the reason ("DNP - Injured Right Knee")
+        if status not in (None, "dnp", inner) or (status and inner == "inactive"):
             break
         status, text = inner, m[2].strip()
     text = " ".join(text.replace("_", " ").split()).lower().strip(".()' ")
