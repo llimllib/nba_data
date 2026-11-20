@@ -476,14 +476,18 @@ def test_box_differences():
     assert len(found) == 10 and found[0] == "1 plus-minus 2, box 0"
     logged = {p: 2 if p < 20 else -2 for p in played}
     assert rotations.box_differences(game, stints, logged) == []
-    game["boxscore"] = box(minutes={**played, 1: "10:00"})
+    game["boxscore"] = box(minutes={**played, 1: "10:00", 2: "12:01"})
     assert rotations.box_differences(game, stints, logged) == [
         "1 minutes 12.0, box 10:00"
     ]
-    # a box score with only whole minutes (2000-01's playoffs) is allowed
-    # to be a minute off, but not one with seconds
-    game["boxscore"] = box(minutes={**played, 1: "11:00"})
+    # a box score with only whole minutes (2000-01's playoffs, 2003-04) is
+    # allowed to be two minutes off, but not one with seconds
+    game["boxscore"] = box(minutes={**played, 1: "10:00"})
     assert rotations.box_differences(game, stints, logged) == []
+    game["boxscore"] = box(minutes={**played, 1: "9:00"})
+    assert rotations.box_differences(game, stints, logged) == [
+        "1 minutes 12.0, box 9:00"
+    ]
     game["boxscore"] = box(minutes={**played, 1: "11:00", 2: "12:01"})
     assert rotations.box_differences(game, stints, logged) == [
         "1 minutes 12.0, box 11:00"

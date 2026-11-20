@@ -257,8 +257,9 @@ RETRY_PAUSE = 60
 # a player's minutes may differ from the box score's by this much, in seconds
 MINUTES_TOLERANCE = 6
 # or this much in a box score with only whole minutes (68 of 2000-01's 71
-# playoff games), which are within a minute but not always rounded
-WHOLE_MINUTES_TOLERANCE = 60
+# playoff games, most of 2003-04's), which can be off by a minute or two
+# either way (in 2003-04, 11 of 20,656 players by more)
+WHOLE_MINUTES_TOLERANCE = 120
 
 # actions a player can have while on the bench
 OFF_FLOOR = re.compile(r"technical|t\.foul|ejection", re.IGNORECASE)
